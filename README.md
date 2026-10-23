@@ -1,0 +1,1 @@
+# se2-team-06-Mountain-Hut-Management
