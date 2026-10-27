@@ -1,0 +1,25 @@
+{
+  "name": "mountain-hut-management-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mountain Hut Management - REST API (Node.js + Express + SQLite)",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch src/server.js",
+    "db:reset": "node -e \"const f = require('path').resolve(__dirname, 'database/database.sqlite'); require('fs').rmSync(f, {force:true}); console.log('SQLite database deleted:', f); console.log('It will be recreated on next server start.');\"",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "supertest": "^7.3.1",
+    "vitest": "^5.0.3"
+  }
+}
