@@ -17,3 +17,19 @@ INSERT INTO dining_tables (id, hut_id, label, seats) VALUES
     (3, 1, 'T3', 4),
     (4, 1, 'T4', 6),
     (5, 1, 'T5', 8);
+
+-- Ranges are [start_time, end_time): a slot at 12:00 is lunch, not breakfast.
+-- Steps give the slot start times, e.g. lunch 12:00, 13:00, 14:00.
+INSERT INTO meals (id, hut_id, meal_type, start_time, end_time, step_minutes) VALUES
+    (1, 1, 'breakfast', '09:00', '12:00', 30),
+    (2, 1, 'lunch',     '12:00', '15:00', 60),
+    (3, 1, 'aperitivo', '15:00', '18:00', 30),
+    (4, 1, 'dinner',    '18:00', '21:00', 60);
+
+INSERT INTO menus (meal_id, name, description) VALUES
+    (1, 'Continental', 'Bread, butter, jam, yogurt, coffee or tea'),
+    (2, 'Mountain lunch', 'Polenta with cheese and a dessert'),
+    (2, 'Vegetarian lunch', 'Vegetable soup and a dessert'),
+    (3, 'Aperitivo', 'Local cured meats, cheese and a drink'),
+    (4, 'Hut dinner', 'Pasta, main course and dessert'),
+    (4, 'Vegetarian dinner', 'Pasta, vegetable main course and dessert');
