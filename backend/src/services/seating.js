@@ -21,27 +21,18 @@ export function computeSeating(partySize, tables) {
     };
   }
 
-  if (partySize === 2 || partySize === 3) {
-    const candidates = list.filter((t) => t.free >= partySize);
-    if (candidates.length === 0) return null;
-    const chosen = candidates.sort((a, b) => a.seats - b.seats || a.free - b.free || a.id - b.id)[0];
-    return {
-      fit: 'single_table',
-      assignments: [{ tableId: chosen.id, tableLabel: chosen.label, seats: partySize }],
-    };
-  }
-
-  // partySize >= 4
+  // partySize >= 2: try one table first, then split when no table fits.
   const singleCandidates = list.filter((t) => t.free >= partySize);
   if (singleCandidates.length > 0) {
-    const chosen = singleCandidates.sort((a, b) => a.seats - b.seats || a.free - b.free || a.id - b.id)[0];
+    // Issue #18: prefer the smallest sufficient free capacity.
+    const chosen = singleCandidates.sort((a, b) => a.free - b.free || a.seats - b.seats || a.id - b.id)[0];
     return {
       fit: 'single_table',
       assignments: [{ tableId: chosen.id, tableLabel: chosen.label, seats: partySize }],
     };
   }
 
-  // Try to split.
+  // Try to split. Portions may be 1 (issue #19: 4+1 is valid).
   let best = null;
   const current = [];
 
@@ -69,9 +60,9 @@ export function computeSeating(partySize, tables) {
     // Table not used.
     rec(i + 1, remaining, usedCount, usedSumFree);
 
-    // Table used with a portion >= 2.
+    // Table used with any positive portion, including one person.
     const maxPortion = Math.min(t.free, remaining);
-    for (let p = 2; p <= maxPortion; p++) {
+    for (let p = 1; p <= maxPortion; p++) {
       current.push({ tableId: t.id, tableLabel: t.label, seats: p });
       rec(i + 1, remaining - p, usedCount + 1, usedSumFree + t.free);
       current.pop();

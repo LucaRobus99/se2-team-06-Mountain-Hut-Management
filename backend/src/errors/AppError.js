@@ -50,9 +50,9 @@ export class ConflictError extends AppError {
   }
 }
 
-/** 422 – request is well-formed but semantically invalid (e.g. slot in the past). */
+/** 422 – request is well-formed but semantically invalid (e.g. too late to book). */
 export class UnprocessableEntityError extends AppError {
-  constructor(detail = 'Unprocessable entity.', code = 'SLOT_IN_THE_PAST', details = null) {
+  constructor(detail = 'Unprocessable entity.', code = 'SLOT_TOO_LATE', details = null) {
     super(422, 'Unprocessable Entity', detail, code, details);
   }
 }

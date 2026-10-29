@@ -1,24 +1,45 @@
-import { NotFoundError, ConflictError, UnprocessableEntityError, ValidationError, AppError } from '../errors/AppError.js';
+import {
+  AppError,
+  ConflictError,
+  NotFoundError,
+  UnauthorizedError,
+  UnprocessableEntityError,
+  ValidationError,
+} from '../errors/AppError.js';
 import { computeSeating } from './seating.js';
+import { isSlotTooLate } from '../utils/hutTime.js';
 
 function validateEmail(value) {
   return typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-function validateBookingBody(body) {
+function parsePositiveInt(value) {
+  if (typeof value === 'number') return Number.isInteger(value) && value > 0 ? value : null;
+  if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
+    const n = Number(value.trim());
+    return n > 0 ? n : null;
+  }
+  return null;
+}
+
+/**
+ * Only slotId and partySize are required (issue #6). The authenticated hiker's
+ * name, email and phone are used as defaults, and may be overridden per booking.
+ */
+function validateBookingBody(body, hiker) {
   const details = [];
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     details.push({ field: 'body', rule: 'invalid', message: 'Request body must be an object.' });
     throw new ValidationError('The request contains invalid fields.', 'VALIDATION_ERROR', details);
   }
-  const allowed = ['slotId', 'partySize', 'contactName', 'email', 'phone', 'acceptSplit'];
+
+  const allowed = ['slotId', 'partySize', 'contactName', 'email', 'phone'];
   for (const key of Object.keys(body)) {
     if (!allowed.includes(key)) {
       details.push({ field: key, rule: 'unknown', message: `${key} is not allowed.` });
     }
   }
 
-  // slotId (JSON integer, not a numeric string)
   let slotId = null;
   if (body.slotId === undefined || body.slotId === null) {
     details.push({ field: 'slotId', rule: 'required', message: 'slotId is required.' });
@@ -28,7 +49,6 @@ function validateBookingBody(body) {
     details.push({ field: 'slotId', rule: 'invalid', message: 'slotId is invalid.' });
   }
 
-  // partySize (JSON integer, not a numeric string)
   let partySize = null;
   if (body.partySize === undefined || body.partySize === null) {
     details.push({ field: 'partySize', rule: 'required', message: 'partySize is required.' });
@@ -38,24 +58,29 @@ function validateBookingBody(body) {
     details.push({ field: 'partySize', rule: 'invalid', message: 'partySize is invalid.' });
   }
 
-  // contactName
-  const contactName = body.contactName;
-  if (contactName === undefined || contactName === null) {
-    details.push({ field: 'contactName', rule: 'required', message: 'contactName is required.' });
-  } else if (typeof contactName !== 'string' || contactName.trim() === '') {
-    details.push({ field: 'contactName', rule: 'invalid', message: 'contactName is invalid.' });
+  let contactName = hiker.displayName;
+  if (body.contactName !== undefined && body.contactName !== null) {
+    if (typeof body.contactName !== 'string' || body.contactName.trim() === '') {
+      details.push({ field: 'contactName', rule: 'invalid', message: 'contactName is invalid.' });
+    } else {
+      contactName = body.contactName.trim();
+    }
   }
 
-  // email
-  const email = body.email;
-  if (email === undefined || email === null) {
-    details.push({ field: 'email', rule: 'required', message: 'email is required.' });
-  } else if (typeof email !== 'string' || email.trim() === '' || !validateEmail(email.trim())) {
-    details.push({ field: 'email', rule: 'invalid', message: 'email is invalid.' });
+  let email = hiker.email;
+  if (body.email !== undefined && body.email !== null) {
+    if (
+      typeof body.email !== 'string' ||
+      body.email.trim() === '' ||
+      !validateEmail(body.email.trim())
+    ) {
+      details.push({ field: 'email', rule: 'invalid', message: 'email is invalid.' });
+    } else {
+      email = body.email.trim();
+    }
   }
 
-  // phone optional
-  let phone = null;
+  let phone = hiker.phone ?? null;
   if (body.phone !== undefined && body.phone !== null) {
     if (typeof body.phone !== 'string') {
       details.push({ field: 'phone', rule: 'invalid', message: 'phone is invalid.' });
@@ -64,39 +89,56 @@ function validateBookingBody(body) {
     }
   }
 
-  // acceptSplit optional boolean
-  let acceptSplit = body.acceptSplit;
-  if (acceptSplit !== undefined && acceptSplit !== null && typeof acceptSplit !== 'boolean') {
-    details.push({ field: 'acceptSplit', rule: 'invalid', message: 'acceptSplit is invalid.' });
-    acceptSplit = undefined;
-  }
-
   if (details.length > 0) {
     throw new ValidationError('The request contains invalid fields.', 'VALIDATION_ERROR', details);
   }
 
-  return {
-    slotId,
-    partySize,
-    contactName: contactName.trim(),
-    email: email.trim(),
-    phone,
-    acceptSplit: acceptSplit === true,
+  return { slotId, partySize, contactName, email, phone };
+}
+
+function toBookingResponse(booking, assignments) {
+  const split = assignments.length > 1;
+  const response = {
+    id: booking.id,
+    status: booking.status,
+    hikerId: booking.hiker_id,
+    slot: {
+      id: booking.slot_id,
+      date: booking.slot_date,
+      startTime: booking.slot_start_time,
+      meal: booking.meal,
+    },
+    partySize: booking.party_size,
+    contactName: booking.contact_name,
+    email: booking.email,
+    phone: booking.phone,
+    split,
+    seatAssignments: assignments.map((a) => ({
+      tableId: a.tableId,
+      tableLabel: a.tableLabel,
+      seats: a.seats,
+    })),
+    createdAt: booking.created_at,
   };
+  if (split) {
+    response.notice = {
+      code: 'GROUP_SPLIT',
+      message: 'The group will be seated across multiple tables.',
+    };
+  }
+  return response;
 }
 
-function isPastSlot(slot) {
-  const now = new Date();
-  const slotDate = new Date(`${slot.date}T${slot.start_time}:00`);
-  return slotDate.getTime() <= now.getTime();
-}
-
-export function createBookingService({ db, bookingDao, slotDao }) {
+export function createBookingService({ db, bookingDao, slotDao, timeZone, now = () => new Date() }) {
   return {
-    async createBooking(body) {
-      const data = validateBookingBody(body);
+    async createBooking(hiker, body) {
+      if (!hiker || !hiker.id) {
+        throw new UnauthorizedError('Authentication required.', 'UNAUTHENTICATED');
+      }
 
+      const data = validateBookingBody(body, hiker);
       let result;
+
       try {
         result = await db.transaction(async (tx) => {
           const slot = await slotDao.findById(tx, data.slotId);
@@ -106,74 +148,63 @@ export function createBookingService({ db, bookingDao, slotDao }) {
             throw new ConflictError('Slot is not available.', 'SLOT_NOT_AVAILABLE');
           }
 
-          const tables = await slotDao.getTablesForSlot(tx, slot.id);
-          const freeMap = await slotDao.getFreeSeats(tx, slot.id);
-          const tablesWithFree = tables.map((t) => ({
-            id: t.id,
-            label: t.label,
-            seats: t.seats,
-            free: freeMap instanceof Map ? (freeMap.get(t.id) ?? t.seats) : (freeMap?.[t.id] ?? t.seats),
-          }));
+          if (isSlotTooLate(slot, { timeZone, now: now() })) {
+            throw new UnprocessableEntityError(
+              'Bookings close two hours before the slot starts.',
+              'SLOT_TOO_LATE'
+            );
+          }
 
-          const seating = computeSeating(data.partySize, tablesWithFree);
+          const existing = await bookingDao.findConfirmedByHikerAndSlot(tx, hiker.id, slot.id);
+          if (existing) {
+            throw new ConflictError(
+              'You already have a confirmed booking for this slot.',
+              'BOOKING_ALREADY_EXISTS'
+            );
+          }
+
+          const tables = await slotDao.getTablesWithFreeForSlot(tx, slot.id);
+          const seating = computeSeating(data.partySize, tables);
           if (!seating) {
             throw new ConflictError('Insufficient capacity.', 'INSUFFICIENT_CAPACITY', []);
           }
 
-          if (seating.fit === 'split' && !data.acceptSplit) {
-            throw new ConflictError('Split not accepted.', 'SPLIT_NOT_ACCEPTED');
-          }
-
-          if (isPastSlot(slot)) {
-            throw new UnprocessableEntityError('Slot is in the past.', 'SLOT_IN_THE_PAST');
-          }
-
           const bookingId = await bookingDao.create(tx, {
             slotId: slot.id,
+            hikerId: hiker.id,
+            createdBy: null,
             partySize: data.partySize,
             contactName: data.contactName,
             email: data.email,
             phone: data.phone,
           });
           await bookingDao.insertSeats(tx, bookingId, seating.assignments);
-          const createdAt = await bookingDao.getCreatedAt(tx, bookingId);
+          const booking = await bookingDao.findById(tx, bookingId);
 
-          return { id: bookingId, slot, seating, createdAt };
+          return { booking, assignments: seating.assignments };
         });
       } catch (err) {
-        if (err instanceof ValidationError || err instanceof NotFoundError ||
-            err instanceof ConflictError || err instanceof UnprocessableEntityError) {
-          throw err;
-        }
+        if (err instanceof AppError) throw err;
         throw new AppError(500, 'Internal Server Error', 'An unexpected error occurred.', 'INTERNAL_ERROR');
       }
 
-      const { id, slot, seating, createdAt } = result;
-      const split = seating.fit === 'split';
-      const response = {
-        id,
-        status: 'confirmed',
-        slot: {
-          id: slot.id,
-          date: slot.date,
-          startTime: slot.start_time,
-          meal: slot.meal,
-        },
-        partySize: data.partySize,
-        contactName: data.contactName,
-        email: data.email,
-        phone: data.phone,
-        split,
-        seatAssignments: seating.assignments,
-        createdAt,
-      };
-      if (split) {
-        response.notice = {
-          code: 'GROUP_SPLIT',
-          message: 'The group will be seated across multiple tables.',
-        };
+      return toBookingResponse(result.booking, result.assignments);
+    },
+
+    async getBooking(bookingIdRaw, user) {
+      const bookingId = parsePositiveInt(bookingIdRaw);
+      if (bookingId === null) throw new NotFoundError('Booking not found.', 'BOOKING_NOT_FOUND');
+
+      const booking = await bookingDao.findById(bookingId);
+      if (!booking) throw new NotFoundError('Booking not found.', 'BOOKING_NOT_FOUND');
+
+      // A hiker can only read their own bookings. Staff roles can read any.
+      if (user.role === 'hiker' && booking.hiker_id !== user.id) {
+        throw new NotFoundError('Booking not found.', 'BOOKING_NOT_FOUND');
       }
-      return response;
+
+      const assignments = await bookingDao.getSeatAssignments(booking.id);
+      return toBookingResponse(booking, assignments);
     },
   };
 }

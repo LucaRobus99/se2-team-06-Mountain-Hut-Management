@@ -83,9 +83,10 @@ CREATE TABLE IF NOT EXISTS slot_tables (
     PRIMARY KEY (slot_id, table_id)
 );
 
--- MH-01: confirmed immediately (no approval). An email is always required,
--- also when an employee books for a hiker (MH-07), so hiker_id may be NULL.
--- POST /api/bookings is public, so created_by is NULL for a guest booking.
+-- MH-01: confirmed immediately (no approval). Online bookings require an
+-- authenticated hiker, so hiker_id is set; created_by is reserved for staff
+-- bookings taken through other channels (MH-07) and is NULL for self-booking.
+-- An email is always required and falls back to the hiker's profile email.
 CREATE TABLE IF NOT EXISTS bookings (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     slot_id         INTEGER NOT NULL REFERENCES slots (id),
@@ -113,6 +114,12 @@ CREATE INDEX IF NOT EXISTS idx_slots_meal ON slots (meal_id);
 CREATE INDEX IF NOT EXISTS idx_menus_meal ON menus (meal_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_slot ON bookings (slot_id);
 CREATE INDEX IF NOT EXISTS idx_booking_seats_table ON booking_seats (table_id);
+
+-- Issue #25: a hiker can have only one confirmed booking per slot.
+-- Cancelled bookings do not block a new one.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_one_confirmed_per_hiker_slot
+ON bookings (hiker_id, slot_id)
+WHERE status = 'confirmed' AND hiker_id IS NOT NULL;
 
 -- Meal time ranges of the same hut must not overlap, so each slot maps to one meal.
 CREATE TRIGGER IF NOT EXISTS meals_no_overlap_insert

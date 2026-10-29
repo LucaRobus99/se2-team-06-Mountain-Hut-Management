@@ -39,22 +39,57 @@ export function createBookingDao(db) {
       const { db: exec, args: a } = executorOf(args);
       const bookingId = a[0];
       const assignments = a[1];
-      for (const a2 of assignments) {
+      for (const assignment of assignments) {
         await exec.query(
           `INSERT INTO booking_seats (booking_id, table_id, seats) VALUES ($1, $2, $3)`,
-          [bookingId, a2.tableId, a2.seats]
+          [bookingId, assignment.tableId, assignment.seats]
         );
       }
     },
 
-    async getCreatedAt(...args) {
+    async findById(...args) {
       const { db: exec, args: a } = executorOf(args);
       const bookingId = a[0];
       const { rows } = await exec.query(
-        `SELECT created_at FROM bookings WHERE id = $1`,
+        `SELECT b.id, b.slot_id, b.hiker_id, b.created_by, b.contact_name, b.email, b.phone,
+                b.party_size, b.status, b.created_at,
+                s.hut_id, s.date AS slot_date, s.start_time AS slot_start_time,
+                s.status AS slot_status, m.meal_type AS meal
+         FROM bookings b
+         JOIN slots s ON s.id = b.slot_id
+         LEFT JOIN meals m ON m.id = s.meal_id
+         WHERE b.id = $1`,
         [bookingId]
       );
-      return rows[0]?.created_at ?? null;
+      return rows[0] ?? null;
+    },
+
+    async getSeatAssignments(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const bookingId = a[0];
+      const { rows } = await exec.query(
+        `SELECT bs.table_id AS tableId, dt.label AS tableLabel, bs.seats
+         FROM booking_seats bs
+         JOIN dining_tables dt ON dt.id = bs.table_id
+         WHERE bs.booking_id = $1
+         ORDER BY dt.id`,
+        [bookingId]
+      );
+      return rows;
+    },
+
+    /** A hiker may have only one confirmed booking per slot (issue #25). */
+    async findConfirmedByHikerAndSlot(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const hikerId = a[0];
+      const slotId = a[1];
+      const { rows } = await exec.query(
+        `SELECT id FROM bookings
+         WHERE hiker_id = $1 AND slot_id = $2 AND status = 'confirmed'
+         LIMIT 1`,
+        [hikerId, slotId]
+      );
+      return rows[0] ?? null;
     },
   };
 }

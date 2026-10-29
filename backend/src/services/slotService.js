@@ -1,13 +1,8 @@
 import { NotFoundError, ConflictError, UnprocessableEntityError, ValidationError } from '../errors/AppError.js';
 import { computeSeating } from './seating.js';
+import { isSlotTooLate } from '../utils/hutTime.js';
 
 const ALLOWED_MEALS = ['breakfast', 'lunch', 'aperitivo', 'dinner'];
-
-function isPastSlot(slot) {
-  const now = new Date();
-  const slotDate = new Date(`${slot.date}T${slot.start_time}:00`);
-  return slotDate.getTime() <= now.getTime();
-}
 
 function validateDate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -21,6 +16,15 @@ function validatePartySize(value) {
   if (typeof value === 'number') {
     return Number.isInteger(value) && value > 0 ? value : null;
   }
+  if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
+    const n = Number(value.trim());
+    return n > 0 ? n : null;
+  }
+  return null;
+}
+
+function parsePositiveInt(value) {
+  if (typeof value === 'number') return Number.isInteger(value) && value > 0 ? value : null;
   if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
     const n = Number(value.trim());
     return n > 0 ? n : null;
@@ -61,102 +65,128 @@ function validateSlotsQuery(query) {
   return { date, meal, partySize };
 }
 
-function parseSlotId(value) {
-  if (typeof value === 'number') return Number.isInteger(value) && value > 0 ? value : null;
-  if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
-    const id = Number(value.trim());
-    return id > 0 ? id : null;
+function validateSeatingQuery(query) {
+  const details = [];
+  const q = query || {};
+  const allowed = ['partySize'];
+  for (const key of Object.keys(q)) {
+    if (!allowed.includes(key)) {
+      details.push({ field: key, rule: 'unknown', message: `${key} is not allowed.` });
+    }
   }
-  return null;
+  let partySize = null;
+  if (q.partySize === undefined || q.partySize === null || q.partySize === '') {
+    details.push({ field: 'partySize', rule: 'required', message: 'partySize is required.' });
+  } else {
+    partySize = validatePartySize(q.partySize);
+    if (partySize === null) {
+      details.push({ field: 'partySize', rule: 'invalid', message: 'partySize is invalid.' });
+    }
+  }
+  if (details.length > 0) {
+    throw new ValidationError('The request contains invalid fields.', 'VALIDATION_ERROR', details);
+  }
+  return { partySize };
 }
 
-export function createSlotService({ slotDao }) {
-  async function loadContext(slotId) {
+function publicTables(tables) {
+  return tables.map((t) => ({
+    tableId: t.id,
+    tableLabel: t.label,
+    seats: Number(t.seats),
+    freeSeats: Number(t.free),
+  }));
+}
+
+function freeSeats(tables) {
+  return tables.reduce((sum, t) => sum + Math.max(0, Number(t.free)), 0);
+}
+
+export function createSlotService({ slotDao, hutDao, timeZone, now = () => new Date() }) {
+  async function assertHut(hutIdRaw) {
+    const hutId = parsePositiveInt(hutIdRaw);
+    if (hutId === null) throw new NotFoundError('Hut not found.', 'HUT_NOT_FOUND');
+    const hut = await hutDao.findById(hutId);
+    if (!hut) throw new NotFoundError('Hut not found.', 'HUT_NOT_FOUND');
+    return hut;
+  }
+
+  async function loadSlot(hutId, slotIdRaw) {
+    const slotId = parsePositiveInt(slotIdRaw);
+    if (slotId === null) throw new NotFoundError('Slot not found.', 'SLOT_NOT_FOUND');
     const slot = await slotDao.findById(slotId);
-    if (!slot) throw new NotFoundError('Slot not found.', 'SLOT_NOT_FOUND');
-    const tables = await slotDao.getTablesForSlot(slotId);
-    const freeMap = await slotDao.getFreeSeats(slotId);
-    const tablesWithFree = tables.map((t) => ({
-      id: t.id,
-      label: t.label,
-      seats: t.seats,
-      free: freeMap instanceof Map ? (freeMap.get(t.id) ?? t.seats) : (freeMap?.[t.id] ?? t.seats),
-    }));
-    return { slot, tablesWithFree };
+    if (!slot || slot.hut_id !== hutId) {
+      throw new NotFoundError('Slot not found.', 'SLOT_NOT_FOUND');
+    }
+    return slot;
   }
 
   return {
-    async listAvailableSlots(query) {
+    async listAvailableSlots(hutIdRaw, query) {
       const { date, meal, partySize } = validateSlotsQuery(query);
-      const slots = await slotDao.listByDate(date);
+      const hut = await assertHut(hutIdRaw);
+      const currentTime = now();
+      const slots = await slotDao.listByDate(hut.id, date);
       const result = [];
+
       for (const slot of slots) {
         if (slot.status !== 'available') continue;
         if (slot.meal !== meal) continue;
-        if (isPastSlot(slot)) continue;
-        const { tablesWithFree } = await loadContext(slot.id);
-        const seating = computeSeating(partySize, tablesWithFree);
+        if (isSlotTooLate(slot, { timeZone, now: currentTime })) continue;
+
+        const tables = await slotDao.getTablesWithFreeForSlot(slot.id);
+        const seating = computeSeating(partySize, tables);
         if (!seating) continue;
-        result.push({ id: slot.id, startTime: slot.start_time });
+
+        result.push({
+          id: slot.id,
+          startTime: slot.start_time,
+          availableSeats: freeSeats(tables),
+          tables: publicTables(tables),
+        });
       }
+
       result.sort((a, b) => a.startTime.localeCompare(b.startTime) || a.id - b.id);
-      return { date, meal, partySize, slots: result };
+      return { hutId: hut.id, date, meal, partySize, slots: result };
     },
 
-    async getSeating(slotIdRaw, partySizeOrQuery) {
-      // The contract only defines 400 for the partySize query parameter;
-      // an unknown slot id is reported as SLOT_NOT_FOUND (404).
-      const details = [];
-      let partySizeRaw = partySizeOrQuery;
-      if (partySizeOrQuery && typeof partySizeOrQuery === 'object' && !Array.isArray(partySizeOrQuery)) {
-        const q = partySizeOrQuery;
-        const allowed = ['partySize'];
-        for (const key of Object.keys(q)) {
-          if (!allowed.includes(key)) {
-            details.push({ field: key, rule: 'unknown', message: `${key} is not allowed.` });
-          }
-        }
-        partySizeRaw = q.partySize;
-      }
+    async getSeating(hutIdRaw, slotIdRaw, query) {
+      const { partySize } = validateSeatingQuery(query);
+      const hut = await assertHut(hutIdRaw);
+      const slot = await loadSlot(hut.id, slotIdRaw);
 
-      let partySize = null;
-      if (partySizeRaw === undefined || partySizeRaw === null || partySizeRaw === '') {
-        details.push({ field: 'partySize', rule: 'required', message: 'partySize is required.' });
-      } else {
-        partySize = validatePartySize(partySizeRaw);
-        if (partySize === null) details.push({ field: 'partySize', rule: 'invalid', message: 'partySize is invalid.' });
-      }
-      if (details.length > 0) {
-        throw new ValidationError('The request contains invalid fields.', 'VALIDATION_ERROR', details);
-      }
-
-      const slotId = parseSlotId(slotIdRaw);
-      if (slotId === null) throw new NotFoundError('Slot not found.', 'SLOT_NOT_FOUND');
-
-      const { slot, tablesWithFree } = await loadContext(slotId);
       if (slot.status !== 'available') {
         throw new ConflictError('Slot is not available.', 'SLOT_NOT_AVAILABLE');
       }
-      const seating = computeSeating(partySize, tablesWithFree);
+      if (isSlotTooLate(slot, { timeZone, now: now() })) {
+        throw new UnprocessableEntityError(
+          'Bookings close two hours before the slot starts.',
+          'SLOT_TOO_LATE'
+        );
+      }
+
+      const tables = await slotDao.getTablesWithFreeForSlot(slot.id);
+      const seating = computeSeating(partySize, tables);
       if (!seating) {
         throw new ConflictError('Insufficient capacity.', 'INSUFFICIENT_CAPACITY', []);
-      }
-      if (isPastSlot(slot)) {
-        throw new UnprocessableEntityError('Slot is in the past.', 'SLOT_IN_THE_PAST');
       }
 
       const requiresConfirmation = seating.fit === 'split';
       const response = {
+        hutId: hut.id,
         slotId: slot.id,
         partySize,
         fit: seating.fit,
         requiresConfirmation,
         seatAssignments: seating.assignments,
+        availableSeats: freeSeats(tables),
+        tables: publicTables(tables),
       };
       if (requiresConfirmation) {
         response.confirmation = {
           code: 'GROUP_SPLIT',
-          message: 'There is no single table for the whole group. The party will be split across tables. Do you still want to book?',
+          message:
+            'There is no single table for the whole group. The party will be split across tables.',
         };
       }
       return response;
