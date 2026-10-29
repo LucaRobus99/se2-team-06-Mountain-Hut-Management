@@ -1,85 +1,39 @@
+import { SimpleTableAllocator } from './SimpleTableAllocator.js';
+
+/** Shared by MH-01 (booking, seating preview) and MH-04 (availability). */
+const allocator = new SimpleTableAllocator();
+
 /**
- * Pure seating logic for MH-01.
- * Given a party size and the list of tables with their free seats for a slot,
- * returns { fit: 'single_table'|'split', assignments: [{tableId, tableLabel, seats}] }
+ * Maps rows from slotDao.getTablesWithFreeForSlot ({ id, label, seats, free })
+ * to allocator tables ({ id, label, capacity, occupied }).
+ */
+function fromSlotTables(rows) {
+  return (rows || []).map((r) => ({
+    id: r.id,
+    label: r.label,
+    capacity: Number(r.seats),
+    occupied: Number(r.seats) - Number(r.free),
+  }));
+}
+
+/**
+ * Seating for MH-01, following the PO rules of issues #18 and #11.
+ * Given a party size and the tables of a slot as returned by
+ * slotDao.getTablesWithFreeForSlot, returns
+ * { fit: 'single_table'|'split', assignments: [{tableId, tableLabel, seats}], explanation }
  * or null when no valid arrangement exists.
  */
 export function computeSeating(partySize, tables) {
-  if (!Number.isInteger(partySize) || partySize <= 0) return null;
-
-  const list = (tables || [])
-    .map((t) => ({ id: t.id, label: t.label, seats: Number(t.seats), free: Number(t.free) }))
-    .sort((a, b) => a.id - b.id);
-
-  if (partySize === 1) {
-    const candidates = list.filter((t) => t.free >= 1);
-    if (candidates.length === 0) return null;
-    const chosen = candidates.sort((a, b) => a.free - b.free || a.seats - b.seats || a.id - b.id)[0];
-    return {
-      fit: 'single_table',
-      assignments: [{ tableId: chosen.id, tableLabel: chosen.label, seats: 1 }],
-    };
-  }
-
-  // partySize >= 2: try one table first, then split when no table fits.
-  const singleCandidates = list.filter((t) => t.free >= partySize);
-  if (singleCandidates.length > 0) {
-    // Issue #18: prefer the smallest sufficient free capacity.
-    const chosen = singleCandidates.sort((a, b) => a.free - b.free || a.seats - b.seats || a.id - b.id)[0];
-    return {
-      fit: 'single_table',
-      assignments: [{ tableId: chosen.id, tableLabel: chosen.label, seats: partySize }],
-    };
-  }
-
-  // Try to split. Portions may be 1 (issue #19: 4+1 is valid).
-  let best = null;
-  const current = [];
-
-  function better(candidate) {
-    if (!best) return true;
-    if (candidate.usedCount !== best.usedCount) return candidate.usedCount < best.usedCount;
-    if (candidate.usedSumFree !== best.usedSumFree) return candidate.usedSumFree < best.usedSumFree;
-    return compareAssignments(candidate.assignments, best.assignments) < 0;
-  }
-
-  function rec(i, remaining, usedCount, usedSumFree) {
-    if (i === list.length) {
-      if (remaining === 0 && usedCount >= 2) {
-        const cand = {
-          usedCount,
-          usedSumFree,
-          assignments: current.map((a) => ({ ...a })),
-        };
-        if (better(cand)) best = cand;
-      }
-      return;
-    }
-    const t = list[i];
-
-    // Table not used.
-    rec(i + 1, remaining, usedCount, usedSumFree);
-
-    // Table used with any positive portion, including one person.
-    const maxPortion = Math.min(t.free, remaining);
-    for (let p = 1; p <= maxPortion; p++) {
-      current.push({ tableId: t.id, tableLabel: t.label, seats: p });
-      rec(i + 1, remaining - p, usedCount + 1, usedSumFree + t.free);
-      current.pop();
-    }
-  }
-
-  rec(0, partySize, 0, 0);
-
-  if (!best) return null;
-  return { fit: 'split', assignments: best.assignments };
+  const result = allocator.allocate({ size: partySize }, fromSlotTables(tables));
+  if (!result.ok) return null;
+  return {
+    fit: result.split ? 'split' : 'single_table',
+    assignments: result.assignments.map((a) => ({ tableId: a.tableId, tableLabel: a.tableLabel, seats: a.guests })),
+    explanation: result.explanation,
+  };
 }
 
-function compareAssignments(a, b) {
-  const n = Math.min(a.length, b.length);
-  for (let i = 0; i < n; i++) {
-    if (a[i].tableId !== b[i].tableId) return a[i].tableId - b[i].tableId;
-    if (a[i].seats !== b[i].seats) return a[i].seats - b[i].seats;
-  }
-  return a.length - b.length;
+/** Yes/no for MH-04: same answer as computeSeating(...) !== null. */
+export function canSeat(partySize, tables) {
+  return allocator.canSeat(partySize, fromSlotTables(tables));
 }
