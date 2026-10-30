@@ -3,8 +3,8 @@ import { Router } from 'express';
 export function createBookingRouter(bookingService, requireAuth) {
   const router = Router();
 
-  /** POST /api/bookings – only authenticated hikers can book online. */
-  router.post('/', requireAuth(['hiker']), async (req, res, next) => {
+  /** POST /api/bookings – only authenticated hikers, employees or wardens can book online. */
+  router.post('/', requireAuth(['hiker', 'employee', 'warden']), async (req, res, next) => {
     try {
       const result = await bookingService.createBooking(req.user, req.body);
       res.status(201).set('Location', `/api/bookings/${result.id}`).json(result);

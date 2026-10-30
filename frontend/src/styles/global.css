@@ -374,3 +374,19 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible { 
   html { scroll-behavior: auto; }
   .eh-button { transition: none; }
 }
+
+.hut-carousel {
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.hut-carousel img {
+  height: 360px;
+  object-fit: cover;
+}
+
+/* Same height as the hut photos; older news are reached by scrolling. */
+.news-list {
+  max-height: 360px;
+  overflow-y: auto;
+}

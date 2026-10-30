@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { createSqliteDb } from '../src/db/sqlite.js';
 
+// These tests start from an empty slots table, so the seeded slots are removed.
+async function createEmptyDb() {
+  const db = createSqliteDb(':memory:');
+  await db.query('DELETE FROM slot_tables');
+  await db.query('DELETE FROM slots');
+  return db;
+}
+
 describe('SQLite transaction helper', () => {
   it('commits when the function succeeds', async () => {
-    const db = createSqliteDb(':memory:');
+    const db = await createEmptyDb();
     try {
       await db.transaction(async (tx) => {
         await tx.query("INSERT INTO slots (hut_id, date, start_time) VALUES (1, '2026-12-01', '12:00')");
@@ -16,7 +24,7 @@ describe('SQLite transaction helper', () => {
   });
 
   it('rolls back when the function throws', async () => {
-    const db = createSqliteDb(':memory:');
+    const db = await createEmptyDb();
     try {
       await expect(db.transaction(async (tx) => {
         await tx.query("INSERT INTO slots (hut_id, date, start_time) VALUES (1, '2026-12-01', '12:00')");
@@ -31,7 +39,7 @@ describe('SQLite transaction helper', () => {
   });
 
   it('runs transactions one at a time, so the first one saved wins', async () => {
-    const db = createSqliteDb(':memory:');
+    const db = await createEmptyDb();
     try {
       await db.query("INSERT INTO slots (id, hut_id, date, start_time) VALUES (1, 1, '2026-12-01', '12:00')");
       const seatsLeft = 2;

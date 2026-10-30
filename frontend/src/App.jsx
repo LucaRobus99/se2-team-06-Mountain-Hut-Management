@@ -8,6 +8,7 @@ import LoginPage from './pages/LoginPage.jsx';
 import MenuPage from './pages/MenuPage.jsx';
 import AboutPage from './pages/AboutPage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
+import ProtectedRoute from './components/ProtectedRoute.jsx';
 
 export default function App() {
   return (
@@ -16,9 +17,13 @@ export default function App() {
         <Route index element={<HomePage />} />
         <Route path="menu" element={<MenuPage />} />
         <Route path="availability" element={<AvailabilityPage />} />
-        <Route path="book" element={<BookingPage />} />
+        <Route element={<ProtectedRoute />}>
+          <Route path="book" element={<BookingPage />} />
+        </Route>
+        <Route element={<ProtectedRoute staffOnly />}>
+            <Route path="staff/slots" element={<SlotManagementPage />} />
+        </Route>
         <Route path="about" element={<AboutPage />} />
-        <Route path="staff/slots" element={<SlotManagementPage />} />
         <Route path="login" element={<LoginPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
