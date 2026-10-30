@@ -3,8 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles/global.css';
+import { AuthProvider } from './auth/AuthContext.jsx';
 import App from './App.jsx';
-import { AuthProvider } from './context/AuthContext.jsx';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
