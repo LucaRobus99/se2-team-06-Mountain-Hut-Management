@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { Form, Button, Alert } from 'react-bootstrap';
+import { Alert } from 'react-bootstrap';
+import AvailabilitySlotCard from '../components/AvailabilitySlotCard.jsx';
+import backdrop from '../assets/edelweiss-dolomites.png';
+import { AlpineDatePicker, AlpineMealSelect } from '../components/AlpineBookingFields.jsx';
 import {
   getAvailableSlots,
   getSlotSeating,
@@ -184,122 +187,95 @@ export default function BookingPage() {
   }
 
   const selectedSlot = result?.slots.find((slot) => slot.id === selectedSlotId);
-
   return (
-    <div>
-      <h1>Book a table</h1>
-      <p>Bookings are simulated for now. Sign in with a real Hiker account to confirm.</p>
-
-      {booking ? (
-        <section aria-label="Booking result">
-          <Alert variant="success">Booking confirmed (mock).</Alert>
-          <h2>Booking details</h2>
-          <p>Reference: {booking.id}</p>
-          <p>Date: {booking.slot.date}</p>
-          <p>Meal: {booking.slot.meal}</p>
-          <p>Time: {booking.slot.startTime}</p>
-          <p>Guests: {booking.partySize}</p>
-          <p>Contact: {booking.contactName}</p>
-          <p>Seating: {booking.split ? 'Multiple tables' : 'Single table'}</p>
-          <p>Assigned seats: {booking.seatAssignments
-            .map((table) => `${table.tableLabel}: ${table.seats}`)
-            .join(', ')}
-          </p>
-          <Button onClick={handleNewBooking}>Make another booking</Button>
-        </section>
-      ) : (
-        <>
-          <Form onSubmit={handleSearch}>
-            <Form.Group className="mb-3" controlId="booking-date">
-              <Form.Label>Date</Form.Label>
-              <Form.Control
-                type="date" value={date} min={today} required disabled={busy}
-                onChange={(event) => { setDate(event.target.value); resetResults(); }}
-              />
-            </Form.Group>
-
-            <Form.Group className="mb-3" controlId="booking-guests">
-              <Form.Label>Guests</Form.Label>
-              <Form.Control
-                type="number" min="1" step="1" required value={partySize}
-                disabled={busy}
-                onChange={(event) => { setPartySize(event.target.value); resetResults(); }}
-              />
-            </Form.Group>
-
-            <Form.Group className="mb-3" controlId="booking-meal">
-              <Form.Label>Meal</Form.Label>
-              <Form.Select
-                value={meal} required disabled={busy}
-                onChange={(event) => { setMeal(event.target.value); resetResults(); }}
-              >
-                <option value="">Select a meal</option>
-                <option value="breakfast">Breakfast</option>
-                <option value="lunch">Lunch</option>
-                <option value="aperitivo">Aperitivo</option>
-                <option value="dinner">Dinner</option>
-              </Form.Select>
-            </Form.Group>
-
-            <Button type="submit" disabled={busy}>
-              {loading ? 'Searching...' : 'Find available times'}
-            </Button>
-          </Form>
-
-          {error && <Alert variant="danger" role="alert" className="mt-3">{error}</Alert>}
-          {info && <Alert variant="info" className="mt-3">{info}</Alert>}
-
-          {result && (
-            <section className="mt-4">
-              <h2>Available times</h2>
-              {result.slots.length === 0 ? (
-                <Alert variant="info">No available slots for the selected date, meal and party size.</Alert>
-              ) : (
-                <div className="d-flex flex-wrap gap-2">
-                  {result.slots.map((slot) => (
-                    <Button
-                      key={slot.id}
-                      variant={selectedSlotId === slot.id ? 'primary' : 'outline-primary'}
-                      disabled={busy}
-                      onClick={() => handleSelectSlot(slot)}
-                    >
-                      {slot.startTime} — {slot.availableSeats} seats left
-                    </Button>
-                  ))}
+    <div className="eh-editorial-page eh-booking-page">
+      <section className="eh-page-banner eh-booking-banner" style={{ backgroundImage: `url(${backdrop})` }}>
+        <div className="eh-wide-wrap eh-banner-content">
+          <p className="eh-page-eyebrow">Your mountain table</p>
+          <h1>Book a table.</h1>
+          <p>Choose your moment and make it yours.</p>
+        </div>
+      </section>
+      <div className="eh-wide-wrap eh-booking-content">
+        {booking ? (
+          <section className="eh-booking-success" aria-label="Booking result">
+            <span className="eh-ornament" aria-hidden="true">✳</span>
+            <h2>Your table is booked.</h2>
+            <p className="eh-booking-confirmed">Booking confirmed (demo).</p>
+            <dl>
+              <div><dt>Reference</dt><dd>{booking.id}</dd></div>
+              <div><dt>Date</dt><dd>{booking.slot.date}</dd></div>
+              <div><dt>Time</dt><dd>{booking.slot.startTime}</dd></div>
+              <div><dt>Meal</dt><dd>{booking.slot.meal === 'aperitivo' ? 'Happy hour' : booking.slot.meal}</dd></div>
+              <div><dt>Guests</dt><dd>{booking.partySize}</dd></div>
+              <div><dt>Name</dt><dd>{booking.contactName}</dd></div>
+              <div><dt>Seating</dt><dd>{booking.split ? 'Multiple tables' : 'Single table'}</dd></div>
+            </dl>
+            <button type="button" className="eh-button eh-button--green" onClick={handleNewBooking}>Make another booking</button>
+          </section>
+        ) : (
+          <>
+            <form className="eh-availability-search eh-booking-search" onSubmit={handleSearch}>
+              <div className="eh-availability-field">
+                <label htmlFor="booking-date">Date</label>
+                <AlpineDatePicker id="booking-date" value={date} minDate={today} required disabled={busy} onChange={value => { setDate(value); resetResults(); }} />
+              </div>
+              <div className="eh-availability-field">
+                <label htmlFor="booking-meal">Meal</label>
+                <AlpineMealSelect id="booking-meal" value={meal} required disabled={busy} onChange={value => { setMeal(value); resetResults(); }} />
+              </div>
+              <div className="eh-availability-field eh-availability-guests">
+                <label htmlFor="booking-guests">Guests</label>
+                <input id="booking-guests" type="number" min="1" step="1" required disabled={busy} value={partySize} onChange={event => { setPartySize(event.target.value); resetResults(); }} />
+              </div>
+              <button className="eh-button eh-button--green eh-availability-submit" disabled={busy} type="submit">{loading ? 'Searching...' : 'Find available times'} <span aria-hidden="true">↗</span></button>
+            </form>
+            {error && <Alert variant="danger" role="alert" className="eh-availability-error">{error}</Alert>}
+            {info && <Alert variant="info" className="eh-availability-error">{info}</Alert>}
+            {result && (
+              <section className="eh-availability-results">
+                <div className="eh-results-heading">
+                  <div><p className="eh-page-eyebrow">Choose your time</p><h2>Available meal slots</h2></div>
+                  <p>{result.date} · {partySize} {Number(partySize) === 1 ? 'guest' : 'guests'}</p>
                 </div>
-              )}
-
-              {checkingSeating && <p className="mt-3">Checking seating...</p>}
-
-              {selectedSlot && seating && (
-                <div className="mt-3">
-                  <p>Selected time: {selectedSlot.startTime}</p>
-                  <p>Seating: {seating.fit === 'single_table' ? 'Single table' : 'Multiple tables'}</p>
-                  <p>Assigned seats: {seating.seatAssignments
-                    .map((table) => `${table.tableLabel}: ${table.seats}`)
-                    .join(', ')}
-                  </p>
-                  <Button onClick={handleConfirmBooking} disabled={busy || loadingAuth || user?.role && user.role !== 'hiker'}>
-                    {bookingLoading ? 'Confirming...' : !user ? 'Log in to confirm' : 'Confirm booking'}
-                  </Button>
-
-                  {user?.role && user.role !== 'hiker' && (
-                    <Alert variant="warning" className="mt-3">Only Hikers can make online bookings.</Alert>
-                  )}
-
-                  {import.meta.env.DEV && (
-                    <div className="mt-3">
-                      <Button variant="outline-secondary" onClick={handleSimulateOtherBooking} disabled={busy || !!info}>
-                        Simulate another booking (test only)
-                      </Button>
+                {result.slots.length === 0 ? (
+                  <div className="eh-empty-results"><h3>No tables available for this search.</h3><p>Try a different meal, date or number of guests.</p></div>
+                ) : (
+                  <div className="eh-slot-cards">
+                    {result.slots.map((slot, index) => (
+                      <AvailabilitySlotCard key={slot.id} slot={slot} index={index} partySize={Number(partySize)}
+                        selected={selectedSlotId === slot.id} disabled={busy} onClick={() => handleSelectSlot(slot)} />
+                    ))}
+                  </div>
+                )}
+                {checkingSeating && <p className="eh-search-message" role="status">Checking your table...</p>}
+                {selectedSlot && seating && (
+                  <div className="eh-selection-summary">
+                    <div>
+                      <p className="eh-page-eyebrow">Your selection</p>
+                      <h3>{selectedSlot.startTime} · {seating.fit === 'single_table' ? 'Single table' : 'Multiple tables'}</h3>
+                      <p>{partySize} {Number(partySize) === 1 ? 'guest' : 'guests'} · {date}</p>
                     </div>
-                  )}
-                </div>
-              )}
-            </section>
-          )}
-        </>
-      )}
+                    <div className="eh-selection-actions">
+                      {user?.role && user.role !== 'hiker' && <p className="eh-selection-warning">Only Hikers can book online.</p>}
+                      <button type="button" className="eh-button eh-button--green" onClick={handleConfirmBooking}
+                        disabled={busy || loadingAuth || Boolean(user?.role && user.role !== 'hiker')}>
+                        {bookingLoading ? 'Confirming...' : !user ? 'Log in to confirm' : 'Confirm booking'}
+                      </button>
+                      {import.meta.env.DEV && (
+                        <button type="button" className="eh-button eh-button--outline" onClick={handleSimulateOtherBooking} disabled={busy || !!info}>
+                          Simulate another booking (test)
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+            {!result && !error && <div className="eh-availability-prompt"><h2>Your next stop starts here.</h2><p>Pick a date, meal and number of guests to find a time.</p></div>}
+          </>
+        )}
+      </div>
     </div>
   );
 }

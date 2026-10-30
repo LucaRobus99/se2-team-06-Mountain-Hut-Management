@@ -176,7 +176,7 @@ body {
   align-items: center;
   gap: clamp(1.2rem, 2.3vw, 2.2rem);
   border-radius: 20px;
-  background: rgba(255, 253, 249, 0.985);
+  background: rgba(255, 253, 249, 3.985);
   box-shadow: 0 21px 60px #4b3f3522;
   padding: clamp(1.3rem, 2.6vw, 2.5rem) clamp(1.25rem, 3.3vw, 3.35rem);
   border: 1px solid #f4efe7;

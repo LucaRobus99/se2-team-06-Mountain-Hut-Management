@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { AlpineDatePicker, AlpineMealSelect } from '../components/AlpineBookingFields.jsx';
 import heroImage from '../assets/edelweiss-hero.png';
 import hutImage from '../assets/edelweiss-terrace.jpg';
 import findUsImage from '../assets/edelweiss-dolomites.png';
@@ -8,7 +9,7 @@ import findUsImage from '../assets/edelweiss-dolomites.png';
 const meals = [
   ['breakfast', 'Breakfast'],
   ['lunch', 'Lunch'],
-  ['aperitivo', 'Aperitivo'],
+  ['aperitivo', 'Happy hour'],
   ['dinner', 'Dinner']
 ];
 
@@ -103,13 +104,11 @@ export default function HomePage() {
             <form className="eh-search-form" onSubmit={handleSearch}>
               <div className="eh-field">
                 <label htmlFor="eh-date">Date</label>
-                <input id="eh-date" type="date" required value={date} min={todayInItaly()} onChange={event => setDate(event.target.value)} />
+                <AlpineDatePicker id="eh-date" required value={date} minDate={todayInItaly()} onChange={setDate} />
               </div>
               <div className="eh-field">
                 <label htmlFor="eh-meal">Meal</label>
-                <select id="eh-meal" value={meal} onChange={event => setMeal(event.target.value)}>
-                  {meals.map(([value,label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
+                <AlpineMealSelect id="eh-meal" required value={meal} onChange={setMeal} />
               </div>
               <div className="eh-field eh-field--guests">
                 <label htmlFor="eh-guests">Guests</label>
@@ -125,11 +124,11 @@ export default function HomePage() {
 
       <div className="eh-wide-wrap eh-home-information">
         <section className="eh-feature" aria-labelledby="eh-our-hut-title">
-          <img src={hutImage} alt="An alpine hut terrace with wooden tables and flowers" loading="lazy" />
+          <img src={hutImage} alt="Wooden Edelweiss Hut sign with a mountain backdrop" loading="lazy" />
           <div className="eh-feature-copy">
             <p className="eh-eyebrow">Our hut <span className="eh-label-line" /></p>
-            <h2 id="eh-our-hut-title">A warm welcome above the valley.</h2>
-            <p>Good food, fresh mountain air and a place to slow down after a hike or a day on the slopes.</p>
+            <h2 id="eh-our-hut-title">A little pause, a lasting memory.</h2>
+            <p>Some of the best mountain moments happen around a table. Come in from the trail, share something delicious and enjoy the view a little longer.</p>
             <Link to="/about" className="eh-text-button">
               Discover our Hut <span className="eh-button-arrow" aria-hidden="true">↗</span>
             </Link>
@@ -139,8 +138,8 @@ export default function HomePage() {
         <section className="eh-feature eh-feature--reverse" aria-labelledby="eh-find-us-title">
           <div className="eh-feature-copy">
             <p className="eh-eyebrow">Find us <span className="eh-label-line" /></p>
-            <h2 id="eh-find-us-title">Seceda, in the Dolomites.</h2>
-            <p>High above Val Gardena, surrounded by trails and ski slopes. Access depends on the season and the weather.</p>
+            <h2 id="eh-find-us-title">The view is part of the experience.</h2>
+            <p>Find us in the Seceda area, above Val Gardena, where mountain paths and ski slopes meet. Plan your way up before visiting: access varies by season and weather.</p>
             <Link to="/about" className="eh-text-button">
               How to reach us <span className="eh-button-arrow" aria-hidden="true">↗</span>
             </Link>
