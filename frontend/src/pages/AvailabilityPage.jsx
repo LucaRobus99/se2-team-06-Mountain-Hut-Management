@@ -5,7 +5,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { getAvailableSlots, getSlotSeating } from '../api/booking.js';
 import { AlpineDatePicker, AlpineMealSelect, MEAL_OPTIONS } from '../components/AlpineBookingFields.jsx';
 import AvailabilitySlotCard from '../components/AvailabilitySlotCard.jsx';
-import landscape from '../assets/edelweiss-dolomites.png';
+import landscape from '../assets/availability.png';
 
 function nextDay() {
   const date = new Date();

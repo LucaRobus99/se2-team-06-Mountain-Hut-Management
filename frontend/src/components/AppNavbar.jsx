@@ -50,7 +50,7 @@ export default function AppNavbar() {
                             <Nav.Link as={NavLink} to="/" end>Home</Nav.Link>
                             <Nav.Link as={NavLink} to="/menu">Menu</Nav.Link>
                             <Nav.Link as={NavLink} to="/availability">Availability</Nav.Link>
-                            <Nav.Link as={NavLink} to="/about">About</Nav.Link>
+                            <Nav.Link as={NavLink} to="/find-us">Find us</Nav.Link>
                             {(user?.role === 'employee' || user?.role === 'warden') && (
                                 <Nav.Link as={NavLink} to="/staff/slots">Manage slots</Nav.Link>
                             )}

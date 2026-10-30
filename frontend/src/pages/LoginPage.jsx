@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, Spinner } from 'react-bootstrap';
-import { Link, useLocation, useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../auth/AuthContext.jsx';
 import EdelweissBrand from '../components/EdelweissBrand.jsx';
 import interiorBackground from '../assets/edelweiss-login-interior.png';
@@ -68,7 +68,7 @@ export default function LoginPage() {
             {loading || loadingAuth ? <><Spinner animation="border" size="sm" /> Signing in...</> : 'Log in'}
           </button>
         </form>
-        <Link to="/availability" className="eh-login-secondary">Just visiting? Check availability</Link>
+        <p className="eh-login-note">Sign in to access your personal area.</p>
       </div>
     </section>
   );

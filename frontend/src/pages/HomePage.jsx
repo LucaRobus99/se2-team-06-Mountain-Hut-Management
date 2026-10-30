@@ -98,7 +98,7 @@ export default function HomePage() {
               <div className="eh-big-calendar"><CalendarIcon /></div>
               <div>
                 <h2 id="eh-availability-title">Check availability</h2>
-                <p>See available meal slots and plan your visit.</p>
+                <p>See available slots and plan your visit.</p>
               </div>
             </div>
             <form className="eh-search-form" onSubmit={handleSearch}>
@@ -126,22 +126,29 @@ export default function HomePage() {
         <section className="eh-feature" aria-labelledby="eh-our-hut-title">
           <img src={hutImage} alt="Wooden Edelweiss Hut sign with a mountain backdrop" loading="lazy" />
           <div className="eh-feature-copy">
-            <p className="eh-eyebrow">Our hut <span className="eh-label-line" /></p>
-            <h2 id="eh-our-hut-title">A little pause, a lasting memory.</h2>
-            <p>Some of the best mountain moments happen around a table. Come in from the trail, share something delicious and enjoy the view a little longer.</p>
-            <Link to="/about" className="eh-text-button">
-              Discover our Hut <span className="eh-button-arrow" aria-hidden="true">↗</span>
-            </Link>
+            <p className="eh-eyebrow">Our story <span className="eh-label-line" /></p>
+            <h2 id="eh-our-hut-title">Where It All Began.</h2>
+            <p>
+              Our story began in 1987, when a family of mountain lovers decided to give an old shepherd’s shelter along the Seceda trails a new life. 
+              <br />
+              At first, it was their own quiet retreat, but as more and more hikers passed by, the family discovered the joy of sharing that special corner of the mountains with others.
+              <br />
+              What started with a pot of soup and a wooden table slowly became Edelweiss Hut: a welcoming stop where local flavours, good company and breathtaking views of the Dolomites still come together.
+            </p>
           </div>
         </section>
 
         <section className="eh-feature eh-feature--reverse" aria-labelledby="eh-find-us-title">
           <div className="eh-feature-copy">
-            <p className="eh-eyebrow">Find us <span className="eh-label-line" /></p>
-            <h2 id="eh-find-us-title">The view is part of the experience.</h2>
-            <p>Find us in the Seceda area, above Val Gardena, where mountain paths and ski slopes meet. Plan your way up before visiting: access varies by season and weather.</p>
-            <Link to="/about" className="eh-text-button">
-              How to reach us <span className="eh-button-arrow" aria-hidden="true">↗</span>
+            <p className="eh-eyebrow">How to reach us <span className="eh-label-line" /></p>
+            <h2 id="eh-find-us-title">Find us above Val Gardena.</h2>
+            <p>Nestled among the alpine meadows of Seceda, Edelweiss Hut is surrounded by some of the most beautiful views of the Dolomites. 
+              <br/>
+              The easiest way to reach us is by taking the Seceda cable car from Ortisei, followed by a walk along the mountain trails. 
+              <br/>
+              For more information visit our...</p>
+            <Link to="/find-us#getting-here" className="eh-text-button">
+              Find Us section <span className="eh-button-arrow" aria-hidden="true">↗</span>
             </Link>
           </div>
           <img src={findUsImage} alt="Open alpine meadows and mountain peaks in the Dolomites" loading="lazy" />
