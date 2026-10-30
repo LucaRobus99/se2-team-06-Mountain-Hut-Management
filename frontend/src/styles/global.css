@@ -29,3 +29,19 @@ a:focus-visible, button:focus-visible {
   outline: 3px solid #73b99c;
   outline-offset: 3px;
 }
+
+.hut-carousel {
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.hut-carousel img {
+  height: 360px;
+  object-fit: cover;
+}
+
+/* Same height as the hut photos; older news are reached by scrolling. */
+.news-list {
+  max-height: 360px;
+  overflow-y: auto;
+}

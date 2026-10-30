@@ -1,5 +1,5 @@
 import { NotFoundError, ConflictError, UnprocessableEntityError, ValidationError } from '../errors/AppError.js';
-import { computeSeating } from './seating.js';
+import { canSeat, computeSeating } from './seating.js';
 import { isSlotTooLate } from '../utils/hutTime.js';
 
 const ALLOWED_MEALS = ['breakfast', 'lunch', 'aperitivo', 'dinner'];
@@ -135,8 +135,7 @@ export function createSlotService({ slotDao, hutDao, timeZone, now = () => new D
         if (isSlotTooLate(slot, { timeZone, now: currentTime })) continue;
 
         const tables = await slotDao.getTablesWithFreeForSlot(slot.id);
-        const seating = computeSeating(partySize, tables);
-        if (!seating) continue;
+        if (!canSeat(partySize, tables)) continue;
 
         result.push({
           id: slot.id,

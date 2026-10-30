@@ -3,7 +3,7 @@ export async function login({ email, password }) {
   let response;
 
   try {
-    response = await fetch('/api/sessions', {
+    response = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include', // Il browser conserva il cookie di sessione.
@@ -14,9 +14,9 @@ export async function login({ email, password }) {
   }
 
   if (response.ok) {
-    // Il frontend non richiede una struttura specifica nella risposta di login.
-    // Basta un codice 2xx: il server ha autenticato l'utente.
-    return;
+    // La risposta contiene l'utente autenticato: { user: { id, email, displayName, role, phone } }.
+    const data = await response.json().catch(() => null);
+    return data?.user ?? null;
   }
 
   if (response.status === 401 || response.status === 403) {
@@ -34,4 +34,23 @@ export async function login({ email, password }) {
   // Il backend Mountain Hut usa errori JSON con un campo "detail".
   const errorData = await response.json().catch(() => null);
   throw new Error(errorData?.detail || 'Login failed. Please try again.');
+}
+
+export async function getCurrentUser() {
+  try {
+    const response = await fetch('/api/auth/me', { credentials: 'include' });
+    if (!response.ok) return null; // 401: nessuna sessione attiva.
+    const data = await response.json();
+    return data?.user ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function logout() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+  } catch {
+    // Anche se il server non risponde, l'utente viene disconnesso lato client.
+  }
 }

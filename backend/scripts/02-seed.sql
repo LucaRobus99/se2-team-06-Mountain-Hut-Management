@@ -34,3 +34,29 @@ INSERT INTO menus (meal_id, name, description) VALUES
     (3, 'Aperitivo', 'Local cured meats, cheese and a drink'),
     (4, 'Hut dinner', 'Pasta, main course and dessert'),
     (4, 'Vegetarian dinner', 'Pasta, vegetable main course and dessert');
+
+-- Sample slots on two days. meal_id is filled in by the slots triggers from start_time,
+-- so each start_time must fall on a meal step (lunch/dinner hourly, others every 30 min).
+INSERT INTO slots (id, hut_id, date, start_time, status) VALUES
+    (1,  1, '2026-11-15', '09:00', 'available'),
+    (2,  1, '2026-11-15', '09:30', 'available'),
+    (3,  1, '2026-11-15', '12:00', 'available'),
+    (4,  1, '2026-11-15', '13:00', 'available'),
+    (5,  1, '2026-11-15', '15:30', 'available'),
+    (6,  1, '2026-11-15', '19:00', 'available'),
+    (7,  1, '2026-11-15', '20:00', 'off'),
+    (8,  1, '2026-11-16', '09:00', 'available'),
+    (9,  1, '2026-11-16', '12:00', 'available'),
+    (10, 1, '2026-11-16', '19:00', 'available');
+
+-- Tables used by each slot. Slot 7 is off and slot 8 has no tables (zero capacity, issue #17).
+INSERT INTO slot_tables (slot_id, table_id) VALUES
+    (1, 1), (1, 2),
+    (2, 1), (2, 2), (2, 3),
+    (3, 1), (3, 2), (3, 3), (3, 4), (3, 5),
+    (4, 2), (4, 3), (4, 4),
+    (5, 1), (5, 2),
+    (6, 1), (6, 2), (6, 3), (6, 4), (6, 5),
+    (7, 4), (7, 5),
+    (9, 2), (9, 4),
+    (10, 3), (10, 4), (10, 5);
