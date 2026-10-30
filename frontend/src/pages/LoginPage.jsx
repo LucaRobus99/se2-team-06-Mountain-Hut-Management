@@ -17,6 +17,7 @@ export default function LoginPage() {
   const { user, loadingAuth, signIn } = useAuth();
   const destination = location.state?.from === '/book' ? '/book' : '/';
   const bookingDraft = location.state?.bookingDraft;
+  const loginNotice = location.state?.notice;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -55,6 +56,7 @@ export default function LoginPage() {
       <div className="eh-login-card">
         <div className="eh-login-brand"><EdelweissBrand /></div>
         <h1>Welcome back.</h1>
+        {loginNotice && !user && <Alert variant="info" className="eh-login-alert">{loginNotice}</Alert>}
         {error && <Alert variant="danger" role="alert" className="eh-login-alert">{error}</Alert>}
         <form onSubmit={handleSubmit} className="eh-login-form">
           <label htmlFor="login-email"><FieldIcon type="mail" />Email</label>

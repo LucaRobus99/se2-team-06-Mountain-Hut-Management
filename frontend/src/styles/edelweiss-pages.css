@@ -429,3 +429,46 @@
   .eh-find-us-page .eh-find-us-cards { grid-template-columns: 1fr; }
   .eh-find-us-page .eh-info-card:last-child { grid-column: auto; }
 }
+
+
+/* MH-01: final confirmation, separate from unrelated website styling. */
+.eh-booking-page .eh-booking-complete {
+  text-align: center;
+  margin-top: clamp(-55px, -4vw, -30px);
+  max-width: 680px;
+  border: 1px solid #dae6d8;
+  box-shadow: 0 20px 60px rgba(32, 69, 49, .13);
+}
+.eh-booking-complete .eh-success-check {
+  display: grid;
+  width: 77px;
+  height: 77px;
+  margin: 0 auto 1.1rem;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #315f47;
+}
+.eh-booking-complete .eh-success-check svg { width: 46px; height: 46px; }
+.eh-booking-complete .eh-page-eyebrow { color: #4b7657; margin: 0 0 .35rem; }
+.eh-booking-complete h2 { margin: 0 0 .75rem; color: #193f30; font-size: clamp(2rem, 3.2vw, 2.6rem); }
+.eh-booking-complete .eh-success-subtitle { max-width: 440px; margin: 0 auto 1.5rem; color: #58675c; font: 400 1.08rem/1.5 Georgia, serif; }
+.eh-booking-complete dl { max-width: 490px; margin: 1.6rem auto; gap: .7rem 1.25rem; }
+.eh-booking-complete dl > div { padding: .7rem .5rem; text-align: left; }
+.eh-booking-complete dd { font-size: 1.05rem; color: #253b2c; overflow-wrap: anywhere; }
+.eh-booking-complete .eh-success-seating { color: #455b4e; background: #ecf3ea; border-radius: .6rem; padding: .8rem 1rem; margin: 0 auto 1.15rem; max-width: 460px; }
+.eh-booking-complete .eh-success-footnote { font: 400 .92rem/1.4 Georgia,serif; color: #69756b; margin: 0 0 1.25rem; }
+.eh-booking-complete .eh-success-actions { display: flex; gap: .75rem; justify-content: center; flex-wrap: wrap; }
+.eh-booking-page .eh-selection-summary small { display: block; color: #617567; margin-top: .65rem; }
+.eh-split-modal .modal-content { background: #fffdfa; border: 1px solid #e3e5d8; border-radius: 1.05rem; box-shadow: 0 20px 75px #1b3b2c30; font-family: Georgia,serif; color: #24392d; }
+.eh-split-modal .modal-header { border-bottom: 1px solid #e8e6dc; padding: 1.4rem 1.6rem .85rem; }
+.eh-split-modal .modal-title { font-family: Georgia,serif; color: #193e2d; font-weight: 700; font-size: 1.5rem; }
+.eh-split-modal .modal-body { padding: 1.2rem 1.6rem .5rem; font-size: 1.06rem; line-height: 1.55; }
+.eh-split-modal .eh-split-arrangement { background: #eaf0e7; color: #2d573c; padding: .8rem .9rem; border-radius: .55rem; font-weight: 700; }
+.eh-split-modal .eh-split-note { color: #657168; font-size: .92rem; }
+.eh-split-modal .modal-footer { border-top: 0; padding: .5rem 1.6rem 1.35rem; gap: .5rem; }
+@media (max-width: 560px) {
+  .eh-booking-complete .eh-success-actions .eh-button { width: 100%; justify-content: center; }
+  .eh-booking-complete dl { grid-template-columns: 1fr 1fr; }
+  .eh-split-modal .modal-footer .eh-button { width: 100%; justify-content: center; }
+}
