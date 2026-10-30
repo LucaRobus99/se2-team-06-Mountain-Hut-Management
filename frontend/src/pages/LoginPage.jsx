@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
-import { Link, useNavigate } from 'react-router';
-import { login } from '../api/auth.js';
+import { Link, useLocation, useNavigate } from 'react-router';
+import { useAuth } from '../context/AuthContext.jsx';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { login } = useAuth();
 
   // Form controllato: React mantiene i valori inseriti dall'utente.
   const [email, setEmail] = useState('');
@@ -26,7 +28,8 @@ export default function LoginPage() {
     try {
       // Solo richiesta HTTP: autenticazione e sessione sono gestite dal backend.
       await login({ email: email.trim(), password });
-      navigate('/', { replace: true }); // Torna all'app dopo il login.
+      // Torna alla pagina protetta richiesta, altrimenti alla home.
+      navigate(location.state?.from ?? '/', { replace: true });
     } catch (err) {
       setError(err.message || 'Unable to sign in. Please try again.');
     } finally {
