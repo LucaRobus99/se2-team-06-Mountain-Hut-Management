@@ -1,6 +1,6 @@
 // MH-01 / public MH-04: real REST calls. No client-side seat reservations.
 // Vite proxies /api to Express on localhost:8080 in development.
-const HUT_ID = 1;
+// The system serves a single hut, so no hut id appears in the paths.
 const VALID_MEALS = new Set(['breakfast', 'lunch', 'aperitivo', 'dinner']);
 
 function positiveInteger(value) {
@@ -45,14 +45,14 @@ export async function getAvailableSlots({ date, meal, partySize }) {
   const validationError = validateSearch({ date, meal, partySize });
   if (validationError) throw new Error(validationError);
   const params = new URLSearchParams({ date, meal, partySize: String(partySize) });
-  return apiRequest(`/api/huts/${HUT_ID}/slots?${params}`);
+  return apiRequest(`/api/availability?${params}`);
 }
 
 export async function getSlotSeating({ slotId, partySize }) {
   if (!positiveInteger(slotId) || !positiveInteger(partySize)) {
     throw new Error('Please select an available time and a valid number of guests.');
   }
-  return apiRequest(`/api/huts/${HUT_ID}/slots/${slotId}/seating?${new URLSearchParams({ partySize: String(partySize) })}`);
+  return apiRequest(`/api/availability/${slotId}/seating?${new URLSearchParams({ partySize: String(partySize) })}`);
 }
 
 export async function createBooking({ slotId, partySize }) {
