@@ -1,18 +1,11 @@
+import { createExecutorOf } from './executor.js';
+
 /**
  * DAO for bookings and booking_seats.
- * Methods accept an optional first argument that may be a database/transaction
- * executor; when omitted, the bound database is used.
+ * Methods take an optional executor first (see executor.js).
  */
 export function createBookingDao(db) {
-  const defaultDb = db;
-
-  function executorOf(args) {
-    const [first, ...rest] = args;
-    if (first && typeof first.query === 'function') {
-      return { db: first, args: rest };
-    }
-    return { db: defaultDb, args };
-  }
+  const executorOf = createExecutorOf(db);
 
   return {
     async create(...args) {
@@ -26,8 +19,8 @@ export function createBookingDao(db) {
           booking.slotId,
           booking.hikerId ?? null,
           booking.createdBy ?? null,
-          booking.contactName,
-          booking.email,
+          booking.contactName ?? null,
+          booking.email ?? null,
           booking.phone ?? null,
           booking.partySize,
         ]
@@ -53,7 +46,7 @@ export function createBookingDao(db) {
       const { rows } = await exec.query(
         `SELECT b.id, b.slot_id, b.hiker_id, b.created_by, b.contact_name, b.email, b.phone,
                 b.party_size, b.status, b.created_at,
-                s.hut_id, s.date AS slot_date, s.start_time AS slot_start_time,
+                s.date AS slot_date, s.start_time AS slot_start_time, s.end_time AS slot_end_time,
                 s.status AS slot_status, m.meal_type AS meal
          FROM bookings b
          JOIN slots s ON s.id = b.slot_id

@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { UnauthorizedError, ValidationError } from '../errors/AppError.js';
-import { validateLogin } from '../auth/validation.js';
+import { UnauthorizedError } from '../errors/AppError.js';
+import { validateLogin } from '../auth/loginValidation.js';
+import { invalidFields } from '../utils/validation.js';
 import { clearSessionCookie } from '../auth/session.js';
 
 export function createAuthRouter({ passport, requireAuth, now = () => new Date() }) {
@@ -10,9 +11,7 @@ export function createAuthRouter({ passport, requireAuth, now = () => new Date()
   router.post('/login', (req, res, next) => {
     const details = validateLogin(req.body);
     if (details.length > 0) {
-      return next(
-        new ValidationError('The request contains invalid fields.', 'VALIDATION_ERROR', details)
-      );
+      return next(invalidFields(details));
     }
 
     // `session: false` only verifies the credentials; the session is created
