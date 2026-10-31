@@ -81,7 +81,7 @@ export default function HomePage() {
         <div className="eh-wide-wrap eh-hero-inner">
           <div className="eh-hero-copy">
             <p className="eh-eyebrow eh-hero-eyebrow"><span className="eh-kicker-line" /> Seceda · Dolomites, Italy</p>
-            <h1>Take a break<br/>at Edelweiss Hut.</h1>
+            <h1>Take a break<br/>at Edelweiss Hut</h1>
             <p className="eh-hero-subtitle">Find a table and make your hike even better.</p>
             <div className="eh-hero-actions">
               <Link to={bookDestination} className="eh-button eh-button--green eh-hero-button"><CalendarIcon/> Book a table</Link>

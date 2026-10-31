@@ -7,6 +7,11 @@
 .eh-page-eyebrow { margin: 0 0 .85rem; text-transform: uppercase; letter-spacing: .21em; font-size: .78rem; font-weight: 700; }
 .eh-page-banner { position: relative; min-height: clamp(250px, 25vw, 390px); display: flex; align-items: center; background-size: cover; background-position: center 51%; color: #fffdf6; isolation: isolate; }
 .eh-page-banner::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(14,35,25,.91) 0%, rgba(20,44,31,.65) 40%, rgba(20,36,27,.1) 100%); z-index: -1; }
+/* Lighter overlay only on Check availability and Book a table; all other banners stay unchanged. */
+.eh-page-banner.eh-availability-banner::before,
+.eh-page-banner.eh-booking-banner::before {
+  background: linear-gradient(90deg, rgba(17,27,22,.62) 0%, rgba(17,27,22,.34) 40%, rgba(17,27,22,.04) 100%);
+}
 .eh-banner-content { position: relative; padding-block: clamp(3.6rem, 6vw, 6rem) clamp(5rem, 7vw, 7rem); }
 .eh-banner-content h1 { font-size: clamp(3.1rem, 6vw, 5.6rem); line-height: 1.03; margin: 0 0 .7rem; font-weight: 700; }
 .eh-banner-content > p:last-child { font-family: Georgia,serif; font-size: clamp(1.13rem, 2vw, 1.5rem); margin: 0; max-width: 580px; }
@@ -466,7 +471,7 @@
 .eh-split-modal .modal-body { padding: 1.2rem 1.6rem .5rem; font-size: 1.06rem; line-height: 1.55; }
 .eh-split-modal .eh-split-arrangement { background: #eaf0e7; color: #2d573c; padding: .8rem .9rem; border-radius: .55rem; font-weight: 700; }
 .eh-split-modal .eh-split-note { color: #657168; font-size: .92rem; }
-.eh-split-modal .modal-footer { border-top: 0; padding: .5rem 1.6rem 1.35rem; gap: .5rem; }
+.eh-split-modal .modal-footer { border-top: 0; padding: .5rem 1.6rem 1.35rem; gap: .5rem;   justify-content: center; }
 @media (max-width: 560px) {
   .eh-booking-complete .eh-success-actions .eh-button { width: 100%; justify-content: center; }
   .eh-booking-complete dl { grid-template-columns: 1fr 1fr; }

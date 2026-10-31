@@ -5,7 +5,8 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { getAvailableSlots, getSlotSeating } from '../api/booking.js';
 import { AlpineDatePicker, AlpineMealSelect, MEAL_OPTIONS } from '../components/AlpineBookingFields.jsx';
 import AvailabilitySlotCard from '../components/AvailabilitySlotCard.jsx';
-import landscape from '../assets/availability.png';
+import SplitSeatingModal from '../components/SplitSeatingModal.jsx';
+import landscape from '../assets/edelweiss-booking-banner.png';
 
 function nextDay() {
   const date = new Date();
@@ -29,12 +30,13 @@ export default function AvailabilityPage() {
   const [result, setResult] = useState(null);
   const [selectedSlotId, setSelectedSlotId] = useState(null);
   const [seating, setSeating] = useState(null);
+  const [pendingSplit, setPendingSplit] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [checkingSeating, setCheckingSeating] = useState(false);
   const searchReady = useMemo(() => Boolean(date && meal && /^\d+$/.test(partySize) && Number(partySize) > 0), [date, meal, partySize]);
 
-  function resetSelection() { setSelectedSlotId(null); setSeating(null); }
+  function resetSelection() { setSelectedSlotId(null); setSeating(null); setPendingSplit(null); }
   function onFieldChange(setter, value) {
     setter(value);
     resetSelection();
@@ -76,13 +78,21 @@ export default function AvailabilityPage() {
     try {
       const data = await getSlotSeating({ slotId: slot.id, partySize: Number(partySize) });
       if (data.requiresConfirmation) {
-        const accepted = window.confirm(`${data.confirmation.message}\n\nDo you want to continue?`);
-        if (!accepted) return;
+        // Reuse the same on-page dialog shown in Book a table, never a browser alert.
+        setPendingSplit({ slotId: slot.id, seating: data });
+      } else {
+        setSelectedSlotId(slot.id);
+        setSeating(data);
       }
-      setSelectedSlotId(slot.id);
-      setSeating(data);
     } catch (err) { setError(err.message || 'Unable to check seating.'); }
     finally { setCheckingSeating(false); }
+  }
+
+  function acceptSplit() {
+    if (!pendingSplit) return;
+    setSelectedSlotId(pendingSplit.slotId);
+    setSeating(pendingSplit.seating);
+    setPendingSplit(null);
   }
 
   function handleContinue() {
@@ -98,7 +108,7 @@ export default function AvailabilityPage() {
       <section className="eh-page-banner eh-availability-banner" style={{ backgroundImage: `url(${landscape})` }}>
         <div className="eh-wide-wrap eh-banner-content">
           <p className="eh-page-eyebrow">Plan your visit</p>
-          <h1>Check availability.</h1>
+          <h1>Check availability</h1>
           <p>Find a table for your next mountain escape.</p>
         </div>
       </section>
@@ -161,6 +171,12 @@ export default function AvailabilityPage() {
           <div className="eh-availability-prompt"><h2>Your table is one search away.</h2><p>Choose a date, a meal and your group size to see available times.</p></div>
         ) : null}
       </div>
+      <SplitSeatingModal
+        show={Boolean(pendingSplit)}
+        seating={pendingSplit?.seating}
+        onCancel={() => setPendingSplit(null)}
+        onContinue={acceptSplit}
+      />
     </div>
   );
 }

@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
-import { Alert } from 'react-bootstrap';
+import { Alert, Modal } from 'react-bootstrap';
 import { useAuth } from '../auth/AuthContext.jsx';
 import AvailabilitySlotCard from '../components/AvailabilitySlotCard.jsx';
 import SplitSeatingModal from '../components/SplitSeatingModal.jsx';
-import backdrop from '../assets/edelweiss-dolomites.png';
+import backdrop from '../assets/edelweiss-booking-banner.png';
 import { AlpineDatePicker, AlpineMealSelect } from '../components/AlpineBookingFields.jsx';
 import { getAvailableSlots, getSlotSeating, createBooking, validateSearch, bookingErrorMessage } from '../api/booking.js';
 
@@ -26,6 +26,7 @@ export default function BookingPage() {
   const [selectedSlotId, setSelectedSlotId] = useState(draft?.selectedSlotId ?? null);
   const [seating, setSeating] = useState(draft?.seating || null);
   const [pendingSplit, setPendingSplit] = useState(null);
+  const [duplicateBooking, setDuplicateBooking] = useState(false);
   const [splitAcknowledged, setSplitAcknowledged] = useState(Boolean(draft?.seating?.requiresConfirmation));
   const [booking, setBooking] = useState(null);
   const [error, setError] = useState('');
@@ -117,6 +118,7 @@ export default function BookingPage() {
       setPendingSplit(null);
     } catch (err) {
       if (err.code === 'UNAUTHENTICATED' || err.status === 401) { goToLogin(); return; }
+      if (err.code === 'BOOKING_ALREADY_EXISTS') { setDuplicateBooking(true); return; }
       setError(bookingErrorMessage(err));
       if (['INSUFFICIENT_CAPACITY', 'SLOT_NOT_AVAILABLE', 'SLOT_NOT_FOUND', 'SLOT_TOO_LATE'].includes(err.code)) {
         await reloadAfterConflict();
@@ -147,6 +149,7 @@ export default function BookingPage() {
       await saveBooking();
     } catch (err) {
       if (err.code === 'UNAUTHENTICATED' || err.status === 401) { goToLogin(); return; }
+      if (err.code === 'BOOKING_ALREADY_EXISTS') { setDuplicateBooking(true); return; }
       setError(bookingErrorMessage(err));
       if (['INSUFFICIENT_CAPACITY', 'SLOT_NOT_AVAILABLE', 'SLOT_NOT_FOUND', 'SLOT_TOO_LATE'].includes(err.code)) await reloadAfterConflict();
     } finally { setCheckingSeating(false); }
@@ -217,6 +220,22 @@ export default function BookingPage() {
         )}
       </div>
       <SplitSeatingModal show={Boolean(pendingSplit)} seating={pendingSplit?.seating} busy={bookingLoading} onCancel={() => setPendingSplit(null)} onContinue={acceptSplit} />
+      <Modal show={duplicateBooking} onHide={() => setDuplicateBooking(false)} centered aria-labelledby="duplicate-booking-title" dialogClassName="eh-split-modal">
+        <Modal.Header closeButton>
+          <Modal.Title id="duplicate-booking-title">You already have a reservation</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p>You already have a confirmed booking for this time slot. Please select a different time to make another reservation.</p>
+        </Modal.Body>
+        <Modal.Footer>
+          <button type="button" className="eh-button eh-button--green" onClick={() => {
+            setDuplicateBooking(false);
+            setSelectedSlotId(null);
+            setSeating(null);
+            setSplitAcknowledged(false);
+          }}>Choose another time</button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 }
