@@ -1,247 +1,182 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Card, Col, Form, Row } from 'react-bootstrap';
+import { Alert } from 'react-bootstrap';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { getAvailableSlots, getSlotSeating } from '../api/booking.js';
-
-const MEALS = [
-  { value: 'breakfast', label: 'Breakfast' },
-  { value: 'lunch', label: 'Lunch' },
-  { value: 'aperitivo', label: 'Aperitivo' },
-  { value: 'dinner', label: 'Dinner' }
-];
+import { AlpineDatePicker, AlpineMealSelect, MEAL_OPTIONS } from '../components/AlpineBookingFields.jsx';
+import AvailabilitySlotCard from '../components/AvailabilitySlotCard.jsx';
+import SplitSeatingModal from '../components/SplitSeatingModal.jsx';
+import landscape from '../assets/edelweiss-booking-banner.png';
 
 function nextDay() {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return tomorrow.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' });
+  const date = new Date();
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(date).map(part => [part.type, part.value]));
+  return new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day + 1)).toISOString().slice(0, 10);
+}
+function formatDate(iso) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || '')) return iso || '';
+  return new Intl.DateTimeFormat('en-GB', { dateStyle: 'full', timeZone: 'UTC' }).format(new Date(`${iso}T00:00:00Z`));
 }
 
 export default function AvailabilityPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-
   const [date, setDate] = useState(searchParams.get('date') || nextDay());
   const [meal, setMeal] = useState(searchParams.get('meal') || 'lunch');
   const [partySize, setPartySize] = useState(searchParams.get('guests') || '2');
   const [result, setResult] = useState(null);
   const [selectedSlotId, setSelectedSlotId] = useState(null);
   const [seating, setSeating] = useState(null);
+  const [pendingSplit, setPendingSplit] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [checkingSeating, setCheckingSeating] = useState(false);
+  const searchReady = useMemo(() => Boolean(date && meal && /^\d+$/.test(partySize) && Number(partySize) > 0), [date, meal, partySize]);
 
-  const searchReady = useMemo(() => Boolean(date && meal && Number(partySize) > 0), [date, meal, partySize]);
-
-  function resetSelection() {
-    setSelectedSlotId(null);
-    setSeating(null);
+  function resetSelection() { setSelectedSlotId(null); setSeating(null); setPendingSplit(null); }
+  function onFieldChange(setter, value) {
+    setter(value);
+    resetSelection();
+    setResult(null); // Never show stale availability for a new party/date/meal.
+    setError('');
   }
 
-  async function performSearch(nextValues) {
+  async function performSearch(values) {
     setLoading(true);
     setError('');
     resetSelection();
     try {
-      const data = await getAvailableSlots({
-        date: nextValues.date,
-        meal: nextValues.meal,
-        partySize: Number(nextValues.partySize)
-      });
+      const data = await getAvailableSlots({ date: values.date, meal: values.meal, partySize: Number(values.partySize) });
       setResult(data);
     } catch (err) {
       setError(err.message || 'Unable to check availability.');
       setResult(null);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
   useEffect(() => {
-    if (searchReady && searchParams.get('date')) {
-      performSearch({ date, meal, partySize });
-    }
+    if (searchReady && searchParams.get('date')) performSearch({ date, meal, partySize });
+    // Run only on initial navigation; clicking Search handles later searches.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleSubmit(event) {
     event.preventDefault();
-    const payload = { date, meal, partySize };
+    if (!searchReady || loading || checkingSeating) return;
     setSearchParams({ date, meal, guests: partySize });
-    await performSearch(payload);
+    await performSearch({ date, meal, partySize });
   }
 
   async function handleSelectSlot(slot) {
+    if (checkingSeating || loading) return;
     setCheckingSeating(true);
     setError('');
+    resetSelection();
     try {
       const data = await getSlotSeating({ slotId: slot.id, partySize: Number(partySize) });
       if (data.requiresConfirmation) {
-        const accepted = window.confirm(
-          `${data.confirmation.message}\n\nDo you want to continue?`
-        );
-        if (!accepted) return;
+        // Reuse the same on-page dialog shown in Book a table, never a browser alert.
+        setPendingSplit({ slotId: slot.id, seating: data });
+      } else {
+        setSelectedSlotId(slot.id);
+        setSeating(data);
       }
-      setSelectedSlotId(slot.id);
-      setSeating(data);
-    } catch (err) {
-      setError(err.message || 'Unable to check seating.');
-    } finally {
-      setCheckingSeating(false);
-    }
+    } catch (err) { setError(err.message || 'Unable to check seating.'); }
+    finally { setCheckingSeating(false); }
+  }
+
+  function acceptSplit() {
+    if (!pendingSplit) return;
+    setSelectedSlotId(pendingSplit.slotId);
+    setSeating(pendingSplit.seating);
+    setPendingSplit(null);
   }
 
   function handleContinue() {
     if (!result || selectedSlotId === null || !seating) return;
     const bookingDraft = { date, meal, partySize, result, selectedSlotId, seating };
-
-    if (user?.role === 'hiker') {
-      navigate('/book', { state: { bookingDraft } });
-      return;
-    }
-
-    navigate('/login', {
-      state: {
-        from: '/book',
-        bookingDraft
-      }
-    });
+    if (user?.role === 'hiker') navigate('/book', { state: { bookingDraft } });
+    else navigate('/login', { state: { from: '/book', bookingDraft } });
   }
 
-  const selectedSlot = result?.slots.find((slot) => slot.id === selectedSlotId);
-
+  const selectedSlot = result?.slots?.find(slot => slot.id === selectedSlotId);
   return (
-    <div className="inner-page-grid gap-4">
-      <section>
-        <p className="section-kicker mb-2">Public page</p>
-        <h1 className="page-heading">Check availability</h1>
-        <p className="page-lead text-secondary">
-          Search for a date, meal and number of guests. You can continue to booking after selecting a slot.
-        </p>
+    <div className="eh-editorial-page eh-availability-page">
+      <section className="eh-page-banner eh-availability-banner" style={{ backgroundImage: `url(${landscape})` }}>
+        <div className="eh-wide-wrap eh-banner-content">
+          <p className="eh-page-eyebrow">Plan your visit</p>
+          <h1>Check availability</h1>
+          <p>Find a table for your next mountain escape.</p>
+        </div>
       </section>
 
-      <Card className="border-0 shadow-sm page-card">
-        <Card.Body className="p-4">
-          <Form onSubmit={handleSubmit}>
-            <Row className="g-3 align-items-end">
-              <Col md={4}>
-                <Form.Group controlId="availability-date">
-                  <Form.Label>Date</Form.Label>
-                  <Form.Control
-                    type="date"
-                    value={date}
-                    min={nextDay()}
-                    onChange={(event) => { setDate(event.target.value); resetSelection(); }}
-                    required
-                  />
-                </Form.Group>
-              </Col>
-              <Col md={4}>
-                <Form.Group controlId="availability-meal">
-                  <Form.Label>Meal</Form.Label>
-                  <Form.Select value={meal} onChange={(event) => { setMeal(event.target.value); resetSelection(); }}>
-                    {MEALS.map((item) => (
-                      <option key={item.value} value={item.value}>{item.label}</option>
-                    ))}
-                  </Form.Select>
-                </Form.Group>
-              </Col>
-              <Col md={2}>
-                <Form.Group controlId="availability-guests">
-                  <Form.Label>Guests</Form.Label>
-                  <Form.Select value={partySize} onChange={(event) => { setPartySize(event.target.value); resetSelection(); }}>
-                    {Array.from({ length: 8 }, (_, index) => String(index + 1)).map((value) => (
-                      <option key={value} value={value}>{value}</option>
-                    ))}
-                  </Form.Select>
-                </Form.Group>
-              </Col>
-              <Col md={2}>
-                <Button type="submit" className="w-100 search-submit-btn">
-                  {loading ? 'Searching...' : 'Search'}
-                </Button>
-              </Col>
-            </Row>
-          </Form>
-        </Card.Body>
-      </Card>
+      <div className="eh-wide-wrap eh-availability-body">
+        <form className="eh-availability-search" onSubmit={handleSubmit}>
+          <div className="eh-availability-field">
+            <label htmlFor="availability-date">Date</label>
+            <AlpineDatePicker id="availability-date" value={date} minDate={nextDay()} onChange={value => onFieldChange(setDate, value)} required disabled={loading || checkingSeating} />
+          </div>
+          <div className="eh-availability-field">
+            <label htmlFor="availability-meal">Meal</label>
+            <AlpineMealSelect id="availability-meal" value={meal} onChange={value => onFieldChange(setMeal, value)} required disabled={loading || checkingSeating} />
+          </div>
+          <div className="eh-availability-field eh-availability-guests">
+            <label htmlFor="availability-guests">Guests</label>
+            <input id="availability-guests" type="number" min="1" step="1" value={partySize} onChange={event => onFieldChange(setPartySize, event.target.value)} required disabled={loading || checkingSeating} />
+          </div>
+          <button type="submit" className="eh-button eh-button--green eh-availability-submit" disabled={!searchReady || loading || checkingSeating}>
+            {loading ? 'Searching...' : 'Search'} <span aria-hidden="true">↗</span>
+          </button>
+        </form>
 
-      {error && <Alert variant="danger">{error}</Alert>}
+        {error && <Alert variant="danger" role="alert" className="eh-availability-error">{error}</Alert>}
+        {loading && <p className="eh-search-message" role="status">Looking for available times...</p>}
 
-      {result && (
-        <Card className="border-0 shadow-sm page-card">
-          <Card.Body className="p-4">
-            <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
-              <div>
-                <h2 className="h4 mb-1">Available slots</h2>
-                <p className="text-secondary mb-0">
-                  {result.date} · {MEALS.find((item) => item.value === result.meal)?.label} · {result.partySize} guests
-                </p>
-              </div>
-              {!user && (
-                <p className="small text-secondary mb-0">
-                  You can search without logging in. Sign in only when you want to confirm a booking.
-                </p>
-              )}
+        {result ? (
+          <section className="eh-availability-results" aria-label="Available meal slots">
+            <div className="eh-results-heading">
+              <div><p className="eh-page-eyebrow">Your visit</p><h2>Available meal slots</h2></div>
+              <p>{formatDate(result.date)} · {MEAL_OPTIONS.find(item => item.value === result.meal)?.label || result.meal} · {result.partySize} {result.partySize === 1 ? 'guest' : 'guests'}</p>
             </div>
-
             {result.slots.length === 0 ? (
-              <Alert variant="info" className="mb-0">
-                No available slots for the selected date, meal and party size.
-              </Alert>
+              <div className="eh-empty-results"><h3>No tables available for this search.</h3><p>Try a different meal, date or number of guests.</p></div>
             ) : (
-              <>
-                <div className="slot-grid">
-                  {result.slots.map((slot) => {
-                    const selected = slot.id === selectedSlotId;
-                    return (
-                      <button
-                        key={slot.id}
-                        type="button"
-                        className={`slot-card ${selected ? 'slot-card--selected' : ''}`}
-                        onClick={() => handleSelectSlot(slot)}
-                        disabled={checkingSeating}
-                      >
-                        <span className="slot-card__time">{slot.startTime}</span>
-                        <span className="slot-card__meta">{slot.availableSeats} seats available</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {checkingSeating && <p className="text-secondary mt-3 mb-0">Checking seating...</p>}
-
-                {selectedSlot && seating && (
-                  <Card className="mt-4 seating-panel border-0">
-                    <Card.Body className="p-4">
-                      <h3 className="h5 mb-3">Selected slot: {selectedSlot.startTime}</h3>
-                      <p className="mb-2">
-                        Seating: <strong>{seating.fit === 'single_table' ? 'Single table' : 'Multiple tables'}</strong>
-                      </p>
-                      <p className="text-secondary mb-4">
-                        Assigned seats: {seating.seatAssignments
-                          .map((table) => `${table.tableLabel}: ${table.seats}`)
-                          .join(', ')}
-                      </p>
-
-                      {user?.role && user.role !== 'hiker' ? (
-                        <Alert variant="warning" className="mb-0">
-                          Only Hikers can make online bookings.
-                        </Alert>
-                      ) : (
-                        <Button onClick={handleContinue} className="search-submit-btn">
-                          Continue to booking
-                        </Button>
-                      )}
-                    </Card.Body>
-                  </Card>
-                )}
-              </>
+              <div className="eh-slot-cards">
+                {result.slots.map((slot, index) => (
+                  <AvailabilitySlotCard key={slot.id} slot={slot} index={index} partySize={result.partySize}
+                    selected={selectedSlotId === slot.id} disabled={checkingSeating} onClick={() => handleSelectSlot(slot)} />
+                ))}
+              </div>
             )}
-          </Card.Body>
-        </Card>
-      )}
+            {checkingSeating && <p className="eh-search-message" role="status">Checking your table...</p>}
+            {selectedSlot && seating && (
+              <div className="eh-selection-summary">
+                <div>
+                  <p className="eh-page-eyebrow">Your selection</p>
+                  <h3>{selectedSlot.startTime} · {seating.fit === 'single_table' ? 'Single table' : 'Multiple tables'}</h3>
+                  <p>For {partySize} {Number(partySize) === 1 ? 'guest' : 'guests'} · {formatDate(date)}</p>
+                </div>
+                {user?.role && user.role !== 'hiker' ? (
+                  <p className="eh-selection-warning">Only Hikers can make online bookings.</p>
+                ) : (
+                  <button className="eh-button eh-button--green" type="button" onClick={handleContinue}>Continue to booking <span aria-hidden="true">↗</span></button>
+                )}
+              </div>
+            )}
+          </section>
+        ) : !loading && !error ? (
+          <div className="eh-availability-prompt"><h2>Your table is one search away.</h2><p>Choose a date, a meal and your group size to see available times.</p></div>
+        ) : null}
+      </div>
+      <SplitSeatingModal
+        show={Boolean(pendingSplit)}
+        seating={pendingSplit?.seating}
+        onCancel={() => setPendingSplit(null)}
+        onContinue={acceptSplit}
+      />
     </div>
   );
 }

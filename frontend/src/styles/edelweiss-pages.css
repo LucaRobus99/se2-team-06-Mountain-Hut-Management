@@ -1,0 +1,479 @@
+/* Additional page styling. Scoped to .eh-* and .ea-* to preserve the established Home/navbar/footer. */
+.eh-editorial-page { background: #f8f5f0; color: var(--eh-ink, #17291f); }
+.eh-editorial-page h1, .eh-editorial-page h2, .eh-editorial-page h3, .eh-login-card h1 {
+  font-family: Georgia, 'Palatino Linotype', 'Times New Roman', serif;
+  letter-spacing: -.035em;
+}
+.eh-page-eyebrow { margin: 0 0 .85rem; text-transform: uppercase; letter-spacing: .21em; font-size: .78rem; font-weight: 700; }
+.eh-page-banner { position: relative; min-height: clamp(250px, 25vw, 390px); display: flex; align-items: center; background-size: cover; background-position: center 51%; color: #fffdf6; isolation: isolate; }
+.eh-page-banner::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(14,35,25,.91) 0%, rgba(20,44,31,.65) 40%, rgba(20,36,27,.1) 100%); z-index: -1; }
+/* Lighter overlay only on Check availability and Book a table; all other banners stay unchanged. */
+.eh-page-banner.eh-availability-banner::before,
+.eh-page-banner.eh-booking-banner::before {
+  background: linear-gradient(90deg, rgba(17,27,22,.62) 0%, rgba(17,27,22,.34) 40%, rgba(17,27,22,.04) 100%);
+}
+.eh-banner-content { position: relative; padding-block: clamp(3.6rem, 6vw, 6rem) clamp(5rem, 7vw, 7rem); }
+.eh-banner-content h1 { font-size: clamp(3.1rem, 6vw, 5.6rem); line-height: 1.03; margin: 0 0 .7rem; font-weight: 700; }
+.eh-banner-content > p:last-child { font-family: Georgia,serif; font-size: clamp(1.13rem, 2vw, 1.5rem); margin: 0; max-width: 580px; }
+.eh-editorial-page .eh-button { white-space: normal; }
+.eh-editorial-page .eh-button--outline { color: #345242; border-color: #c8d0c4; background: #f7f5f0; }
+.eh-editorial-page .eh-button--outline:hover { background: #e5ede5; }
+
+/* Login: one quiet card and the existing website photo, no extra links/claims. */
+.eh-login-scene { position: relative; display: grid; place-items: center; padding: clamp(2rem, 7vw, 5.5rem) 1.25rem; min-height: min(800px, calc(100svh - 86px)); background-size: cover; background-position: center 49%; isolation: isolate; }
+.eh-login-scene::before { content: ''; position: absolute; inset: 0; background: rgba(23, 29, 24, .32); z-index: -1; }
+.eh-login-card { width: min(100%, 410px); padding: clamp(1.8rem, 4vw, 2.5rem); background: rgba(255,252,247,.98); border: 1px solid rgba(255,255,255,.9); border-radius: 1.1rem; box-shadow: 0 24px 80px rgba(0,0,0,.24); }
+.eh-login-brand { display: flex; justify-content: center; margin-bottom: 1.35rem; }
+.eh-login-brand .eh-brand-mark { width: 56px; height: 47px; }
+.eh-login-brand .eh-brand-title { font-size: 2.1rem; }
+.eh-login-brand .eh-brand-tagline { font-size: .72rem; }
+.eh-login-card h1 { font-size: clamp(1.55rem, 2.6vw, 1.9rem); font-weight: 700; margin: 3rem 0 1.7rem; text-align: center; }
+.eh-login-form { display: flex; flex-direction: column; gap: .6rem; }
+.eh-login-form label { display: flex; align-items: center; gap: .6rem; font-size: .96rem; font-weight: 600; color: #394038; margin-top: .35rem; }
+.eh-login-form label svg { width: 17px; height: 17px; color: #765437; }
+.eh-login-form input { height: 48px; width: 100%; min-width: 0; border-radius: .55rem; border: 1px solid #dedbd3; background: #fff; font-family: Georgia,serif; padding: 0 .9rem; color: #24382b; outline-color: #60836d; }
+.eh-login-form input:focus { border-color: #5f7a65; box-shadow: 0 0 0 3px rgba(53,80,62,.12); outline: none; }
+.eh-login-form input::placeholder { color: #9a9990; }
+.eh-password-input { position: relative; }
+.eh-password-input input { padding-right: 3rem; }
+.eh-password-input button { position: absolute; right: .4rem; top: .3rem; bottom: .3rem; width: 42px; display: grid; place-items: center; background: transparent; border: 0; color: #777; border-radius: .4rem; }
+.eh-password-input button svg { width: 18px; height: 18px; }
+.eh-login-submit { margin-top: 1.05rem; width: 100%; min-height: 51px; }
+.eh-login-note { margin: 1.25rem 0 0; color: #6c4d33; text-align: center; font-size: .89rem; }
+.eh-login-alert { font-size: .9rem; }
+
+/* Keep the larger login brand readable on small phones, without changing navbar branding. */
+@media (max-width: 420px) {
+  .eh-login-brand .eh-brand { gap: .5rem; }
+  .eh-login-brand .eh-brand-mark { width: 48px; height: 37px; }
+  .eh-login-brand .eh-brand-title { font-size: clamp(1.4rem, 6.2vw, 1.8rem); }
+  .eh-login-brand .eh-brand-tagline { font-size: .58rem; }
+}
+
+/* Availability / Booking, shared search panel. Field sizing is identical on both pages. */
+.eh-availability-body, .eh-booking-content { padding-bottom: clamp(3.2rem, 5vw, 5rem); }
+.eh-availability-search {
+  position: relative; z-index: 5; display: grid;
+  grid-template-columns: minmax(0, 1.38fr) minmax(0, 1.23fr) minmax(0, .72fr) minmax(160px, 1fr);
+  gap: clamp(.8rem, 1.4vw, 1.35rem); align-items: end;
+  padding: clamp(1.2rem, 2.3vw, 2.2rem);
+  margin: clamp(-65px, -4vw, -38px) auto 0;
+  border: 1px solid #eee7dc; border-radius: 1.1rem;
+  background: #fffcf7; box-shadow: 0 20px 55px rgba(41,46,35,.15);
+}
+.eh-availability-field { min-width: 0; display: flex; flex-direction: column; gap: .55rem; }
+.eh-availability-field label { font: 600 1.02rem/1.2 Georgia,serif; color: #39483c; }
+.eh-availability-field > input { width: 100%; height: 58px; border-radius: .68rem; background: #fffdfa; border: 1px solid #c9d0c5; padding: 0 .9rem; color: #1e3428; font: 500 1.04rem Georgia,serif; outline-color: #6d8c77; }
+.eh-availability-field > input:focus { border-color: #466b52; box-shadow: 0 0 0 3px rgba(69,107,81,.15); outline: none; }
+.eh-availability-field .ea-field-wrap { width: 100%; }
+.eh-availability-field .ea-control { font-size: 1.04rem; }
+.eh-availability-submit { height: 58px; min-width: 0; border-radius: .65rem; gap: .55rem; }
+.eh-availability-error { margin-top: 1.3rem; }
+.eh-search-message { margin: 1.3rem 0; color: #546257; }
+.eh-availability-results { margin-top: clamp(2.3rem, 4vw, 3.7rem); }
+.eh-results-heading { display: flex; align-items: end; justify-content: space-between; flex-wrap: wrap; gap: .7rem 2rem; margin-bottom: 1.4rem; }
+.eh-results-heading .eh-page-eyebrow { color: #90643e; margin-bottom: .35rem; }
+.eh-results-heading h2 { font-size: clamp(1.8rem, 3vw, 2.45rem); margin: 0; }
+.eh-results-heading > p { margin: 0 0 .2rem; color: #696c63; font-family: Georgia,serif; }
+.eh-slot-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 245px), 1fr)); gap: clamp(.9rem, 1.8vw, 1.45rem); }
+.eh-slot-tile { padding: 0; overflow: hidden; border-radius: .85rem; text-align: left; border: 1px solid #e6dfd4; background: #fffdfa; box-shadow: 0 9px 25px rgba(46,48,37,.09); color: #263b2c; transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease; }
+.eh-slot-tile:hover:not(:disabled) { transform: translateY(-3px); border-color: #749178; box-shadow: 0 16px 34px rgba(46,48,37,.16); }
+.eh-slot-tile:disabled { opacity: .6; cursor: wait; }
+.eh-slot-tile--selected { border-color: #2e5940; box-shadow: 0 0 0 2px rgba(46,89,64,.24); }
+.eh-slot-tile img { display: block; width: 100%; height: clamp(125px, 13vw, 165px); object-fit: cover; }
+.eh-slot-tile:nth-child(3n + 2) img { object-position: 40% 45%; }
+.eh-slot-tile-body { padding: .95rem 1rem 1rem; display: flex; justify-content: space-between; align-items: center; gap: .6rem; }
+.eh-slot-tile-info { display: flex; flex-direction: column; gap: .45rem; min-width: 0; }
+.eh-slot-tile-info strong { font: 700 1.2rem Georgia,serif; }
+.eh-slot-availability { display: flex; align-items: center; gap: .5rem; font: 400 .92rem/1.3 Georgia,serif; color: #5b6259; }
+.eh-status-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+.eh-status-dot--green { background: #278051; }
+.eh-status-dot--red { background: #b52f2b; }
+.eh-status-dot--amber { background: #b98228; }
+.eh-slot-arrow { width: 20px; height: 20px; flex: 0 0 auto; color: #355343; }
+.eh-empty-results { padding: 2.4rem; text-align: center; background: #fffdfa; border-radius: .9rem; border: 1px solid #e8e0d7; }
+.eh-empty-results h3 { font-size: 1.5rem; }
+.eh-empty-results p { color: #697367; margin-bottom: 0; }
+.eh-selection-summary { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.3rem 2rem; margin-top: 1.65rem; padding: clamp(1.3rem,2.2vw,2rem); border: 1px solid #c9d5c7; border-radius: .9rem; background: #eaf0e8; }
+.eh-selection-summary .eh-page-eyebrow { font-size: .71rem; margin-bottom: .5rem; color: #58715d; }
+.eh-selection-summary h3 { margin: 0 0 .35rem; font-size: 1.55rem; }
+.eh-selection-summary p { margin-bottom: 0; color: #506251; }
+.eh-selection-warning { color: #965020 !important; }
+.eh-selection-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .8rem; }
+.eh-availability-prompt { margin-top: 3rem; padding: 3.6rem 1rem; text-align: center; }
+.eh-availability-prompt h2 { font-size: clamp(1.8rem, 3vw, 2.5rem); }
+.eh-availability-prompt p { color: #697468; }
+.eh-booking-success { padding: clamp(2.4rem,5vw,4rem); margin: clamp(-50px,-3vw,-30px) auto 2rem; max-width: 710px; position: relative; z-index: 5; background: #fffcf7; box-shadow: 0 16px 45px #26392720; border-radius: 1rem; text-align: center; }
+.eh-booking-success h2 { font-size: 2.25rem; }
+.eh-booking-confirmed { color: #2f6f4c; font-weight: 700; }
+.eh-booking-success dl { text-align: left; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .7rem 1.2rem; margin: 2rem 0; }
+.eh-booking-success dl > div { border-bottom: 1px solid #e9e4dc; padding: .55rem .2rem; }
+.eh-booking-success dt { color: #7a766e; font-size: .9rem; }
+.eh-booking-success dd { margin: .2rem 0 0; font-weight: 600; }
+
+/* Menu: deliberately no invented dishes, prices or hours. */
+.eh-menu-banner { background-position: center 58%; }
+.eh-menu-empty { min-height: clamp(300px, 35vw, 480px); text-align: center; display: flex; align-items: center; justify-content: center; flex-direction: column; padding-block: 3.5rem 4.5rem; }
+.eh-ornament { display: inline-block; margin-bottom: .85rem; color: #8a6844; font-size: 2.2rem; line-height: 1; }
+.eh-menu-empty h2 { font-size: clamp(2rem, 4vw, 3.1rem); margin-bottom: .7rem; }
+.eh-menu-empty p { font-family: Georgia,serif; font-size: 1.15rem; color: #68685d; margin-bottom: 1.6rem; }
+
+/* About: one distinct story photo followed by a practical Google map. */
+.eh-about-intro--simple {
+  display: grid;
+  grid-template-columns: minmax(0, 1.03fr) minmax(0, .97fr);
+  align-items: center;
+  gap: clamp(2rem, 5vw, 5.5rem);
+  padding-block: clamp(3rem, 6vw, 6.5rem);
+}
+.eh-about-intro-copy { max-width: 680px; }
+.eh-about-page .eh-page-eyebrow { color: #89613f; }
+.eh-about-page .eh-page-eyebrow .eh-label-line { display: inline-block; vertical-align: middle; margin-left: .7rem; }
+.eh-about-page h1 { font-size: clamp(2.7rem, 4.5vw, 5.2rem); line-height: 1.05; margin-bottom: 1.4rem; }
+.eh-about-page h2 { font-size: clamp(2rem, 3.5vw, 3.3rem); line-height: 1.12; margin-bottom: 1rem; }
+.eh-about-page p:not(.eh-page-eyebrow) { font-family: Georgia,serif; font-size: clamp(1.07rem, 1.3vw, 1.22rem); line-height: 1.67; color: #666960; }
+.eh-about-page .eh-about-lead { color: #3e5143 !important; font-size: clamp(1.18rem, 1.6vw, 1.42rem) !important; }
+.eh-about-intro--simple > img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1.05 / 1;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 1rem;
+  box-shadow: 0 15px 35px #24382f25;
+}
+.eh-about-find {
+  background: #eeeae1;
+  padding-block: clamp(3rem, 5vw, 5rem);
+  scroll-margin-top: 110px;
+}
+.eh-about-find-heading { max-width: 740px; margin-bottom: clamp(1.4rem, 3vw, 2.5rem); }
+.eh-about-find-heading > p:last-child { margin-bottom: 0; }
+.eh-location-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+  gap: clamp(1.35rem, 3.2vw, 3.3rem);
+  align-items: stretch;
+}
+.eh-location-map {
+  overflow: hidden;
+  min-height: 410px;
+  border: 1px solid #ded9ca;
+  border-radius: 1rem;
+  background: #e0e5db;
+  box-shadow: 0 12px 28px #26392718;
+}
+.eh-location-map iframe { width: 100%; height: 100%; min-height: 410px; display: block; border: 0; }
+.eh-location-details {
+  padding: clamp(1.25rem, 2.5vw, 2rem);
+  background: #fffcf7;
+  border: 1px solid #e5ddce;
+  border-radius: 1rem;
+}
+.eh-location-details h3 {
+  font: 700 clamp(1.3rem, 1.9vw, 1.6rem)/1.25 Georgia,serif;
+  margin: 0 0 .65rem;
+  color: #20382d;
+}
+.eh-location-details h3:not(:first-child) { margin-top: 1.6rem; }
+.eh-location-details address { font: normal 1.03rem/1.7 Georgia,serif; color: #536052; }
+.eh-location-details p { margin-bottom: .75rem; font-size: 1.03rem !important; line-height: 1.6 !important; }
+.eh-location-details p strong { color: #2e4d3a; }
+.eh-location-details .eh-location-note { font-size: .92rem !important; color: #707569 !important; }
+.eh-location-actions { display: flex; flex-wrap: wrap; align-items: stretch; gap: .75rem; margin-top: 1.5rem; }
+.eh-location-actions .eh-button, .eh-location-actions .eh-text-button {
+  white-space: normal;
+  margin-top: 0;
+  min-height: 48px;
+  text-align: center;
+  font-size: 1rem;
+  padding: .8rem 1rem;
+}
+
+@media (max-width: 950px) {
+  .eh-availability-search { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .eh-availability-submit { align-self: end; }
+  .eh-about-intro--simple, .eh-location-grid { grid-template-columns: minmax(0,1fr); }
+  .eh-about-intro--simple > img { aspect-ratio: 1.5/1; max-height: 500px; }
+  .eh-location-map, .eh-location-map iframe { min-height: 350px; }
+}
+@media (max-width: 560px) {
+  .eh-page-banner { min-height: 240px; }
+  .eh-banner-content { padding-block: 3rem 4.4rem; }
+  .eh-availability-search { grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: .85rem; }
+  .eh-availability-search > .eh-availability-field:nth-child(1),
+  .eh-availability-search > .eh-availability-field:nth-child(2) { grid-column: 1/-1; }
+  .eh-availability-search .eh-availability-guests { grid-column: 1; }
+  .eh-availability-submit { grid-column: 2; padding-inline: .5rem; font-size: .98rem; }
+  .eh-availability-search { padding: 1.05rem; }
+  .eh-availability-field .ea-control { font-size: 1rem; }
+  .eh-results-heading > p { font-size: .91rem; }
+  .eh-slot-tile img { height: 155px; }
+  .eh-booking-success dl { grid-template-columns: 1fr; }
+  .eh-login-scene { min-height: 650px; }
+  .eh-location-map, .eh-location-map iframe { min-height: 300px; }
+  .eh-location-actions > a { width: 100%; justify-content: center; }
+}
+
+/* Home form: let Guests occupy the same width as the other two controls. */
+.eh-search-form .eh-field--guests { flex: 1 1 138px; min-width: min(100%, 115px); }
+
+/* Small utility pages, including the unfinished staff screen. */
+.eh-simple-page { max-width: 800px; margin-block: clamp(4rem,7vw,7rem); }
+.eh-simple-page .eh-page-eyebrow { color: #8b633f; }
+.eh-simple-page h1 { font-family: Georgia,serif; font-size: clamp(2.4rem,5vw,4rem); margin-bottom: 1.2rem; }
+.eh-simple-page p:not(.eh-page-eyebrow) { font-family: Georgia,serif; font-size: 1.16rem; color: #687066; margin-bottom: 2rem; }
+
+/* Find Us — layout unico, senza override duplicati.
+   Tutte le regole sono isolate sulla pagina Find Us. */
+.eh-find-us-page .eh-find-us-section {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: #fdfaf5;
+  padding: clamp(1.3rem, 2.5vw, 2.3rem) 0 clamp(2rem, 3vw, 3.25rem);
+  scroll-margin-top: 95px;
+}
+
+/* Decorazione montagna + fiore: dimensioni e posizionamento della versione originale.
+   L'immagine originale e` ripristinata, senza ulteriori sfumature o filtri. */
+.eh-find-us-page .eh-find-us-backdrop {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: auto;
+  width: min(670px, 51vw);
+  height: clamp(160px, 16vw, 220px);
+  opacity: .77;
+  z-index: 0;
+  background: url('../assets/edelweiss-findus-mountains.png') right top / contain no-repeat;
+  pointer-events: none;
+}
+
+.eh-find-us-page .eh-find-us-inner {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+.eh-find-us-page .eh-find-us-heading {
+  margin-bottom: 1.25rem;
+  position: relative;
+  max-width: 860px;
+}
+.eh-find-us-page .eh-find-us-heading h1 {
+  color: #15392e;
+  font: 700 clamp(3.3rem, 5.3vw, 5.1rem)/1.04 Georgia, serif;
+  letter-spacing: -.055em;
+  margin: 0 0 .32rem;
+}
+.eh-find-us-page .eh-find-us-heading > p:last-child {
+  margin: 0;
+  color: #242824;
+  font: 400 clamp(1.05rem, 1.6vw, 1.35rem)/1.4 Georgia, serif;
+}
+
+/* Impedisce all'immagine di allargarsi sopra le card: la proporzione
+   appartiene all'IMG, non al FIGURE che deve rimanere nel suo grid track. */
+.eh-find-us-page .eh-find-us-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: clamp(.9rem, 1.5vw, 1.35rem);
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+}
+/* La mappa resta un'immagine normale nel proprio riquadro.
+   Si ridimensiona mantenendo SEMPRE il rapporto originale, senza bande sfocate. */
+.eh-find-us-page .eh-route-visual {
+  display: block;
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 0;
+  align-self: start;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #e5e0d7;
+  border-radius: 16px;
+  background: transparent;
+  box-shadow: none;
+  aspect-ratio: auto;
+}
+.eh-find-us-page .eh-route-visual img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  object-fit: initial;
+  object-position: initial;
+  filter: none;
+  opacity: 1;
+  transform: none;
+}
+
+
+.eh-find-us-page .eh-find-us-cards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto;
+  gap: .8rem;
+  min-width: 0;
+}
+.eh-find-us-page .eh-info-card {
+  display: block;
+  min-width: 0;
+  padding: clamp(1.1rem, 1.45vw, 1.5rem);
+  border: 1px solid #e5e0d7;
+  border-radius: 16px;
+  background: #fffdfa;
+  box-shadow: none;
+}
+.eh-find-us-page .eh-info-copy h2 {
+  font: 700 clamp(1.3rem, 1.75vw, 1.75rem)/1.15 Georgia, serif;
+  color: #173b30;
+  margin: 0 0 .48rem;
+}
+.eh-find-us-page .eh-info-copy p,
+.eh-find-us-page .eh-info-copy address {
+  font: 400 clamp(.96rem, 1.03vw, 1.07rem)/1.45 Georgia, serif;
+  color: #4b4d47;
+  margin: 0;
+}
+.eh-find-us-page .eh-info-copy strong { color: #314c3c; }
+.eh-find-us-page .eh-info-map-link {
+  display: inline-flex;
+  align-items: center;
+  gap: .42rem;
+  background: #234535;
+  border: 1px solid #234535;
+  border-radius: .48rem;
+  padding: .55rem .85rem;
+  margin: .7rem 0 0;
+  text-decoration: none;
+  color: #fff;
+  font: 700 .9rem/1.3 Georgia, serif;
+}
+.eh-find-us-page .eh-info-map-link svg { width: 16px; height: 16px; }
+.eh-find-us-page .eh-info-map-link:hover { color: white; background: #193b2a; }
+.eh-find-us-page .eh-info-inline-link {
+  display: inline-block;
+  margin-top: .55rem;
+  color: #315643;
+  font: 700 .88rem/1.3 Georgia, serif;
+  text-underline-offset: 3px;
+}
+
+/* Una fascia verde con tre colonne separate; nessuna emoji o icona. */
+.eh-find-us-page .eh-journey-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin-top: clamp(1rem, 1.8vw, 1.5rem);
+  padding: clamp(1.2rem, 1.7vw, 1.6rem) .35rem;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(96deg, #eef3e9 0%, #e5eee3 49%, #eef3e9 100%);
+}
+.eh-find-us-page .eh-journey-step,
+.eh-find-us-page .eh-journey-step:first-child {
+  display: block;
+  min-width: 0;
+  padding: 0 clamp(1.95rem, 1.5vw, 1.45rem);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.eh-find-us-page .eh-journey-step + .eh-journey-step {
+  border-left: 1px solid rgba(50, 83, 62, .25);
+}
+.eh-find-us-page .eh-journey-icon,
+.eh-find-us-page .eh-journey-badge { display: none; }
+.eh-find-us-page .eh-journey-step h3 {
+  margin: 0 0 .35rem;
+  color: #163b2f;
+  font: 700 clamp(1.15rem, 1.5vw, 1.45rem)/1.15 Georgia, serif;
+}
+.eh-find-us-page .eh-journey-step p {
+  margin: 0;
+  color: #3d4b42;
+  font: 400 clamp(.93rem, 1vw, 1.02rem)/1.4 Georgia, serif;
+}
+.eh-find-us-page .eh-journey-step a {
+  display: inline-block;
+  margin-top: 0.8rem;
+  color: #244b38;
+  font: 700 .86rem/1.25 Georgia, serif;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* La sezione ha già padding-bottom: crea il respiro prima del footer
+   senza cambiare il footer delle altre pagine. */
+@media (max-width: 920px) {
+  .eh-find-us-page .eh-find-us-layout { grid-template-columns: 1fr; }
+  .eh-find-us-page .eh-find-us-backdrop { width: min(480px, 65vw); opacity: .5; }
+  .eh-find-us-page .eh-find-us-cards { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .eh-find-us-page .eh-info-card:last-child { grid-column: 1 / -1; }
+  .eh-find-us-page .eh-journey-steps { grid-template-columns: 1fr; }
+  .eh-find-us-page .eh-journey-step,
+  .eh-find-us-page .eh-journey-step:first-child { padding: .9rem 1.1rem; }
+  .eh-find-us-page .eh-journey-step + .eh-journey-step {
+    border-left: 0;
+    border-top: 1px solid rgba(50, 83, 62, .25);
+  }
+}
+@media (max-width: 580px) {
+  .eh-find-us-page .eh-find-us-backdrop { width: 73vw; height: 105px; opacity: .33; }
+  .eh-find-us-page .eh-find-us-heading h1 { font-size: clamp(2.9rem, 13vw, 4rem); }
+  .eh-find-us-page .eh-find-us-cards { grid-template-columns: 1fr; }
+  .eh-find-us-page .eh-info-card:last-child { grid-column: auto; }
+}
+
+
+/* MH-01: final confirmation, separate from unrelated website styling. */
+.eh-booking-page .eh-booking-complete {
+  text-align: center;
+  margin-top: clamp(-55px, -4vw, -30px);
+  max-width: 680px;
+  border: 1px solid #dae6d8;
+  box-shadow: 0 20px 60px rgba(32, 69, 49, .13);
+}
+.eh-booking-complete .eh-success-check {
+  display: grid;
+  width: 77px;
+  height: 77px;
+  margin: 0 auto 1.1rem;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #315f47;
+}
+.eh-booking-complete .eh-success-check svg { width: 46px; height: 46px; }
+.eh-booking-complete .eh-page-eyebrow { color: #4b7657; margin: 0 0 .35rem; }
+.eh-booking-complete h2 { margin: 0 0 .75rem; color: #193f30; font-size: clamp(2rem, 3.2vw, 2.6rem); }
+.eh-booking-complete .eh-success-subtitle { max-width: 440px; margin: 0 auto 1.5rem; color: #58675c; font: 400 1.08rem/1.5 Georgia, serif; }
+.eh-booking-complete dl { max-width: 490px; margin: 1.6rem auto; gap: .7rem 1.25rem; }
+.eh-booking-complete dl > div { padding: .7rem .5rem; text-align: left; }
+.eh-booking-complete dd { font-size: 1.05rem; color: #253b2c; overflow-wrap: anywhere; }
+.eh-booking-complete .eh-success-seating { color: #455b4e; background: #ecf3ea; border-radius: .6rem; padding: .8rem 1rem; margin: 0 auto 1.15rem; max-width: 460px; }
+.eh-booking-complete .eh-success-footnote { font: 400 .92rem/1.4 Georgia,serif; color: #69756b; margin: 0 0 1.25rem; }
+.eh-booking-complete .eh-success-actions { display: flex; gap: .75rem; justify-content: center; flex-wrap: wrap; }
+.eh-booking-page .eh-selection-summary small { display: block; color: #617567; margin-top: .65rem; }
+.eh-split-modal .modal-content { background: #fffdfa; border: 1px solid #e3e5d8; border-radius: 1.05rem; box-shadow: 0 20px 75px #1b3b2c30; font-family: Georgia,serif; color: #24392d; }
+.eh-split-modal .modal-header { border-bottom: 1px solid #e8e6dc; padding: 1.4rem 1.6rem .85rem; }
+.eh-split-modal .modal-title { font-family: Georgia,serif; color: #193e2d; font-weight: 700; font-size: 1.5rem; }
+.eh-split-modal .modal-body { padding: 1.2rem 1.6rem .5rem; font-size: 1.06rem; line-height: 1.55; }
+.eh-split-modal .eh-split-arrangement { background: #eaf0e7; color: #2d573c; padding: .8rem .9rem; border-radius: .55rem; font-weight: 700; }
+.eh-split-modal .eh-split-note { color: #657168; font-size: .92rem; }
+.eh-split-modal .modal-footer { border-top: 0; padding: .5rem 1.6rem 1.35rem; gap: .5rem;   justify-content: center; }
+@media (max-width: 560px) {
+  .eh-booking-complete .eh-success-actions .eh-button { width: 100%; justify-content: center; }
+  .eh-booking-complete dl { grid-template-columns: 1fr 1fr; }
+  .eh-split-modal .modal-footer .eh-button { width: 100%; justify-content: center; }
+}

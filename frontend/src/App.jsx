@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router';
+import { Navigate, Route, Routes } from 'react-router';
 import MainLayout from './layouts/MainLayout.jsx';
 import HomePage from './pages/HomePage.jsx';
 import AvailabilityPage from './pages/AvailabilityPage.jsx';
@@ -23,7 +23,8 @@ export default function App() {
         <Route element={<ProtectedRoute staffOnly />}>
             <Route path="staff/slots" element={<SlotManagementPage />} />
         </Route>
-        <Route path="about" element={<AboutPage />} />
+        <Route path="find-us" element={<AboutPage />} />
+        <Route path="about" element={<Navigate to="/find-us" replace />} />
         <Route path="login" element={<LoginPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
