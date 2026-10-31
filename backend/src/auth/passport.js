@@ -13,6 +13,7 @@ export function sanitizeUser(user) {
     displayName: user.name,
     role: user.role,
     phone: user.phone ?? null,
+    hutId: user.hut_id ?? null,
   };
 }
 
