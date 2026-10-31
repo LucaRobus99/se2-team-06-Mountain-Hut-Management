@@ -1,25 +1,44 @@
+import { createExecutorOf } from './executor.js';
+
 /**
  * DAO for slots and their tables.
- * Methods accept an optional first argument that may be a database/transaction
- * executor; when omitted, the bound database is used.
+ * Methods take an optional executor first (see executor.js).
  */
-export function createSlotDao(db) {
-  const defaultDb = db;
+/** The one free-seats query, shared by the single-slot and multi-slot lookups. */
+async function tablesWithFree(exec, slotIds) {
+  if (slotIds.length === 0) return [];
+  const placeholders = slotIds.map((_, i) => `$${i + 1}`).join(', ');
+  const { rows } = await exec.query(
+    `SELECT st.slot_id,
+            dt.id,
+            dt.label,
+            st.seats,
+            st.seats - COALESCE((
+              SELECT SUM(bs.seats)
+              FROM booking_seats bs
+              JOIN bookings b ON b.id = bs.booking_id
+              WHERE bs.table_id = dt.id
+                AND b.slot_id = st.slot_id
+                AND b.status = 'confirmed'
+            ), 0) AS free
+     FROM slot_tables st
+     JOIN dining_tables dt ON dt.id = st.table_id
+     WHERE st.slot_id IN (${placeholders})
+     ORDER BY st.slot_id, dt.id`,
+    slotIds
+  );
+  return rows;
+}
 
-  function executorOf(args) {
-    const [first, ...rest] = args;
-    if (first && typeof first.query === 'function') {
-      return { db: first, args: rest };
-    }
-    return { db: defaultDb, args };
-  }
+export function createSlotDao(db) {
+  const executorOf = createExecutorOf(db);
 
   return {
     async findById(...args) {
       const { db: exec, args: a } = executorOf(args);
       const slotId = a[0];
       const { rows } = await exec.query(
-        `SELECT s.id, s.hut_id, s.date, s.start_time, s.end_time, s.status, m.meal_type AS meal
+        `SELECT s.id, s.date, s.start_time, s.end_time, s.status, m.meal_type AS meal
          FROM slots s
          LEFT JOIN meals m ON m.id = s.meal_id
          WHERE s.id = $1`,
@@ -30,105 +49,89 @@ export function createSlotDao(db) {
 
     async listByDate(...args) {
       const { db: exec, args: a } = executorOf(args);
-      const hutId = a[0];
-      const date = a[1];
+      const date = a[0];
       const { rows } = await exec.query(
-        `SELECT s.id, s.hut_id, s.date, s.start_time, s.end_time, s.status, m.meal_type AS meal
+        `SELECT s.id, s.date, s.start_time, s.end_time, s.status, m.meal_type AS meal
          FROM slots s
          LEFT JOIN meals m ON m.id = s.meal_id
-         WHERE s.hut_id = $1 AND s.date = $2
+         WHERE s.date = $1
          ORDER BY s.start_time, s.id`,
-        [hutId, date]
+        [date]
       );
       return rows;
     },
 
-    async listByHut(...args) {
+    /** The meal whose range [start_time, end_time) contains `time`, or null. */
+    async findMealAt(...args) {
       const { db: exec, args: a } = executorOf(args);
-      const hutId = a[0];
-      const date = a[1];
-      const params = [hutId];
-      let sql = `SELECT s.id, s.hut_id, s.date, s.start_time, s.end_time, s.status, m.meal_type AS meal
-         FROM slots s
-         LEFT JOIN meals m ON m.id = s.meal_id
-         WHERE s.hut_id = $1`;
-      if (date) {
-        sql += ' AND s.date = $2';
-        params.push(date);
-      }
-      sql += ' ORDER BY s.date, s.start_time, s.id';
-      const { rows } = await exec.query(sql, params);
-      return rows;
+      const time = a[0];
+      const { rows } = await exec.query(
+        `SELECT id, meal_type, start_time, end_time
+         FROM meals
+         WHERE start_time <= $1 AND $1 < end_time`,
+        [time]
+      );
+      return rows[0] ?? null;
     },
 
     /**
-     * Tables assigned to the slot, each with its free seats.
+     * Tables assigned to the slot as { slot_id, id, label, seats, free }: the seats
+     * the table has in this slot and the seats not taken by confirmed bookings.
      * A slot without rows in `slot_tables` has no tables and therefore zero
-     * capacity (issue #17). There is deliberately no fallback to all hut tables.
+     * capacity (issue #17). There is deliberately no fallback to all tables.
      */
     async getTablesWithFreeForSlot(...args) {
       const { db: exec, args: a } = executorOf(args);
-      const slotId = a[0];
-      const { rows } = await exec.query(
-        `SELECT dt.id,
-                dt.label,
-                dt.seats,
-                dt.seats - COALESCE((
-                  SELECT SUM(bs.seats)
-                  FROM booking_seats bs
-                  JOIN bookings b ON b.id = bs.booking_id
-                  WHERE bs.table_id = dt.id
-                    AND b.slot_id = $1
-                    AND b.status = 'confirmed'
-                ), 0) AS free
-         FROM slot_tables st
-         JOIN dining_tables dt ON dt.id = st.table_id
-         WHERE st.slot_id = $1
-         ORDER BY dt.id`,
-        [slotId]
-      );
-      return rows;
+      return tablesWithFree(exec, [a[0]]);
     },
 
-    async getTableIdsForSlot(...args) {
+    /** Same rows for several slots in one query (slot lists), ordered by slot then table. */
+    async getTablesWithFreeForSlots(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      return tablesWithFree(exec, a[0]);
+    },
+
+    /** The table set of a slot as { tableId, seats }, used to copy it to a new slot. */
+    async getTableSetForSlot(...args) {
       const { db: exec, args: a } = executorOf(args);
       const slotId = a[0];
       const { rows } = await exec.query(
-        `SELECT table_id FROM slot_tables WHERE slot_id = $1`,
+        `SELECT table_id AS "tableId", seats FROM slot_tables WHERE slot_id = $1 ORDER BY table_id`,
         [slotId]
       );
-      return rows.map((r) => r.table_id);
+      return rows;
     },
 
     async createSlot(...args) {
       const { db: exec, args: a } = executorOf(args);
       const slot = a[0];
       const { rows } = await exec.query(
-        `INSERT INTO slots (hut_id, date, start_time, end_time, status)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO slots (date, start_time, end_time, status)
+         VALUES ($1, $2, $3, $4)
          RETURNING id`,
-        [slot.hutId, slot.date, slot.startTime, slot.endTime ?? null, slot.status ?? 'available']
+        [slot.date, slot.startTime, slot.endTime ?? null, slot.status ?? 'available']
       );
       return rows[0].id;
     },
 
+    /** Adds a table to the slot with the seats it has in this slot only. */
     async addTableToSlot(...args) {
       const { db: exec, args: a } = executorOf(args);
       const slotId = a[0];
       const tableId = a[1];
+      const seats = a[2];
       await exec.query(
-        `INSERT INTO slot_tables (slot_id, table_id) VALUES ($1, $2)`,
-        [slotId, tableId]
+        `INSERT INTO slot_tables (slot_id, table_id, seats) VALUES ($1, $2, $3)`,
+        [slotId, tableId, seats]
       );
     },
 
     async findTableByLabel(...args) {
       const { db: exec, args: a } = executorOf(args);
-      const hutId = a[0];
-      const label = a[1];
+      const label = a[0];
       const { rows } = await exec.query(
-        `SELECT id, seats FROM dining_tables WHERE hut_id = $1 AND label = $2`,
-        [hutId, label]
+        `SELECT id FROM dining_tables WHERE label = $1`,
+        [label]
       );
       return rows[0] ?? null;
     },
@@ -137,17 +140,10 @@ export function createSlotDao(db) {
       const { db: exec, args: a } = executorOf(args);
       const table = a[0];
       const { rows } = await exec.query(
-        `INSERT INTO dining_tables (hut_id, label, seats) VALUES ($1, $2, $3) RETURNING id`,
-        [table.hutId, table.label, table.seats]
+        `INSERT INTO dining_tables (label) VALUES ($1) RETURNING id`,
+        [table.label]
       );
       return rows[0].id;
-    },
-
-    async updateTableSeats(...args) {
-      const { db: exec, args: a } = executorOf(args);
-      const tableId = a[0];
-      const seats = a[1];
-      await exec.query(`UPDATE dining_tables SET seats = $2 WHERE id = $1`, [tableId, seats]);
     },
   };
 }
