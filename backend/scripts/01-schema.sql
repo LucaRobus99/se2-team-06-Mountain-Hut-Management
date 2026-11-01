@@ -16,9 +16,13 @@ CREATE TABLE IF NOT EXISTS users (
     name            VARCHAR(100) NOT NULL,
     email           VARCHAR(255) NOT NULL UNIQUE,
     phone           VARCHAR(30),
+    notes           TEXT,
+    emergency_contact VARCHAR(200),
     password_hash   TEXT NOT NULL,
     created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_ci ON users (lower(email));
 
 -- MH-02: the hut's table labels (T1, T2, ...). Seats are not stored here: each
 -- slot sets the seats of its tables in slot_tables (issue #17: no fixed table set).

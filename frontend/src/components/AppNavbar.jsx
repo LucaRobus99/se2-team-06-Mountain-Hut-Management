@@ -11,7 +11,7 @@ export default function AppNavbar() {
     const [expanded, setExpanded] = useState(false);
     const [logoutError, setLogoutError] = useState('');
     const [loggingOut, setLoggingOut] = useState(false);
-    const bookDestination = user?.role === 'hiker' ? '/book' : '/availability';
+    const bookingDestination = user?.role === 'hiker' ? '/book' : '/availability';
 
     // Close the mobile menu whenever the user navigates to another route.
     useEffect(() => {
@@ -49,7 +49,7 @@ export default function AppNavbar() {
                         <Nav className="eh-nav-links">
                             <Nav.Link as={NavLink} to="/" end>Home</Nav.Link>
                             <Nav.Link as={NavLink} to="/menu">Menu</Nav.Link>
-                            <Nav.Link as={NavLink} to="/availability">Availability</Nav.Link>
+                            {!user && <Nav.Link as={NavLink} to="/availability">Availability</Nav.Link>}
                             <Nav.Link as={NavLink} to="/find-us">Find us</Nav.Link>
                             {(user?.role === 'employee' || user?.role === 'warden') && (
                                 <Nav.Link as={NavLink} to="/staff/slots">Manage slots</Nav.Link>
@@ -65,8 +65,7 @@ export default function AppNavbar() {
                                     align="end"
                                 >
                                     <NavDropdown.Header>My account</NavDropdown.Header>
-                                    <NavDropdown.Item as={Link} to={bookDestination}>Book a table</NavDropdown.Item>
-                                    <NavDropdown.Item as={Link} to="/availability">Check availability</NavDropdown.Item>
+                                    <NavDropdown.Item as={Link} to={bookingDestination}>Book a table</NavDropdown.Item>
                                     <NavDropdown.Item disabled>My bookings (coming soon)</NavDropdown.Item>
                                     <NavDropdown.Divider />
                                     <NavDropdown.Item disabled={loggingOut} onClick={handleLogout}>
@@ -74,9 +73,12 @@ export default function AppNavbar() {
                                     </NavDropdown.Item>
                                 </NavDropdown>
                             ) : (
-                                <Nav.Link as={NavLink} to="/login" className="eh-login-link">Log in</Nav.Link>
+                                <div className="eh-auth-links" role="group" aria-label="Account access">
+                                    <Nav.Link as={NavLink} to="/login" className="eh-auth-link">Log in</Nav.Link>
+                                    <Nav.Link as={NavLink} to="/register" className="eh-auth-link eh-auth-link--register">Register</Nav.Link>
+                                </div>
                             ))}
-                            <Link className="eh-button eh-button--green eh-header-book" to={bookDestination}>
+                            <Link className="eh-button eh-button--green eh-header-book" to={bookingDestination}>
                                 <svg viewBox="0 0 24 24" aria-hidden="true">
                                     <rect x="3" y="5" width="18" height="16" rx="2" />
                                     <path d="M7 3v4M17 3v4M3 10h18" />

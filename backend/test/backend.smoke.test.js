@@ -12,15 +12,15 @@ describe('Backend smoke tests', () => {
         "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
       );
       expect(tables.map((t) => t.name)).toEqual([
-        'booking_seats', 'bookings', 'dining_tables', 'huts', 'slot_tables', 'slots', 'users',
+        'booking_seats', 'bookings', 'dining_tables', 'meals', 'menus', 'slot_tables', 'slots', 'users',
       ]);
 
       const { rows: staff } = await db.query(
-        "SELECT role, hut_id FROM users WHERE role <> 'hiker' ORDER BY role"
+        "SELECT role FROM users WHERE role <> 'hiker' ORDER BY role"
       );
       expect(staff).toEqual([
-        { role: 'employee', hut_id: 1 },
-        { role: 'warden', hut_id: 1 },
+        { role: 'employee' },
+        { role: 'warden' },
       ]);
     } finally {
       await db.close();
@@ -48,7 +48,7 @@ describe('Backend smoke tests', () => {
 
       expect(response.status).toBe(404);
       expect(response.body).toEqual({
-        type: 'about:blank', title: 'Not Found', status: 404, detail: 'No route for GET /api/unknown',
+        error: { code: 'NOT_FOUND', message: 'No route for GET /api/unknown' },
       });
     } finally {
       await db.close();

@@ -20,6 +20,7 @@ async function request(path, options = {}) {
         const err = new Error(body?.error?.message || 'The request could not be completed.');
         err.status = response.status;
         err.code = body?.error?.code;
+        err.details = Array.isArray(body?.error?.details) ? body.error.details : [];
         throw err;
     }
     return body;
@@ -58,5 +59,22 @@ export async function logout() {
     } catch (err) {
         // Se la sessione e' gia' scaduta, il logout lato frontend va comunque bene.
         if (err.status !== 401) throw err;
+    }
+}
+
+export async function registerHiker({ name, email, phone, password, notes, emergencyContact }) {
+    try {
+        const data = await request('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, email, phone, password, notes, emergencyContact }),
+        });
+        return data.user;
+    } catch (err) {
+        if (err.code === 'EMAIL_ALREADY_REGISTERED') {
+            err.message = 'This email already has an account. Please log in instead.';
+            throw err;
+        }
+        throw err;
     }
 }

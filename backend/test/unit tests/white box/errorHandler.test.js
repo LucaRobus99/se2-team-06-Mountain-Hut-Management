@@ -11,12 +11,12 @@ describe('White Box Test - errorHandler & notFoundHandler', () => {
     next = vi.fn();
   });
 
-  it('turns an AppError into a problem response', () => {
+  it('turns an AppError into the API error format', () => {
     errorHandler(new ConflictError('Not enough seats'), req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(409);
     expect(res.json).toHaveBeenCalledWith({
-      type: 'about:blank', title: 'Conflict', status: 409, detail: 'Not enough seats',
+      error: { code: 'CONFLICT', message: 'Not enough seats' },
     });
   });
 
@@ -25,7 +25,7 @@ describe('White Box Test - errorHandler & notFoundHandler', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({
-      type: 'about:blank', title: 'Bad Request', status: 400, detail: 'Request body is not valid JSON',
+      error: { code: 'VALIDATION_ERROR', message: 'Request body is not valid JSON.', details: [] },
     });
   });
 
@@ -35,7 +35,7 @@ describe('White Box Test - errorHandler & notFoundHandler', () => {
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({
-      type: 'about:blank', title: 'Internal Server Error', status: 500, detail: 'An error occurred, please try later',
+      error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred.' },
     });
     spy.mockRestore();
   });
@@ -45,7 +45,7 @@ describe('White Box Test - errorHandler & notFoundHandler', () => {
 
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({
-      type: 'about:blank', title: 'Not Found', status: 404, detail: 'No route for GET /api/slots',
+      error: { code: 'NOT_FOUND', message: 'No route for GET /api/slots' },
     });
   });
 });

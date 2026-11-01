@@ -56,12 +56,12 @@ function FlowerDecoration() {
 export default function HomePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const bookingDestination = user?.role === 'hiker' ? '/book' : '/availability';
   const [date, setDate] = useState(tomorrowInItaly());
   const [meal, setMeal] = useState('lunch');
   const [partySize, setPartySize] = useState('2');
   const [formError, setFormError] = useState('');
 
-  const bookDestination = user?.role === 'hiker' ? '/book' : '/availability';
 
   function handleSearch(event) {
     event.preventDefault();
@@ -72,7 +72,7 @@ export default function HomePage() {
     }
     setFormError('');
     const params = new URLSearchParams({ date, meal, guests: String(guests) });
-    navigate(`/availability?${params.toString()}`);
+    navigate(`${bookingDestination}?${params.toString()}`);
   }
 
   return (
@@ -84,7 +84,7 @@ export default function HomePage() {
             <h1>Take a break<br/>at Edelweiss Hut</h1>
             <p className="eh-hero-subtitle">Find a table and make your hike even better.</p>
             <div className="eh-hero-actions">
-              <Link to={bookDestination} className="eh-button eh-button--green eh-hero-button"><CalendarIcon/> Book a table</Link>
+              <Link to={bookingDestination} className="eh-button eh-button--green eh-hero-button"><CalendarIcon/> Book a table</Link>
               <Link to="/menu" className="eh-button eh-button--cream eh-hero-button"><CutleryIcon/> Our menu</Link>
             </div>
           </div>

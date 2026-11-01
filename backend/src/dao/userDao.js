@@ -9,10 +9,22 @@ export function createUserDao(db) {
       const email = a[0];
       const { rows } = await exec.query(
         `SELECT id, role, name, email, phone, password_hash, created_at
-         FROM users WHERE email = $1`,
+         FROM users WHERE lower(email) = lower($1)`,
         [email]
       );
       return rows[0] ?? null;
+    },
+
+    async createHiker(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const [{ name, email, phone, passwordHash, notes, emergencyContact }] = a;
+      const { rows } = await exec.query(
+        `INSERT INTO users (role, name, email, phone, password_hash, notes, emergency_contact)
+         VALUES ('hiker', $1, $2, $3, $4, $5, $6)
+         RETURNING id, role, name, email, phone, notes, emergency_contact, created_at`,
+        [name, email, phone, passwordHash, notes, emergencyContact]
+      );
+      return rows[0];
     },
 
     async findById(...args) {
