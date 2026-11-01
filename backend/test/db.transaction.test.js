@@ -14,7 +14,7 @@ describe('SQLite transaction helper', () => {
     const db = await createEmptyDb();
     try {
       await db.transaction(async (tx) => {
-        await tx.query("INSERT INTO slots (hut_id, date, start_time) VALUES (1, '2026-12-01', '12:00')");
+        await tx.query("INSERT INTO slots (date, start_time, end_time) VALUES ('2026-12-01', '12:00', '13:00')");
       });
       const { rows } = await db.query('SELECT status FROM slots');
       expect(rows).toEqual([{ status: 'available' }]);
@@ -27,7 +27,7 @@ describe('SQLite transaction helper', () => {
     const db = await createEmptyDb();
     try {
       await expect(db.transaction(async (tx) => {
-        await tx.query("INSERT INTO slots (hut_id, date, start_time) VALUES (1, '2026-12-01', '12:00')");
+        await tx.query("INSERT INTO slots (date, start_time, end_time) VALUES ('2026-12-01', '12:00', '13:00')");
         throw new Error('not enough seats');
       })).rejects.toThrow('not enough seats');
 
@@ -41,7 +41,7 @@ describe('SQLite transaction helper', () => {
   it('runs transactions one at a time, so the first one saved wins', async () => {
     const db = await createEmptyDb();
     try {
-      await db.query("INSERT INTO slots (id, hut_id, date, start_time) VALUES (1, 1, '2026-12-01', '12:00')");
+      await db.query("INSERT INTO slots (id, date, start_time, end_time) VALUES (1, '2026-12-01', '12:00', '13:00')");
       const seatsLeft = 2;
 
       // Two bookings for the last 2 seats, started at the same moment.
@@ -49,7 +49,7 @@ describe('SQLite transaction helper', () => {
         const { rows } = await tx.query('SELECT COALESCE(SUM(party_size), 0) AS taken FROM bookings WHERE slot_id = 1');
         if (rows[0].taken + 2 > seatsLeft) throw new Error('not enough seats');
         await tx.query(
-          'INSERT INTO bookings (slot_id, created_by, contact_name, email, party_size) VALUES (1, 3, $1, $2, 2)',
+          'INSERT INTO bookings (slot_id, created_by, contact_name, email, party_size) VALUES (1, 2, $1, $2, 2)',
           [name, `${name}@test`]
         );
       });

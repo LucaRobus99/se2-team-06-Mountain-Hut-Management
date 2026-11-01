@@ -22,12 +22,12 @@
 /* Login: one quiet card and the existing website photo, no extra links/claims. */
 .eh-login-scene { position: relative; display: grid; place-items: center; padding: clamp(2rem, 7vw, 5.5rem) 1.25rem; min-height: min(800px, calc(100svh - 86px)); background-size: cover; background-position: center 49%; isolation: isolate; }
 .eh-login-scene::before { content: ''; position: absolute; inset: 0; background: rgba(23, 29, 24, .32); z-index: -1; }
-.eh-login-card { width: min(100%, 410px); padding: clamp(1.8rem, 4vw, 2.5rem); background: rgba(255,252,247,.98); border: 1px solid rgba(255,255,255,.9); border-radius: 1.1rem; box-shadow: 0 24px 80px rgba(0,0,0,.24); }
+.eh-login-card { width: min(100%, 480px); padding: clamp(1.8rem, 4vw, 2.5rem); background: rgba(255,252,247,.98); border: 1px solid rgba(255,255,255,.9); border-radius: 1.1rem; box-shadow: 0 24px 80px rgba(0,0,0,.24); }
 .eh-login-brand { display: flex; justify-content: center; margin-bottom: 1.35rem; }
 .eh-login-brand .eh-brand-mark { width: 56px; height: 47px; }
 .eh-login-brand .eh-brand-title { font-size: 2.1rem; }
 .eh-login-brand .eh-brand-tagline { font-size: .72rem; }
-.eh-login-card h1 { font-size: clamp(1.55rem, 2.6vw, 1.9rem); font-weight: 700; margin: 3rem 0 1.7rem; text-align: center; }
+.eh-login-card h1 { font-size: clamp(1.55rem, 2.6vw, 1.9rem); font-weight: 700; margin: 2rem 0 1.3rem; text-align: center; }
 .eh-login-form { display: flex; flex-direction: column; gap: .6rem; }
 .eh-login-form label { display: flex; align-items: center; gap: .6rem; font-size: .96rem; font-weight: 600; color: #394038; margin-top: .35rem; }
 .eh-login-form label svg { width: 17px; height: 17px; color: #765437; }
@@ -41,6 +41,36 @@
 .eh-login-submit { margin-top: 1.05rem; width: 100%; min-height: 51px; }
 .eh-login-note { margin: 1.25rem 0 0; color: #6c4d33; text-align: center; font-size: .89rem; }
 .eh-login-alert { font-size: .9rem; }
+
+/* Registration uses the same 480px card as Login. The photo fades into
+   a neutral surface instead of stretching behind the whole long form. */
+.eh-register-scene {
+  min-height: calc(100svh - 86px);
+  padding-block: clamp(2rem, 4vw, 3.75rem);
+  background: #f5f1e9;
+}
+.eh-register-scene::before {
+  inset: 0 0 auto;
+  height: clamp(340px, 42vw, 495px);
+  background: linear-gradient(180deg, rgba(23,29,24,.35), rgba(23,29,24,.21) 42%, #f5f1e9 100%), var(--eh-register-image) center 42% / cover no-repeat;
+}
+.eh-register-card { width: min(100%, 480px); }
+.eh-register-card h1 { margin: 2rem 0 1.3rem; }
+.eh-register-intro { color: #5d6b60; text-align: center; margin: 0 0 1.15rem; }
+.eh-register-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: .9rem; row-gap: .8rem; }
+.eh-register-field { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+.eh-register-field--full { grid-column: 1 / -1; }
+.eh-register-card .eh-register-field label { margin-top: 0; font-size: .9rem; }
+.eh-register-card .eh-login-form textarea { width: 100%; border: 1px solid #dedbd3; border-radius: .55rem; padding: .7rem .9rem; font: inherit; background: #fff; color: #24382b; resize: vertical; }
+.eh-register-card .eh-login-form textarea:focus { border-color: #5f7a65; outline: none; box-shadow: 0 0 0 3px rgba(53,80,62,.12); }
+.eh-register-hint { margin: .08rem 0 0; color: #6e746c; font-size: .8rem; }
+.eh-register-optional { color: #7a8076; font-weight: normal; font-size: .8rem; }
+@media (max-width: 520px) {
+  .eh-register-grid { grid-template-columns: minmax(0, 1fr); }
+  .eh-register-scene { padding-inline: .9rem; }
+  .eh-register-card { padding: 1.5rem; }
+}
+.eh-login-note a { color: #2b6244; font-weight: 700; }
 
 /* Keep the larger login brand readable on small phones, without changing navbar branding. */
 @media (max-width: 420px) {
@@ -476,4 +506,191 @@
   .eh-booking-complete .eh-success-actions .eh-button { width: 100%; justify-content: center; }
   .eh-booking-complete dl { grid-template-columns: 1fr 1fr; }
   .eh-split-modal .modal-footer .eh-button { width: 100%; justify-content: center; }
+}
+
+/* Consistent account actions: no background swaps on Login / Register. */
+.eh-auth-links { display: inline-flex; align-items: center; gap: .25rem; }
+.eh-navbar .eh-auth-links .eh-auth-link {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: .65rem .82rem; border: 1px solid transparent; border-radius: .6rem;
+  color: #324a3c; background: transparent; text-decoration: none;
+  font: 600 1rem/1.2 Georgia, 'Palatino Linotype', 'Times New Roman', serif;
+  white-space: nowrap;
+}
+.eh-navbar .eh-auth-links .eh-auth-link--register {
+  background: #fffdfa; border-color: #ccd6cb;
+}
+.eh-navbar .eh-auth-links .eh-auth-link.active {
+  color: #324a3c; background: transparent;
+}
+.eh-navbar .eh-auth-links .eh-auth-link--register.active {
+  background: #fffdfa;
+}
+.eh-navbar .eh-auth-links .eh-auth-link:hover {
+  color: #1f3329; text-decoration: underline; text-underline-offset: 5px;
+}
+@media (max-width: 991px) {
+  .eh-auth-links { display: flex; width: 100%; }
+  .eh-navbar .eh-auth-links .eh-auth-link { flex: 1; }
+}
+
+/* Account actions share the same neutral surface; only the active tab is green. */
+.eh-auth-links {
+  display: inline-flex; align-items: center; gap: .2rem; padding: .28rem;
+  border: 1px solid #d9ded4; border-radius: .85rem; background: #f1f2ed;
+}
+.eh-navbar .eh-auth-links .eh-auth-link,
+.eh-navbar .eh-auth-links .eh-auth-link--register {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 43px; padding: .5rem .95rem; border: 1px solid transparent;
+  border-radius: .68rem; color: #314a3a; background: transparent;
+  text-decoration: none; font: 700 1.02rem/1.25 Georgia, 'Palatino Linotype', serif;
+  transition: background .16s ease, color .16s ease;
+}
+.eh-navbar .eh-auth-links .eh-auth-link.active,
+.eh-navbar .eh-auth-links .eh-auth-link--register.active {
+  color: #1d3f2d; background: #dce9dc; border-color: #dce9dc;
+  text-decoration: none;
+}
+.eh-navbar .eh-auth-links .eh-auth-link:not(.active):hover {
+  background: #e7ece5; color: #1b3627; text-decoration: none;
+}
+.eh-navbar .eh-auth-links .eh-auth-link:focus-visible {
+  outline: 2px solid #527963; outline-offset: 2px;
+}
+
+/* Same full-image treatment for Login and Register; two-column form stays. */
+.eh-login-card, .eh-register-card { width: min(100%, 520px); }
+.eh-register-scene {
+  min-height: calc(100svh - 86px);
+  padding-block: clamp(2.2rem, 5vw, 4.25rem);
+  background-size: cover; background-position: center center;
+  background-repeat: no-repeat; background-color: #21352b;
+}
+.eh-register-scene::before {
+  inset: 0; height: auto;
+  background: rgba(18, 31, 25, .44);
+}
+.eh-register-card { position: relative; z-index: 1; }
+.eh-register-card h1 { margin: 2rem 0 1.3rem; }
+.eh-register-card .eh-register-grid { column-gap: 1rem; row-gap: .85rem; }
+.eh-register-card .eh-login-form input[aria-invalid="true"],
+.eh-register-card .eh-login-form textarea[aria-invalid="true"],
+.eh-login-card .eh-login-form input[aria-invalid="true"] {
+  border-color: #b74639; box-shadow: 0 0 0 2px rgba(183,70,57,.1);
+}
+.eh-login-card .eh-field-error {
+  display: block; color: #a13529; font: 500 .81rem/1.35 system-ui, sans-serif;
+  margin: .12rem 0 0;
+}
+.eh-register-card .eh-field-error { margin: -.02rem 0 0; }
+
+/* Shared booking photo and centered card: same visual language as Login. */
+.eh-booking-page { background: #22392d; }
+.eh-booking-scene {
+  min-height: min(820px, calc(100svh - 86px));
+  padding-block: clamp(2.25rem, 5vw, 4.5rem);
+  background-position: center 52%;
+}
+.eh-booking-scene::before { background: rgba(23, 29, 24, .31); }
+.eh-booking-card { width: min(100%, 565px); position: relative; }
+.eh-booking-card--confirmed { border-top: 4px solid #567e5f; }
+.eh-booking-card .eh-login-brand { margin-bottom: 3rem; }
+.eh-booking-kicker {
+  margin: 0 0 .4rem;
+  text-align: center;
+  color: #7a664a;
+  font: 700 .72rem/1.45 Georgia, serif;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.eh-booking-kicker--confirmed { color: #3f724b; }
+.eh-booking-card h1 {
+  margin: 0 0 .6rem;
+  font-size: clamp(1.65rem, 2.9vw, 2rem);
+  text-align: center;
+}
+.eh-booking-intro {
+  margin: 0 auto 1.5rem;
+  text-align: center;
+  color: #667368;
+  font: 400 .98rem/1.5 Georgia, serif;
+  max-width: 425px;
+}
+.eh-booking-success-mark {
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  margin: .1rem auto 1rem;
+  border-radius: 50%;
+  background: #3e764c;
+  color: #fff;
+  box-shadow: 0 5px 16px rgba(44, 92, 58, .19);
+}
+.eh-booking-success-mark svg { width: 40px; height: 40px; }
+.eh-booking-details-heading {
+  margin: 0 0 .65rem;
+  color: #586959;
+  font: 700 .84rem/1.35 Georgia, serif;
+}
+/* Reintroduce the two-column detail cards from the previous review layout. */
+.eh-booking-recap {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .7rem;
+  margin: 0;
+}
+.eh-booking-recap > div {
+  min-width: 0;
+  padding: .9rem 1rem;
+  border: 1px solid #e4e8dd;
+  border-radius: .7rem;
+  background: #f6f6f0;
+}
+.eh-booking-recap dt {
+  margin: 0 0 .25rem;
+  color: #6c7c6c;
+  font: 600 .8rem/1.35 Georgia, serif;
+}
+.eh-booking-recap dd {
+  margin: 0;
+  color: #203a2d;
+  font: 700 1.03rem/1.38 Georgia, serif;
+  overflow-wrap: anywhere;
+}
+.eh-booking-recap .eh-booking-seating-detail {
+  grid-column: 1 / -1;
+  border-color: #dae6d8;
+  background: #eaf1e8;
+}
+.eh-booking-error { margin: 1.15rem 0 0; }
+.eh-booking-actions {
+  display: flex;
+  gap: .8rem;
+  margin-top: 1.6rem;
+}
+.eh-booking-actions .eh-button {
+  flex: 1 1 0;
+  min-height: 49px;
+  justify-content: center;
+  text-align: center;
+}
+.eh-booking-actions .eh-button--outline {
+  background: #fffaf3;
+  color: #345242;
+  border-color: #c7d1c6;
+}
+.eh-booking-actions .eh-button--outline:hover { background: #eef3ed; }
+
+@media (max-width: 560px) {
+  .eh-booking-card { padding: 1.55rem; }
+  .eh-booking-recap { gap: .55rem; }
+  .eh-booking-recap > div { padding: .75rem; }
+  .eh-booking-recap dd { font-size: .96rem; }
+  .eh-booking-actions { flex-direction: column; }
+  .eh-booking-actions .eh-button { flex-basis: auto; width: 100%; }
+}
+@media (max-width: 390px) {
+  .eh-booking-recap { grid-template-columns: minmax(0, 1fr); }
 }

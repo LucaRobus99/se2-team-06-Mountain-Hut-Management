@@ -8,12 +8,12 @@ import AvailabilitySlotCard from '../components/AvailabilitySlotCard.jsx';
 import SplitSeatingModal from '../components/SplitSeatingModal.jsx';
 import landscape from '../assets/edelweiss-booking-banner.png';
 
-function nextDay() {
+function todayInHut() {
   const date = new Date();
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit'
   }).formatToParts(date).map(part => [part.type, part.value]));
-  return new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day + 1)).toISOString().slice(0, 10);
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 function formatDate(iso) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || '')) return iso || '';
@@ -24,7 +24,7 @@ export default function AvailabilityPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [date, setDate] = useState(searchParams.get('date') || nextDay());
+  const [date, setDate] = useState(searchParams.get('date') || todayInHut());
   const [meal, setMeal] = useState(searchParams.get('meal') || 'lunch');
   const [partySize, setPartySize] = useState(searchParams.get('guests') || '2');
   const [result, setResult] = useState(null);
@@ -108,8 +108,8 @@ export default function AvailabilityPage() {
       <section className="eh-page-banner eh-availability-banner" style={{ backgroundImage: `url(${landscape})` }}>
         <div className="eh-wide-wrap eh-banner-content">
           <p className="eh-page-eyebrow">Plan your visit</p>
-          <h1>Check availability</h1>
-          <p>Find a table for your next mountain escape.</p>
+          <h1>{user?.role === 'hiker' ? 'Book a table' : 'Check availability'}</h1>
+          <p>{user?.role === 'hiker' ? 'Choose your perfect time at Edelweiss Hut.' : 'Find a table for your next mountain escape.'}</p>
         </div>
       </section>
 
@@ -117,7 +117,7 @@ export default function AvailabilityPage() {
         <form className="eh-availability-search" onSubmit={handleSubmit}>
           <div className="eh-availability-field">
             <label htmlFor="availability-date">Date</label>
-            <AlpineDatePicker id="availability-date" value={date} minDate={nextDay()} onChange={value => onFieldChange(setDate, value)} required disabled={loading || checkingSeating} />
+            <AlpineDatePicker id="availability-date" value={date} minDate={todayInHut()} onChange={value => onFieldChange(setDate, value)} required disabled={loading || checkingSeating} />
           </div>
           <div className="eh-availability-field">
             <label htmlFor="availability-meal">Meal</label>

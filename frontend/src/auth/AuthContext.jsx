@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { getCurrentUser, login as apiLogin, logout as apiLogout } from '../api/auth.js';
+import { getCurrentUser, login as apiLogin, logout as apiLogout, registerHiker as apiRegister } from '../api/auth.js';
 
 const AuthContext = createContext(null);
 
@@ -37,6 +37,13 @@ export function AuthProvider({ children }) {
     return authenticatedUser;
   }
 
+  async function signUp(registration) {
+    const registeredUser = await apiRegister(registration);
+    setUser(registeredUser);
+    setAuthError('');
+    return registeredUser;
+  }
+
   async function signOut() {
     await apiLogout();
     setUser(null);
@@ -45,14 +52,19 @@ export function AuthProvider({ children }) {
 
   // Serve per riallineare il frontend alla sessione dopo errori 401.
   async function refreshUser() {
-    const currentUser = await getCurrentUser();
-    setUser(currentUser);
-    return currentUser;
+    try {
+      const currentUser = await getCurrentUser();
+      setUser(currentUser);
+      return currentUser;
+    } catch (error) {
+      if (error.status === 401 || error.code === 'UNAUTHENTICATED') setUser(null);
+      throw error;
+    }
   }
 
   return (
     <AuthContext.Provider value={{
-      user, loadingAuth, authError, signIn, signOut, refreshUser
+      user, loadingAuth, authError, signIn, signUp, signOut, refreshUser
     }}>
       {children}
     </AuthContext.Provider>
