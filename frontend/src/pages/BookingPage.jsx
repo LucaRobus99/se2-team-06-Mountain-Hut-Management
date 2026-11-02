@@ -1,305 +1,199 @@
-import { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
+import { useRef, useState } from 'react';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router';
+import { Alert, Modal } from 'react-bootstrap';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { Form, Button, Alert } from 'react-bootstrap';
-import {
-  getAvailableSlots,
-  getSlotSeating,
-  createBooking,
-  simulateOtherBooking
-} from '../api/booking.js';
+import SplitSeatingModal from '../components/SplitSeatingModal.jsx';
+import bookingBackground from '../assets/edelweiss-booking-background.jpg';
+import EdelweissBrand from '../components/EdelweissBrand.jsx';
+import { createBooking, getSlotSeating, bookingErrorMessage } from '../api/booking.js';
 
+function friendlyDate(iso) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || '')) return iso || '';
+  return new Intl.DateTimeFormat('en-GB', { dateStyle: 'long', timeZone: 'UTC' })
+    .format(new Date(`${iso}T00:00:00Z`));
+}
+
+function availabilityUrl(draft) {
+  if (!draft?.date || !draft?.meal || !draft?.partySize) return '/availability';
+  const params = new URLSearchParams({
+    date: draft.date, meal: draft.meal, guests: String(draft.partySize),
+  });
+  return `/availability?${params.toString()}`;
+}
+
+// Booking is the review/confirmation step. The search experience is shared
+// between public /availability and authenticated /book.
 export default function BookingPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, loadingAuth, refreshUser } = useAuth();
   const draft = location.state?.bookingDraft;
-  const today = new Date().toLocaleDateString('sv-SE', {
-    timeZone: 'Europe/Rome'
-  });
-
-  const [date, setDate] = useState(draft?.date ?? '');
-  const [partySize, setPartySize] = useState(draft?.partySize ?? '2');
-  const [meal, setMeal] = useState(draft?.meal ?? '');
-
-  const [result, setResult] = useState(draft?.result ?? null);
-  const [selectedSlotId, setSelectedSlotId] = useState(draft?.selectedSlotId ?? null);
-  const [seating, setSeating] = useState(draft?.seating ?? null);
+  const [seating, setSeating] = useState(draft?.seating || null);
+  const [splitAcknowledged, setSplitAcknowledged] = useState(Boolean(draft?.seating?.requiresConfirmation));
+  const [pendingSplit, setPendingSplit] = useState(null);
+  const [duplicateBooking, setDuplicateBooking] = useState(false);
   const [booking, setBooking] = useState(null);
   const [error, setError] = useState('');
-  const [info, setInfo] = useState('');
-
-  const [loading, setLoading] = useState(false);
+  const [staleSelection, setStaleSelection] = useState(false);
   const [checkingSeating, setCheckingSeating] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
-  const busy = loading || checkingSeating || bookingLoading;
+  const submitting = useRef(false);
+  const busy = checkingSeating || bookingLoading;
+  const backToAvailability = availabilityUrl(draft);
+  const selectedSlot = draft?.result?.slots?.find(slot => slot.id === draft.selectedSlotId);
+  const shownDate = booking?.slot.date || draft?.date;
+  const shownTime = booking?.slot.startTime || selectedSlot?.startTime;
+  const shownEnd = booking?.slot.endTime || selectedSlot?.endTime;
+  const shownMeal = booking?.slot.meal || draft?.meal;
+  const shownGuests = booking?.partySize || Number(draft?.partySize);
+  const groupIsSplit = booking ? booking.split : seating?.fit === 'split';
+  const mealLabel = shownMeal === 'aperitivo'
+    ? 'Happy hour'
+    : shownMeal ? `${shownMeal[0].toUpperCase()}${shownMeal.slice(1)}` : '';
 
-  function resetResults() {
-    setResult(null);
-    setSelectedSlotId(null);
-    setSeating(null);
-    setError('');
-    setInfo('');
+  function goToLogin() {
+    navigate('/login', {
+      state: {
+        from: '/book', bookingDraft: draft,
+        notice: 'Please log in to complete your booking. Your selection will be kept.',
+      },
+    });
   }
 
-  async function handleSearch(event) {
-    event.preventDefault();
-    if (busy) return;
-
-    const guests = Number(partySize);
-    if (!date || date < today || !meal || !Number.isInteger(guests) || guests < 1) {
-      setError('Please enter a valid date, meal and number of guests.');
+  function handleBookingError(err) {
+    if (err.code === 'UNAUTHENTICATED' || err.status === 401) {
+      goToLogin();
       return;
     }
-    setLoading(true);
-    resetResults();
-    try {
-      setResult(await getAvailableSlots({ date, meal, partySize: guests }));
-    } catch (err) {
-      setError(err.message || 'Unable to check availability.');
-    } finally {
-      setLoading(false);
+    if (err.code === 'BOOKING_ALREADY_EXISTS') {
+      setDuplicateBooking(true);
+      return;
+    }
+    setError(bookingErrorMessage(err));
+    if (['INSUFFICIENT_CAPACITY', 'SLOT_NOT_AVAILABLE', 'SLOT_NOT_FOUND', 'SLOT_TOO_LATE'].includes(err.code)) {
+      // A booking attempt can fail after a previous public availability check.
+      // Return to the single search page instead of duplicating the form here.
+      setStaleSelection(true);
     }
   }
 
-  async function handleSelectSlot(slot) {
-    if (busy) return;
+  async function saveBooking() {
+    if (submitting.current || !draft) return;
+    submitting.current = true;
+    setBookingLoading(true);
     setError('');
-    setInfo('');
-    setSelectedSlotId(null);
-    setSeating(null);
-    setCheckingSeating(true);
     try {
-      const data = await getSlotSeating({
-        slotId: slot.id,
-        partySize: Number(partySize)
+      const confirmed = await createBooking({
+        slotId: draft.selectedSlotId, partySize: Number(draft.partySize),
       });
-      if (data.requiresConfirmation) {
-        // Popup provvisorio: in futuro lo sostituiremo con una Modal.
-        const accepted = window.confirm(
-          `${data.confirmation.message}\n\nDo you want to continue?`
-        );
-        if (!accepted) return;
-      }
-      setSelectedSlotId(slot.id);
-      setSeating(data);
+      setBooking(confirmed);
+      setPendingSplit(null);
     } catch (err) {
-      setError(err.message || 'Unable to check seating.');
+      handleBookingError(err);
+    } finally {
+      submitting.current = false;
+      setBookingLoading(false);
+    }
+  }
+
+  async function confirmBooking() {
+    if (!draft || !seating || !selectedSlot || busy || booking || staleSelection || loadingAuth) return;
+    if (!user) { goToLogin(); return; }
+    if (user.role !== 'hiker') { setError('Only Hiker accounts can book online.'); return; }
+    setCheckingSeating(true);
+    setError('');
+    try {
+      const activeUser = await refreshUser();
+      if (!activeUser) { goToLogin(); return; }
+      if (activeUser.role !== 'hiker') { setError('Only Hiker accounts can book online.'); return; }
+      const latest = await getSlotSeating({ slotId: draft.selectedSlotId, partySize: Number(draft.partySize) });
+      setSeating(latest);
+      if (latest.requiresConfirmation && !splitAcknowledged) {
+        setPendingSplit(latest);
+        return;
+      }
+      await saveBooking();
+    } catch (err) {
+      handleBookingError(err);
     } finally {
       setCheckingSeating(false);
     }
   }
 
-  function goToLogin() {
-    navigate('/login', {
-      state: {
-        from: '/book',
-        bookingDraft: { date, partySize, meal, result, selectedSlotId, seating }
-      }
-    });
+  async function acceptSplit() {
+    if (!pendingSplit) return;
+    setSeating(pendingSplit);
+    setSplitAcknowledged(true);
+    setPendingSplit(null);
+    await saveBooking();
   }
 
-  async function handleConfirmBooking() {
-    if (busy || loadingAuth || selectedSlotId === null || !seating || booking) return;
-    if (!user) {
-      goToLogin();
-      return;
-    }
-    if (user.role !== 'hiker') {
-      setError('Only Hikers can make online bookings.');
-      return;
-    }
-
-    setBookingLoading(true);
-    setError('');
-    setInfo('');
-    try {
-      // La sessione e' reale: verifichiamo che non sia scaduta nel frattempo.
-      const activeUser = await refreshUser();
-      if (!activeUser) {
-        goToLogin();
-        return;
-      }
-      if (activeUser.role !== 'hiker') {
-        setError('Only Hikers can make online bookings.');
-        return;
-      }
-      const confirmedBooking = await createBooking({
-        slotId: selectedSlotId,
-        partySize: Number(partySize)
-      }, activeUser);
-      setBooking(confirmedBooking);
-    } catch (err) {
-      if (err.code === 'INSUFFICIENT_CAPACITY') {
-        setError('These seats are no longer available. Please choose another time.');
-      } else if (err.code === 'BOOKING_ALREADY_EXISTS') {
-        setError('You already have a confirmed booking for this time slot.');
-      } else if (err.code === 'SLOT_TOO_LATE') {
-        setError('Bookings close two hours before the selected time.');
-      } else if (err.code === 'SLOT_NOT_AVAILABLE') {
-        setError('This time slot is no longer available.');
-      } else if (err.code === 'UNAUTHENTICATED') {
-        goToLogin();
-        return;
-      } else if (err.code === 'FORBIDDEN') {
-        setError('Only Hikers can make online bookings.');
-      } else {
-        setError(err.message || 'The booking could not be completed.');
-      }
-
-      // Rilettura della disponibilita' dopo un errore di prenotazione.
-      try {
-        const updated = await getAvailableSlots({
-          date,
-          meal,
-          partySize: Number(partySize)
-        });
-        setResult(updated);
-      } catch {
-        setResult(null);
-      }
-      setSelectedSlotId(null);
-      setSeating(null);
-    } finally {
-      setBookingLoading(false);
-    }
+  if (!draft || !selectedSlot || !seating) {
+    return <Navigate to={backToAvailability} replace />;
   }
-
-  async function handleSimulateOtherBooking() {
-    if (busy || selectedSlotId === null || !seating || booking) return;
-    try {
-      // Un'altra persona occupa abbastanza posti da rendere impossibile
-      // la nostra prenotazione, lasciando invariata la schermata corrente.
-      const seatsToTake = seating.availableSeats - Number(partySize) + 1;
-      await simulateOtherBooking({ slotId: selectedSlotId, partySize: seatsToTake });
-      setInfo('Another mock Hiker has booked seats. Now click Confirm booking to test the 409 error.');
-    } catch (err) {
-      setError(err.message || 'Could not simulate another booking.');
-    }
-  }
-
-  function handleNewBooking() {
-    setBooking(null);
-    resetResults();
-  }
-
-  const selectedSlot = result?.slots.find((slot) => slot.id === selectedSlotId);
 
   return (
-    <div>
-      <h1>Book a table</h1>
-      <p>Bookings are simulated for now. Sign in with a real Hiker account to confirm.</p>
-
-      {booking ? (
-        <section aria-label="Booking result">
-          <Alert variant="success">Booking confirmed (mock).</Alert>
-          <h2>Booking details</h2>
-          <p>Reference: {booking.id}</p>
-          <p>Date: {booking.slot.date}</p>
-          <p>Meal: {booking.slot.meal}</p>
-          <p>Time: {booking.slot.startTime}</p>
-          <p>Guests: {booking.partySize}</p>
-          <p>Contact: {booking.contactName}</p>
-          <p>Seating: {booking.split ? 'Multiple tables' : 'Single table'}</p>
-          <p>Assigned seats: {booking.seatAssignments
-            .map((table) => `${table.tableLabel}: ${table.seats}`)
-            .join(', ')}
-          </p>
-          <Button onClick={handleNewBooking}>Make another booking</Button>
-        </section>
-      ) : (
-        <>
-          <Form onSubmit={handleSearch}>
-            <Form.Group className="mb-3" controlId="booking-date">
-              <Form.Label>Date</Form.Label>
-              <Form.Control
-                type="date" value={date} min={today} required disabled={busy}
-                onChange={(event) => { setDate(event.target.value); resetResults(); }}
-              />
-            </Form.Group>
-
-            <Form.Group className="mb-3" controlId="booking-guests">
-              <Form.Label>Guests</Form.Label>
-              <Form.Control
-                type="number" min="1" step="1" required value={partySize}
-                disabled={busy}
-                onChange={(event) => { setPartySize(event.target.value); resetResults(); }}
-              />
-            </Form.Group>
-
-            <Form.Group className="mb-3" controlId="booking-meal">
-              <Form.Label>Meal</Form.Label>
-              <Form.Select
-                value={meal} required disabled={busy}
-                onChange={(event) => { setMeal(event.target.value); resetResults(); }}
-              >
-                <option value="">Select a meal</option>
-                <option value="breakfast">Breakfast</option>
-                <option value="lunch">Lunch</option>
-                <option value="aperitivo">Aperitivo</option>
-                <option value="dinner">Dinner</option>
-              </Form.Select>
-            </Form.Group>
-
-            <Button type="submit" disabled={busy}>
-              {loading ? 'Searching...' : 'Find available times'}
-            </Button>
-          </Form>
-
-          {error && <Alert variant="danger" role="alert" className="mt-3">{error}</Alert>}
-          {info && <Alert variant="info" className="mt-3">{info}</Alert>}
-
-          {result && (
-            <section className="mt-4">
-              <h2>Available times</h2>
-              {result.slots.length === 0 ? (
-                <Alert variant="info">No available slots for the selected date, meal and party size.</Alert>
-              ) : (
-                <div className="d-flex flex-wrap gap-2">
-                  {result.slots.map((slot) => (
-                    <Button
-                      key={slot.id}
-                      variant={selectedSlotId === slot.id ? 'primary' : 'outline-primary'}
-                      disabled={busy}
-                      onClick={() => handleSelectSlot(slot)}
-                    >
-                      {slot.startTime} — {slot.availableSeats} seats left
-                    </Button>
-                  ))}
-                </div>
-              )}
-
-              {checkingSeating && <p className="mt-3">Checking seating...</p>}
-
-              {selectedSlot && seating && (
-                <div className="mt-3">
-                  <p>Selected time: {selectedSlot.startTime}</p>
-                  <p>Seating: {seating.fit === 'single_table' ? 'Single table' : 'Multiple tables'}</p>
-                  <p>Assigned seats: {seating.seatAssignments
-                    .map((table) => `${table.tableLabel}: ${table.seats}`)
-                    .join(', ')}
-                  </p>
-                  <Button onClick={handleConfirmBooking} disabled={busy || loadingAuth || user?.role && user.role !== 'hiker'}>
-                    {bookingLoading ? 'Confirming...' : !user ? 'Log in to confirm' : 'Confirm booking'}
-                  </Button>
-
-                  {user?.role && user.role !== 'hiker' && (
-                    <Alert variant="warning" className="mt-3">Only Hikers can make online bookings.</Alert>
-                  )}
-
-                  {import.meta.env.DEV && (
-                    <div className="mt-3">
-                      <Button variant="outline-secondary" onClick={handleSimulateOtherBooking} disabled={busy || !!info}>
-                        Simulate another booking (test only)
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </section>
+    <main className="eh-booking-page">
+      <section className="eh-login-scene eh-booking-scene" style={{ backgroundImage: `url(${bookingBackground})` }}>
+        <div className={`eh-login-card eh-booking-card ${booking ? 'eh-booking-card--confirmed' : ''}`}>
+          <div className="eh-login-brand"><EdelweissBrand /></div>
+          {booking && (
+            <div className="eh-booking-success-mark" role="status" aria-label="Booking successfully confirmed">
+              <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m12 24 9 9 16-18" />
+              </svg>
+            </div>
           )}
-        </>
-      )}
-    </div>
+          <p className={`eh-booking-kicker ${booking ? 'eh-booking-kicker--confirmed' : ''}`}>
+            {booking ? 'Reservation successful' : 'Review your selection'}
+          </p>
+          <h1>{booking ? 'Booking confirmed!' : 'Review your booking'}</h1>
+          <p className="eh-booking-intro">{booking
+            ? 'You’re all set! Your table is reserved. We look forward to welcoming you.'
+            : 'Please check the details below before confirming your reservation.'}</p>
+
+          <p className="eh-booking-details-heading">{booking ? 'Your confirmed details' : 'Your selected details'}</p>
+          <dl className="eh-booking-recap">
+            <div><dt>Date</dt><dd>{friendlyDate(shownDate)}</dd></div>
+            <div><dt>Time</dt><dd>{shownTime}{shownEnd ? ` – ${shownEnd}` : ''}</dd></div>
+            <div><dt>Meal</dt><dd>{mealLabel}</dd></div>
+            <div><dt>Guests</dt><dd>{shownGuests} {shownGuests === 1 ? 'person' : 'people'}</dd></div>
+            <div className="eh-booking-seating-detail"><dt>Seating</dt><dd>{groupIsSplit ? 'Across multiple tables' : 'Together at one table'}</dd></div>
+          </dl>
+
+          {error && <Alert variant="danger" role="alert" className="eh-booking-error">{error}</Alert>}
+
+          <div className="eh-booking-actions">
+            {booking ? (
+              <>
+                <Link to="/book" className="eh-button eh-button--green">Book another table</Link>
+                <Link to="/" className="eh-button eh-button--outline">Back to home</Link>
+              </>
+            ) : (
+              <>
+                <Link to={backToAvailability} className="eh-button eh-button--outline">
+                  {staleSelection ? 'Check availability again' : 'Back'}
+                </Link>
+                {!staleSelection && (
+                  <button type="button" className="eh-button eh-button--green"
+                    onClick={confirmBooking} disabled={busy || loadingAuth}>
+                    {busy ? 'Confirming...' : 'Confirm booking'}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </section>
+      <SplitSeatingModal
+        show={Boolean(pendingSplit)} seating={pendingSplit}
+        busy={bookingLoading} onCancel={() => setPendingSplit(null)} onContinue={acceptSplit}
+      />
+      <Modal show={duplicateBooking} onHide={() => setDuplicateBooking(false)} centered aria-labelledby="duplicate-booking-title" dialogClassName="eh-split-modal">
+        <Modal.Header closeButton><Modal.Title id="duplicate-booking-title">You already have a reservation</Modal.Title></Modal.Header>
+        <Modal.Body><p>You already have a confirmed booking for this time slot. Please select a different time to make another reservation.</p></Modal.Body>
+        <Modal.Footer><button type="button" className="eh-button eh-button--green" onClick={() => navigate(backToAvailability)}>Choose another time</button></Modal.Footer>
+      </Modal>
+    </main>
   );
 }

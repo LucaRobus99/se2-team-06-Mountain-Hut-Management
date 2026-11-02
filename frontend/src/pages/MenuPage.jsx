@@ -1,55 +1,22 @@
-import { Card, Col, Row } from 'react-bootstrap';
-
-const menuSections = [
-  {
-    title: 'Breakfast',
-    hours: '08:30 – 10:30',
-    items: ['Homemade cakes', 'Hot drinks', 'Yogurt with granola']
-  },
-  {
-    title: 'Lunch',
-    hours: '12:00 – 14:30',
-    items: ['Mountain pasta', 'Polenta dishes', 'Seasonal soups']
-  },
-  {
-    title: 'Aperitivo',
-    hours: '16:00 – 18:00',
-    items: ['Local cheeses', 'Cold cuts', 'Aperitif drinks']
-  },
-  {
-    title: 'Dinner',
-    hours: '19:00 – 21:00',
-    items: ['Warm alpine plates', 'Vegetarian option', 'Dessert of the day']
-  }
-];
+import { Link } from 'react-router';
+import menuBackground from '../assets/edelweiss-hero.png';
 
 export default function MenuPage() {
   return (
-    <div className="inner-page-grid gap-4">
-      <section>
-        <p className="section-kicker mb-2">Public page</p>
-        <h1 className="page-heading">Our menu</h1>
-        <p className="page-lead text-secondary">
-          A simple overview of the meal moments offered by Edelweiss Hut.
-          Detailed menus can be refined later when the related stories are implemented.
-        </p>
+    <div className="eh-editorial-page eh-menu-page">
+      <section className="eh-page-banner eh-menu-banner" style={{ backgroundImage: `url(${menuBackground})` }}>
+        <div className="eh-wide-wrap eh-banner-content">
+          <p className="eh-page-eyebrow">Food &amp; drinks</p>
+          <h1>Our menu.</h1>
+          <p>Mountain flavours, served with a view.</p>
+        </div>
       </section>
-
-      <Row className="g-4">
-        {menuSections.map((section) => (
-          <Col key={section.title} md={6}>
-            <Card className="border-0 shadow-sm page-card h-100">
-              <Card.Body className="p-4">
-                <p className="section-kicker mb-2">{section.hours}</p>
-                <h2 className="h4 mb-3">{section.title}</h2>
-                <ul className="menu-item-list mb-0">
-                  {section.items.map((item) => <li key={item}>{item}</li>)}
-                </ul>
-              </Card.Body>
-            </Card>
-          </Col>
-        ))}
-      </Row>
+      <section className="eh-menu-empty eh-wide-wrap">
+        <span className="eh-ornament" aria-hidden="true">✳</span>
+        <h2>Something good is coming.</h2>
+        <p>Our menu will be available here soon.</p>
+        <Link to="/availability" className="eh-button eh-button--green">Check availability <span aria-hidden="true">↗</span></Link>
+      </section>
     </div>
   );
 }

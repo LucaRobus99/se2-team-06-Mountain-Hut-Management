@@ -1,18 +1,18 @@
 import { Router } from 'express';
-import { UnauthorizedError, ValidationError } from '../errors/AppError.js';
-import { validateLogin } from '../auth/validation.js';
+import { UnauthorizedError } from '../errors/AppError.js';
+import { validateLogin } from '../auth/loginValidation.js';
+import { invalidFields } from '../utils/validation.js';
 import { clearSessionCookie } from '../auth/session.js';
+import { sanitizeUser } from '../auth/passport.js';
 
-export function createAuthRouter({ passport, requireAuth, now = () => new Date() }) {
+export function createAuthRouter({ passport, requireAuth, registrationService, now = () => new Date() }) {
   const router = Router();
 
   /** POST /api/auth/login – public */
   router.post('/login', (req, res, next) => {
     const details = validateLogin(req.body);
     if (details.length > 0) {
-      return next(
-        new ValidationError('The request contains invalid fields.', 'VALIDATION_ERROR', details)
-      );
+      return next(invalidFields(details));
     }
 
     // `session: false` only verifies the credentials; the session is created
@@ -23,20 +23,18 @@ export function createAuthRouter({ passport, requireAuth, now = () => new Date()
         return next(new UnauthorizedError('Invalid email or password.', 'INVALID_CREDENTIALS'));
       }
 
-      return req.session.regenerate((regenerateErr) => {
-        if (regenerateErr) return next(regenerateErr);
-
-        return req.logIn(user, (loginErr) => {
-          if (loginErr) return next(loginErr);
-
-          const timestamp = now().getTime();
-          req.session.createdAt = timestamp;
-          req.session.lastAccessAt = timestamp;
-
-          return res.status(200).json({ user });
-        });
-      });
+      return startSession(req, user, now, next, (sanitized) => res.status(200).json({ user: sanitized }));
     })(req, res, next);
+  });
+
+  /** POST /api/auth/register – public; creates a hiker and signs them in. */
+  router.post('/register', async (req, res, next) => {
+    try {
+      const registered = await registrationService.registerHiker(req.body);
+      startSession(req, sanitizeUser(registered), now, next, (user) => res.status(201).json({ user }));
+    } catch (err) {
+      next(err);
+    }
   });
 
   /** GET /api/auth/me – any authenticated role */
@@ -58,4 +56,18 @@ export function createAuthRouter({ passport, requireAuth, now = () => new Date()
   });
 
   return router;
+}
+
+/** Regenerate the cookie before authentication to prevent session fixation. */
+function startSession(req, user, now, next, respond) {
+  req.session.regenerate((regenerateErr) => {
+    if (regenerateErr) return next(regenerateErr);
+    req.logIn(user, (loginErr) => {
+      if (loginErr) return next(loginErr);
+      const timestamp = now().getTime();
+      req.session.createdAt = timestamp;
+      req.session.lastAccessAt = timestamp;
+      respond(user);
+    });
+  });
 }

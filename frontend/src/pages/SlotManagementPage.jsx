@@ -1,12 +1,12 @@
-import PagePlaceholder from '../components/PagePlaceholder.jsx';
+import { Link } from 'react-router';
 
 export default function SlotManagementPage() {
   return (
-    <PagePlaceholder
-      story="MHM-2 · Define slot capacity"
-      title="Configure meal slots"
-      description="Employees will set the date, start time, duration, tables and available seats for each meal slot, with the option of reusing a previous table layout."
-      nextStep="Gaia will implement the form and Luca will connect the staff-only API. Authorization is not active in this skeleton."
-    />
+    <section className="eh-simple-page eh-wide-wrap">
+      <p className="eh-page-eyebrow">Staff workspace</p>
+      <h1>Meal slot management.</h1>
+      <p>This area is being prepared for the team. Slot configuration and its staff permissions are not available from this screen yet.</p>
+      <Link to="/" className="eh-button eh-button--green">Return home</Link>
+    </section>
   );
 }

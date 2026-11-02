@@ -2,14 +2,15 @@ import express from 'express';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { createHealthRouter } from './routes/healthRoutes.js';
 import { createUserDao } from './dao/userDao.js';
-import { createHutDao } from './dao/hutDao.js';
 import { createSlotDao } from './dao/slotDao.js';
 import { createBookingDao } from './dao/bookingDao.js';
 import { createSlotService } from './services/slotService.js';
 import { createBookingService } from './services/bookingService.js';
 import { createAuthRouter } from './routes/authRoutes.js';
-import { createHutRouter } from './routes/hutRoutes.js';
+import { createRegistrationService } from './services/registrationService.js';
+import { createAvailabilityRouter } from './routes/availabilityRoutes.js';
 import { createBookingRouter } from './routes/bookingRoutes.js';
+import { createSlotRouter } from './routes/slotRoutes.js';
 import { configurePassport } from './auth/passport.js';
 import { sessionMiddleware } from './auth/session.js';
 import { createRequireAuth } from './middleware/requireAuth.js';
@@ -21,7 +22,6 @@ export function createApp({ db, timeZone = config.hutTimeZone, now = () => new D
   app.use(express.json());
 
   const userDao = createUserDao(db);
-  const hutDao = createHutDao(db);
   const slotDao = createSlotDao(db);
   const bookingDao = createBookingDao(db);
 
@@ -33,17 +33,19 @@ export function createApp({ db, timeZone = config.hutTimeZone, now = () => new D
 
   const requireAuth = createRequireAuth({ now: () => now().getTime() });
 
-  const slotService = createSlotService({ slotDao, hutDao, timeZone, now });
+  const slotService = createSlotService({ slotDao, db, timeZone, now });
   const bookingService = createBookingService({ db, bookingDao, slotDao, timeZone, now });
+  const registrationService = createRegistrationService({ userDao });
 
   // Health check
   app.use('/api/health', createHealthRouter(db));
 
   // Authentication
-  app.use('/api/auth', createAuthRouter({ passport: auth, requireAuth, now }));
+  app.use('/api/auth', createAuthRouter({ passport: auth, requireAuth, registrationService, now }));
 
   // Public availability, then authenticated bookings
-  app.use('/api/huts', createHutRouter(slotService));
+  app.use('/api/availability', createAvailabilityRouter(slotService));
+  app.use('/api/slots', createSlotRouter(slotService, requireAuth));
   app.use('/api/bookings', createBookingRouter(bookingService, requireAuth));
 
   // Error handling (must stay last)

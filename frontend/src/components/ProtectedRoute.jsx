@@ -13,7 +13,7 @@ export default function ProtectedRoute({ staffOnly = false }) {
   if (loadingAuth) return null; // Attende il ripristino della sessione.
   if (!user) {
     // Dopo il login l'utente torna alla pagina richiesta.
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    return <Navigate to="/login" replace state={{ from: location.pathname, bookingDraft: location.state?.bookingDraft, notice: location.pathname === '/book' ? 'Please log in to complete your booking.' : undefined }} />;
   }
   if (staffOnly && !STAFF_ROLES.includes(user.role)) return <Navigate to="/" replace />;
   return <Outlet />;

@@ -72,6 +72,17 @@ export function zonedTimeToUtc(date, time, timeZone) {
   return new Date(instant);
 }
 
+/** Today's date (`YYYY-MM-DD`) in the hut's time zone. */
+export function todayInZone(timeZone, now = new Date()) {
+  const { year, month, day } = partsInZone(now, timeZone);
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/** Whether a wall-clock date/time in the hut's zone has already started. */
+export function isInPast(date, time, { timeZone, now = new Date() }) {
+  return zonedTimeToUtc(date, time, timeZone).getTime() <= now.getTime();
+}
+
 /**
  * A slot can be booked until exactly two hours before its start.
  * At 11:00 a 13:00 slot is allowed; at 11:01 it is too late.
