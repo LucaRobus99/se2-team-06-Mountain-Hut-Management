@@ -17,12 +17,12 @@ INSERT INTO dining_tables (id, label) VALUES
     (4, 'T4'),
     (5, 'T5');
 
--- Ranges are [start_time, end_time): a slot at 12:00 is lunch, not breakfast.
-INSERT INTO meals (id, meal_type, start_time, end_time) VALUES
-    (1, 'breakfast', '09:00', '12:00'),
-    (2, 'lunch',     '12:00', '15:00'),
-    (3, 'aperitivo', '15:00', '18:00'),
-    (4, 'dinner',    '18:00', '21:00');
+-- Employee-selected meal categories; they do not impose a timetable.
+INSERT INTO meals (id, meal_type) VALUES
+    (1, 'breakfast'),
+    (2, 'lunch'),
+    (3, 'aperitivo'),
+    (4, 'dinner');
 
 INSERT INTO menus (meal_id, name, description) VALUES
     (1, 'Continental', 'Bread, butter, jam, yogurt, coffee or tea'),
@@ -32,19 +32,18 @@ INSERT INTO menus (meal_id, name, description) VALUES
     (4, 'Hut dinner', 'Pasta, main course and dessert'),
     (4, 'Vegetarian dinner', 'Pasta, vegetable main course and dessert');
 
--- Sample slots on two days, back to back but never overlapping. meal_id is filled
--- in by the slots triggers from start_time, which must fall inside a meal range.
-INSERT INTO slots (id, date, start_time, end_time, status) VALUES
-    (1,  '2026-11-15', '09:00', '09:30', 'available'),
-    (2,  '2026-11-15', '09:30', '10:00', 'available'),
-    (3,  '2026-11-15', '12:00', '13:00', 'available'),
-    (4,  '2026-11-15', '13:00', '14:00', 'available'),
-    (5,  '2026-11-15', '15:30', '16:00', 'available'),
-    (6,  '2026-11-15', '19:00', '20:00', 'available'),
-    (7,  '2026-11-15', '20:00', '21:00', 'off'),
-    (8,  '2026-11-16', '09:00', '09:30', 'available'),
-    (9,  '2026-11-16', '12:00', '13:00', 'available'),
-    (10, '2026-11-16', '19:00', '20:00', 'available');
+-- Sample slots; meal_id is explicitly assigned (no inference from clock time).
+INSERT INTO slots (id, meal_id, date, start_time, end_time, status) VALUES
+    (1,  1, '2026-11-15', '09:00', '09:30', 'available'),
+    (2,  1, '2026-11-15', '09:30', '10:00', 'available'),
+    (3,  2, '2026-11-15', '12:00', '13:00', 'available'),
+    (4,  2, '2026-11-15', '13:00', '14:00', 'available'),
+    (5,  3, '2026-11-15', '15:30', '16:00', 'available'),
+    (6,  4, '2026-11-15', '19:00', '20:00', 'available'),
+    (7,  4, '2026-11-15', '20:00', '21:00', 'off'),
+    (8,  1, '2026-11-16', '09:00', '09:30', 'available'),
+    (9,  2, '2026-11-16', '12:00', '13:00', 'available'),
+    (10, 4, '2026-11-16', '19:00', '20:00', 'available');
 
 -- Table set of each slot: table and its seats in that slot (T1 = 2, T2/T3 = 4,
 -- T4 = 6, T5 = 8). Slot 7 is off and slot 8 has no tables (zero capacity, issue #17).
