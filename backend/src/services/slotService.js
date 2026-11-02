@@ -91,12 +91,11 @@ function toMinutes(time) {
  * overlapping slot and a suggested time just before the overlap:
  * - the slot starts before the other one → end it when the other one starts;
  * - the slot starts inside the other one → start it when that one (and any slot
- *   right after it) ends, but only while that is still inside the meal range,
- *   so a suggestion can always be used as it is.
+ *   right after it) ends. Slots can start at any time, independent of meal type.
  * Back-to-back slots (12:00-13:00, 13:00-14:00) do not overlap. 'HH:MM' strings
  * compare correctly as text.
  */
-function findOverlap(daySlots, startTime, endTime, meal) {
+function findOverlap(daySlots, startTime, endTime) {
   const sorted = [...daySlots].sort((a, b) => a.start_time.localeCompare(b.start_time));
   const first = sorted.find((s) => s.start_time < endTime && startTime < s.end_time);
   if (!first) return null;
@@ -115,14 +114,6 @@ function findOverlap(daySlots, startTime, endTime, meal) {
   let freeStart = first.end_time;
   for (const s of sorted) {
     if (s.start_time <= freeStart && freeStart < s.end_time) freeStart = s.end_time;
-  }
-  if (freeStart >= meal.end_time) {
-    return {
-      field: 'startTime',
-      rule: 'overlap',
-      message: `${base} No free time is left in ${meal.meal_type} (until ${meal.end_time}).`,
-      overlapsSlotId: first.id,
-    };
   }
   return {
     field: 'startTime',
@@ -159,7 +150,7 @@ function validateCreateSlotBody(body) {
     return { details, value: null };
   }
 
-  const allowed = ['date', 'startTime', 'endTime', 'tables', 'copyTablesFromSlotId'];
+  const allowed = ['date', 'startTime', 'endTime', 'meal', 'tables', 'copyTablesFromSlotId'];
   for (const key of Object.keys(body)) {
     if (!allowed.includes(key)) {
       details.push(unknown(key));
@@ -188,6 +179,14 @@ function validateCreateSlotBody(body) {
     details.push(invalid('endTime', EXPECTED.time));
   } else if (isValidTime(startTime) && endTime <= startTime) {
     details.push(invalid('endTime', 'after startTime on the same day'));
+  }
+
+  // A meal is a category chosen by staff, not an automatically inferred time band.
+  const meal = body.meal;
+  if (isMissing(meal)) {
+    details.push(required('meal'));
+  } else if (!ALLOWED_MEALS.includes(meal)) {
+    details.push(invalid('meal', `one of ${ALLOWED_MEALS.join(', ')}`));
   }
 
   let tables = body.tables;
@@ -265,6 +264,7 @@ function validateCreateSlotBody(body) {
       date,
       startTime,
       endTime,
+      meal,
       tables: tables ?? [],
       copyTablesFromSlotId,
     },
@@ -333,27 +333,15 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
 
       let slotId;
       const doCreate = async (exec) => {
-        // The whole slot must fall inside the meal its start time belongs to.
-        const meal = await slotDao.findMealAt(exec, value.startTime);
+        // No fixed breakfast/lunch/dinner timetable: the employee chooses the meal.
+        const meal = await slotDao.findMealByType(exec, value.meal);
         if (!meal) {
-          throw invalidFields([
-            { field: 'startTime', rule: 'no_meal', message: 'No meal is served at this slot start time.' },
-          ]);
-        }
-        if (value.endTime > meal.end_time) {
-          throw invalidFields([
-            {
-              field: 'endTime',
-              rule: 'outside_meal',
-              message: `The slot must end by ${meal.end_time}, when ${meal.meal_type} ends.`,
-              suggestedEndTime: meal.end_time,
-            },
-          ]);
+          throw invalidFields([invalid('meal', `one of ${ALLOWED_MEALS.join(', ')}`)]);
         }
 
         // Checked inside the transaction so two concurrent creations cannot both fit.
         const daySlots = await slotDao.listByDate(exec, value.date);
-        const overlap = findOverlap(daySlots, value.startTime, value.endTime, meal);
+        const overlap = findOverlap(daySlots, value.startTime, value.endTime);
         if (overlap) {
           throw new ConflictError('The slot overlaps another slot.', 'SLOT_OVERLAP', [overlap]);
         }
@@ -373,6 +361,7 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
           date: value.date,
           startTime: value.startTime,
           endTime: value.endTime,
+          mealId: meal.id,
           status: 'available',
         });
 
@@ -401,9 +390,6 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
       } catch (err) {
         if (err instanceof AppError) throw err;
         // Safety nets: the DB triggers caught something the checks above missed.
-        if (err?.message?.includes('meal time range')) {
-          throw invalidFields([invalid('endTime', 'within the meal time range of the start time')]);
-        }
         if (err?.message?.includes('overlaps another slot')) {
           throw new ConflictError('The slot overlaps another slot.', 'SLOT_OVERLAP', [
             { field: 'startTime', rule: 'overlap', message: 'The slot overlaps another slot on this date.' },
@@ -454,6 +440,7 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
           id: slot.id,
           startTime: slot.start_time,
           endTime: slot.end_time,
+          meal: slot.meal,
           availableSeats: freeSeats(tables),
           tables: publicTables(tables),
         });

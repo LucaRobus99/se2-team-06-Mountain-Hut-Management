@@ -12,6 +12,7 @@ export default function AppNavbar() {
     const [logoutError, setLogoutError] = useState('');
     const [loggingOut, setLoggingOut] = useState(false);
     const bookingDestination = user?.role === 'hiker' ? '/book' : '/availability';
+    const initials = user?.displayName?.split(/\s+/).slice(0, 2).map((name) => name[0]).join('').toUpperCase() || 'HI';
 
     // Close the mobile menu whenever the user navigates to another route.
     useEffect(() => {
@@ -51,9 +52,6 @@ export default function AppNavbar() {
                             <Nav.Link as={NavLink} to="/menu">Menu</Nav.Link>
                             {!user && <Nav.Link as={NavLink} to="/availability">Availability</Nav.Link>}
                             <Nav.Link as={NavLink} to="/find-us">Find us</Nav.Link>
-                            {(user?.role === 'employee' || user?.role === 'warden') && (
-                                <Nav.Link as={NavLink} to="/staff/slots">Manage slots</Nav.Link>
-                            )}
                         </Nav>
 
                         <div className="eh-nav-actions">
@@ -61,15 +59,19 @@ export default function AppNavbar() {
                                 <NavDropdown
                                     id="edelweiss-account"
                                     className="eh-account-menu"
-                                    title={user.displayName || 'My account'}
+                                    title={<span className="eh-account-trigger"><span className="eh-account-avatar">{initials}</span><span className="eh-account-trigger-name">{user.displayName || 'My account'}</span></span>}
                                     align="end"
                                 >
-                                    <NavDropdown.Header>My account</NavDropdown.Header>
-                                    <NavDropdown.Item as={Link} to={bookingDestination}>Book a table</NavDropdown.Item>
-                                    <NavDropdown.Item disabled>My bookings (coming soon)</NavDropdown.Item>
+                                    <NavDropdown.Header>
+                                        <span className="eh-account-dropdown-title">{user.displayName || 'Hiker'}</span>
+                                        <span className="eh-account-dropdown-caption">HIKER ACCOUNT</span>
+                                    </NavDropdown.Header>
                                     <NavDropdown.Divider />
-                                    <NavDropdown.Item disabled={loggingOut} onClick={handleLogout}>
-                                        {loggingOut ? 'Logging out…' : 'Log out'}
+                                    <NavDropdown.Item as={Link} to={bookingDestination}><span className="eh-account-item-icon">✦</span> Book a table</NavDropdown.Item>
+                                    <NavDropdown.Item disabled title="Booking history will be available in a later story"><span className="eh-account-item-icon">▤</span> My bookings <small>Coming soon</small></NavDropdown.Item>
+                                    <NavDropdown.Divider />
+                                    <NavDropdown.Item disabled={loggingOut} className="eh-account-logout" onClick={handleLogout}>
+                                        <span className="eh-account-item-icon">↪</span> {loggingOut ? 'Logging out…' : 'Log out'}
                                     </NavDropdown.Item>
                                 </NavDropdown>
                             ) : (

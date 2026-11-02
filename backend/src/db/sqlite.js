@@ -26,6 +26,7 @@ export function createSqliteDb(file) {
   initialiseIfEmpty(database);
   assertCurrentSchema(database);
   migrateHikerProfile(database);
+  migrateMealAssignments(database);
 
   let queue = Promise.resolve();
 
@@ -103,5 +104,21 @@ function assertCurrentSchema(database) {
       'Legacy SQLite schema detected. Back up database/database.sqlite, then run npm run db:reset ' +
       'to generate the current schema. Existing data is not deleted automatically.'
     );
+  }
+}
+
+/** Upgrade databases from the old time-range-based meal model without deleting
+ * existing bookings, users or slots. Old meal start/end columns can remain as
+ * unused legacy data; only new databases use the simplified meals table.
+ * The old triggers otherwise override explicit meal_id and reject valid slots.
+ */
+function migrateMealAssignments(database) {
+  const legacyTriggers = [
+    'meals_no_overlap_insert', 'meals_no_overlap_update',
+    'slots_require_meal_insert', 'slots_require_meal_update',
+    'slots_resolve_meal_insert', 'slots_resolve_meal_update',
+  ];
+  for (const name of legacyTriggers) {
+    database.exec(`DROP TRIGGER IF EXISTS ${name}`);
   }
 }
