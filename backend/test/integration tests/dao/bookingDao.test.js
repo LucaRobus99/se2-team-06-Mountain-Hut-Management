@@ -19,7 +19,7 @@ describe('BookingDao - Integration Tests', () => {
 
   describe('create and findById', () => {
     
-    it('should successfully create a new booking and retrieve it by ID with joined details', async () => {
+    it('should successfully create a new booking and retrieve it by ID with joined slot and meal details', async () => {
       const newBooking = {
         slotId: 1,
         hikerId: 3, // Hanna Hiker from seed
@@ -34,18 +34,41 @@ describe('BookingDao - Integration Tests', () => {
       expect(bookingId).toBeDefined();
       expect(typeof bookingId).toBe('number');
 
-      // Retrieve the created booking and verify fields and joins
+      // Retrieve the created booking and verify fields and joins matching the updated Dao query
       const retrieved = await bookingDao.findById(bookingId);
       expect(retrieved).toBeDefined();
       expect(retrieved).not.toBeNull();
       expect(retrieved.id).toBe(bookingId);
       expect(retrieved.slot_id).toBe(1);
       expect(retrieved.hiker_id).toBe(3);
+      expect(retrieved.created_by).toBeNull();
       expect(retrieved.contact_name).toBe('Hanna Hiker');
+      expect(retrieved.email).toBe('hiker@hut.test');
+      expect(retrieved.phone).toBe('1234567890');
       expect(retrieved.party_size).toBe(2);
       expect(retrieved.status).toBe('confirmed');
-      expect(retrieved.hut_id).toBe(1);
+      expect(retrieved.slot_date).toBeDefined();
+      expect(retrieved.slot_start_time).toBeDefined();
       expect(retrieved.meal).toBe('breakfast');
+    });
+
+    it('should successfully create a booking created by staff (createdBy set)', async () => {
+      const staffBooking = {
+        slotId: 2,
+        hikerId: null,
+        createdBy: 1, // Staff ID from seed
+        contactName: 'Guest Visitor',
+        email: 'guest@hut.test',
+        phone: '9876543210',
+        partySize: 4,
+      };
+
+      const bookingId = await bookingDao.create(staffBooking);
+      const retrieved = await bookingDao.findById(bookingId);
+
+      expect(retrieved.hiker_id).toBeNull();
+      expect(retrieved.created_by).toBe(1);
+      expect(retrieved.party_size).toBe(4);
     });
 
     it('should return null if booking ID does not exist', async () => {
@@ -57,7 +80,7 @@ describe('BookingDao - Integration Tests', () => {
 
   describe('insertSeats and getSeatAssignments', () => {
     
-    it('should insert seat assignments for a booking and retrieve them correctly', async () => {
+    it('should insert seat assignments for a booking and retrieve them correctly ordered', async () => {
       // First, create a booking to link seats to
       const bookingId = await bookingDao.create({
         slotId: 2,

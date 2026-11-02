@@ -4,7 +4,7 @@ import {
   UnauthorizedError, 
   ValidationError, 
   NotFoundError, 
-  ConflictError, 
+  ConflictError,
   UnprocessableEntityError 
 } from '../../../src/errors/AppError.js';
 
@@ -119,6 +119,7 @@ describe('bookingService - Black-Box Tests', () => {
         id: 101, 
         status: 'available', 
         start_time: '14:00', 
+        end_time: '16:00',
         date: '2026-08-14',
         meal: 'lunch'
       });
@@ -134,9 +135,11 @@ describe('bookingService - Black-Box Tests', () => {
         id: 100,
         status: 'confirmed',
         hiker_id: 10,
+        created_by: null,
         slot_id: 101,
         slot_date: '2026-08-14',
         slot_start_time: '14:00',
+        slot_end_time: '16:00',
         meal: 'lunch',
         party_size: 2,
         contact_name: 'Mario Rossi',
@@ -144,6 +147,9 @@ describe('bookingService - Black-Box Tests', () => {
         phone: '+393331234567',
         created_at: '2026-08-14T07:05:00.000Z',
       });
+      bookingDao.getSeatAssignments.mockResolvedValue([
+        { tableId: 1, tableLabel: 'T1', seats: 2 }
+      ]);
 
       const result = await bookingService.createBooking(mockHiker, {
         slotId: 101,
@@ -154,16 +160,18 @@ describe('bookingService - Black-Box Tests', () => {
         id: 100,
         status: 'confirmed',
         hikerId: 10,
+        createdBy: null,
         slot: {
           id: 101,
           date: '2026-08-14',
           startTime: '14:00',
+          endTime: '16:00',
           meal: 'lunch',
         },
         partySize: 2,
         contactName: 'Mario Rossi',
         email: 'mario.rossi@example.com',
-        phone: '+393331234567',
+        contactNumber: '+393331234567',
         split: false,
         seatAssignments: [
           { tableId: 1, tableLabel: 'T1', seats: 2 }
@@ -207,15 +215,17 @@ describe('bookingService - Black-Box Tests', () => {
         id: 100,
         status: 'confirmed',
         hiker_id: 10, // Matches mockHiker.id
+        created_by: null,
         slot_id: 101,
         slot_date: '2026-08-14',
         slot_start_time: '14:00',
+        slot_end_time: '16:00',
         meal: 'lunch',
         party_size: 2,
         contact_name: 'Mario Rossi',
         email: 'mario.rossi@example.com',
         phone: '+393331234567',
-        created_at: '2026-08-14T07:05:00.000Z',
+        created_at: '2026-08-14T07:05:00.000Data.000Z',
       });
       bookingDao.getSeatAssignments.mockResolvedValue([
         { tableId: 1, tableLabel: 'T1', seats: 2 }

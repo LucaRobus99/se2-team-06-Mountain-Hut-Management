@@ -26,7 +26,6 @@ describe('SlotDao - Integration Tests', () => {
       expect(slot).toBeDefined();
       expect(slot).not.toBeNull();
       expect(slot.id).toBe(3);
-      expect(slot.hut_id).toBe(1);
       expect(slot.date).toBe('2026-11-15');
       expect(slot.start_time).toBe('12:00');
       expect(slot.status).toBe('available');
@@ -42,9 +41,9 @@ describe('SlotDao - Integration Tests', () => {
 
   describe('listByDate', () => {
     
-    it('should return all slots for a given hut and date ordered by start time', async () => {
-      // In the seed data, date '2026-11-15' has multiple slots for hut 1
-      const slots = await slotDao.listByDate(1, '2026-11-15');
+    it('should return all slots for a given date ordered by start time', async () => {
+      // The updated listByDate function takes the date as the first argument
+      const slots = await slotDao.listByDate('2026-11-15');
 
       expect(slots).toBeInstanceOf(Array);
       expect(slots.length).toBeGreaterThan(0);
@@ -55,24 +54,37 @@ describe('SlotDao - Integration Tests', () => {
       expect(slots[0].meal).toBe('breakfast');
     });
 
-    it('should return an empty array if no slots exist for the given date or hut', async () => {
-      const slots = await slotDao.listByDate(1, '2099-01-01');
+    it('should return an empty array if no slots exist for the given date', async () => {
+      const slots = await slotDao.listByDate('2099-01-01');
       expect(slots).toEqual([]);
     });
 
   });
 
-  describe('getTablesWithFreeForSlot', () => {
+  describe('findMealAt', () => {
+    it('should return the correct meal for a time falling within its range', async () => {
+      const meal = await slotDao.findMealAt('12:30');
+      expect(meal).toBeDefined();
+      expect(meal).not.toBeNull();
+      expect(meal.meal_type).toBe('lunch');
+    });
+
+    it('should return null if no meal matches the given time', async () => {
+      const meal = await slotDao.findMealAt('04:00');
+      expect(meal).toBeNull();
+    });
+  });
+
+  describe('getTablesWithFreeForSlot & getTablesWithFreeForSlots', () => {
     
     it('should return tables associated with the slot and calculate free seats correctly', async () => {
-      // In the seed data, slot 3 ('2026-11-15 12:00') has associated tables (e.g., T1, T2, T3, T4, T5)
       const tables = await slotDao.getTablesWithFreeForSlot(3);
 
       expect(tables).toBeInstanceOf(Array);
       expect(tables.length).toBeGreaterThan(0);
 
-      // Each returned table must have label, seats, and calculated free seats
       const firstTable = tables[0];
+      expect(firstTable).toHaveProperty('slot_id');
       expect(firstTable).toHaveProperty('id');
       expect(firstTable).toHaveProperty('label');
       expect(firstTable).toHaveProperty('seats');
@@ -80,12 +92,75 @@ describe('SlotDao - Integration Tests', () => {
       expect(firstTable.free).toBeLessThanOrEqual(firstTable.seats);
     });
 
+    it('should return tables for multiple slots at once', async () => {
+      const tables = await slotDao.getTablesWithFreeForSlots([3, 4]);
+      expect(tables).toBeInstanceOf(Array);
+      expect(tables.length).toBeGreaterThan(0);
+    });
+
     it('should return an empty array for a slot that has no tables assigned (zero capacity)', async () => {
-      // In the seed data, slot 8 has hut_id 1 but no rows in slot_tables (issue #17)
       const tables = await slotDao.getTablesWithFreeForSlot(8);
       expect(tables).toEqual([]);
     });
 
+    it('should return an empty array if empty slotIds array is passed to getTablesWithFreeForSlots', async () => {
+      const tables = await slotDao.getTablesWithFreeForSlots([]);
+      expect(tables).toEqual([]);
+    });
+
+  });
+
+  describe('getTableSetForSlot', () => {
+    it('should return the table set for a specific slot', async () => {
+      const tableSet = await slotDao.getTableSetForSlot(3);
+      expect(tableSet).toBeInstanceOf(Array);
+      if (tableSet.length > 0) {
+        expect(tableSet[0]).toHaveProperty('tableId');
+        expect(tableSet[0]).toHaveProperty('seats');
+      }
+    });
+  });
+
+  describe('Slot and Table Creation / Management', () => {
+    it('should create a new slot and return its ID', async () => {
+      const newSlotId = await slotDao.createSlot({
+        date: '2026-12-01',
+        startTime: '13:00',
+        endTime: '15:00',
+        status: 'available'
+      });
+      expect(newSlotId).toBeDefined();
+      expect(typeof newSlotId).toBe('number');
+    });
+
+    it('should find a table by label and create a new table', async () => {
+      const label = 'TestTable-99';
+      let table = await slotDao.findTableByLabel(label);
+      expect(table).toBeNull();
+
+      const newTableId = await slotDao.createTable({ label });
+      expect(newTableId).toBeDefined();
+
+      table = await slotDao.findTableByLabel(label);
+      expect(table).not.toBeNull();
+      expect(table.id).toBe(newTableId);
+    });
+
+    it('should add a table to a slot', async () => {
+      const slotId = await slotDao.createSlot({
+        date: '2026-12-02',
+        startTime: '10:00',
+        endTime: '11:00'
+      });
+      const tableId = await slotDao.createTable({ label: 'SlotTestTable' });
+
+      // Should not throw
+      await expect(slotDao.addTableToSlot(slotId, tableId, 4)).resolves.not.toThrow();
+
+      const tables = await slotDao.getTablesWithFreeForSlot(slotId);
+      expect(tables.length).toBe(1);
+      expect(tables[0].seats).toBe(4);
+    });
   });
 
 });

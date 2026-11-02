@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createBookingService } from '../../../src/services/bookingService.js';
-import { ValidationError, AppError } from '../../../src/errors/AppError.js';
+import { ValidationError, AppError, NotFoundError } from '../../../src/errors/AppError.js';
 
 describe('bookingService - White-Box Tests', () => {
   let db;
@@ -16,6 +16,12 @@ describe('bookingService - White-Box Tests', () => {
     email: 'mario.rossi@example.com',
     phone: '+393331234567',
     role: 'hiker',
+  };
+
+  const mockStaff = {
+    id: 1,
+    displayName: 'Warden Staff',
+    role: 'warden',
   };
 
   beforeEach(() => {
@@ -49,7 +55,7 @@ describe('bookingService - White-Box Tests', () => {
     
     it('should throw ValidationError if request body is an array or not an object', async () => {
       try {
-        await bookingService.createBooking(mockHiker, [1, 2, 3]); // Array instead of object
+        await bookingService.createBooking(mockHiker, [1, 2, 3]);
         expect.fail('Should have thrown ValidationError');
       } catch (err) {
         expect(err).toBeInstanceOf(ValidationError);
@@ -79,9 +85,9 @@ describe('bookingService - White-Box Tests', () => {
       }
     });
 
-    it('should validate email format and throw ValidationError for invalid emails', async () => {
+    it('should validate email format and throw ValidationError for invalid emails when booked by staff', async () => {
       try {
-        await bookingService.createBooking(mockHiker, {
+        await bookingService.createBooking(mockStaff, {
           slotId: 101,
           partySize: 2,
           email: 'invalid-email-format',
@@ -97,23 +103,84 @@ describe('bookingService - White-Box Tests', () => {
       }
     });
 
-    it('should convert empty phone string to null and flag invalid phone types', async () => {
-      // Test invalid phone type (e.g. number instead of string)
+    it('should flag invalid phone/contactNumber types or values when booked by staff', async () => {
       try {
-        await bookingService.createBooking(mockHiker, {
+        await bookingService.createBooking(mockStaff, {
           slotId: 101,
           partySize: 2,
-          phone: 123456789, // Invalid type
+          contactNumber: 123456789, 
         });
         expect.fail('Should have thrown ValidationError');
       } catch (err) {
         expect(err).toBeInstanceOf(ValidationError);
         expect(err.details).toEqual(
           expect.arrayContaining([
-            expect.objectContaining({ field: 'phone', rule: 'invalid' })
+            expect.objectContaining({ field: 'contactNumber', rule: 'invalid' })
           ])
         );
       }
+    });
+
+    it('should require at least one contact field if staff provides none', async () => {
+      try {
+        await bookingService.createBooking(mockStaff, {
+          slotId: 101,
+          partySize: 2,
+        });
+        expect.fail('Should have thrown ValidationError');
+      } catch (err) {
+        expect(err).toBeInstanceOf(ValidationError);
+        expect(err.details).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ field: 'contact', rule: 'required' })
+          ])
+        );
+      }
+    });
+
+    it('should successfully validate when staff provides valid contact details', async () => {
+      slotDao.findById.mockResolvedValue({ 
+        id: 101, 
+        status: 'available', 
+        start_time: '14:00', 
+        end_time: '16:00',
+        date: '2026-08-14',
+        meal: 'lunch'
+      });
+      slotDao.getTablesWithFreeForSlot.mockResolvedValue([
+        { id: 1, label: 'T1', seats: 4, free: 4 }
+      ]);
+      bookingDao.create.mockResolvedValue(200);
+      bookingDao.findById.mockResolvedValue({
+        id: 200,
+        status: 'confirmed',
+        hiker_id: null,
+        created_by: 1,
+        slot_id: 101,
+        slot_date: '2026-08-14',
+        slot_start_time: '14:00',
+        slot_end_time: '16:00',
+        meal: 'lunch',
+        party_size: 2,
+        contact_name: 'Guest User',
+        email: 'guest@example.com',
+        phone: '+393339998877',
+        created_at: '2026-08-14T07:05:00.000Z',
+      });
+      bookingDao.getSeatAssignments.mockResolvedValue([
+        { tableId: 1, tableLabel: 'T1', seats: 2 }
+      ]);
+
+      const result = await bookingService.createBooking(mockStaff, {
+        slotId: 101,
+        partySize: 2,
+        contactName: 'Guest User',
+        email: 'guest@example.com',
+        contactNumber: '+393339998877',
+      });
+
+      expect(result.createdBy).toBe(1);
+      expect(result.contactName).toBe('Guest User');
     });
 
   });
@@ -128,7 +195,6 @@ describe('bookingService - White-Box Tests', () => {
         date: '2026-08-14' 
       });
       
-      // Force database to throw a generic native error inside transaction
       db.transaction.mockImplementationOnce(async () => {
         throw new Error('Database connection lost unexpectedly');
       });
@@ -157,7 +223,6 @@ describe('bookingService - White-Box Tests', () => {
       });
       bookingDao.findConfirmedByHikerAndSlot.mockResolvedValue(null);
       
-      // Multiple tables requiring a split
       slotDao.getTablesWithFreeForSlot.mockResolvedValue([
         { id: 1, label: 'T1', seats: 2, free: 2 },
         { id: 2, label: 'T2', seats: 2, free: 2 },
@@ -179,7 +244,6 @@ describe('bookingService - White-Box Tests', () => {
         created_at: '2026-08-14T07:05:00.000Z',
       });
 
-      // Seating assignments with length > 1 triggers split notice
       bookingDao.getSeatAssignments?.mockResolvedValue([
         { tableId: 1, tableLabel: 'T1', seats: 2 },
         { tableId: 2, tableLabel: 'T2', seats: 2 },
@@ -195,6 +259,33 @@ describe('bookingService - White-Box Tests', () => {
         code: 'GROUP_SPLIT',
         message: 'The group will be seated across multiple tables.',
       });
+    });
+
+  });
+
+  describe('Internal GetBooking Permission Branches', () => {
+    
+    it('should allow staff to read any booking regardless of hiker_id', async () => {
+      bookingDao.findById.mockResolvedValue({
+        id: 150,
+        status: 'confirmed',
+        hiker_id: 99, // Different hiker
+        created_by: 1,
+        slot_id: 101,
+        slot_date: '2026-08-14',
+        slot_start_time: '14:00',
+        party_size: 2,
+        contact_name: 'Other Hiker',
+        email: 'other@example.com',
+        phone: '+393331112233',
+        created_at: '2026-08-14T07:05:00.000Z',
+      });
+      bookingDao.getSeatAssignments.mockResolvedValue([
+        { tableId: 1, tableLabel: 'T1', seats: 2 }
+      ]);
+
+      const result = await bookingService.getBooking(150, mockStaff);
+      expect(result.id).toBe(150);
     });
 
   });
