@@ -31,16 +31,11 @@ CREATE TABLE IF NOT EXISTS dining_tables (
     label       VARCHAR(50) NOT NULL UNIQUE
 );
 
--- A meal is a meal type served by the hut in a time range [start_time, end_time),
--- e.g. breakfast 09:00-12:00, so a slot starting at 12:00 belongs to lunch.
--- A slot may start at any minute of the range (MH-02: flexible start times).
--- Ranges may not overlap (trigger below); gaps are allowed.
+-- Meal types are categories, NOT fixed time ranges. MH-02: staff selects a meal
+-- for any start/end interval, including unusual serving times.
 CREATE TABLE IF NOT EXISTS meals (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    meal_type       TEXT NOT NULL UNIQUE CHECK (meal_type IN ('breakfast', 'lunch', 'aperitivo', 'dinner')),
-    start_time      TEXT NOT NULL,
-    end_time        TEXT NOT NULL,
-    CHECK (start_time < end_time)
+    meal_type       TEXT NOT NULL UNIQUE CHECK (meal_type IN ('breakfast', 'lunch', 'aperitivo', 'dinner'))
 );
 
 -- A meal offers one or more menus (the "at least one" rule is checked by the service).
@@ -56,12 +51,11 @@ CREATE TABLE IF NOT EXISTS menus (
 -- A slot is [start_time, end_time) on one day, so it ends after it starts and
 -- never crosses midnight. Slots of the same day may not overlap, also
 -- when switched off (trigger below); back-to-back slots (12-13, 13-14) are fine.
--- The whole slot must fall inside one meal range (meal start <= slot start and
--- slot end <= meal end), so each slot has exactly one meal; meal_id is resolved
--- by the triggers below.
+-- Each slot has exactly one meal chosen explicitly by the employee.
+-- A meal type does not constrain start/end time.
 CREATE TABLE IF NOT EXISTS slots (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    meal_id     INTEGER REFERENCES meals (id),
+    meal_id     INTEGER NOT NULL REFERENCES meals (id),
     date        TEXT NOT NULL,
     start_time  TEXT NOT NULL,
     end_time    TEXT NOT NULL,
@@ -122,38 +116,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_one_confirmed_per_hiker_slot
 ON bookings (hiker_id, slot_id)
 WHERE status = 'confirmed' AND hiker_id IS NOT NULL;
 
--- Meal time ranges must not overlap, so each slot maps to one meal.
-CREATE TRIGGER IF NOT EXISTS meals_no_overlap_insert
-BEFORE INSERT ON meals
-WHEN EXISTS (
-    SELECT 1 FROM meals
-    WHERE start_time < NEW.end_time AND NEW.start_time < end_time
-)
-BEGIN
-    SELECT RAISE(ABORT, 'Meal time range overlaps another meal');
-END;
-
-CREATE TRIGGER IF NOT EXISTS meals_no_overlap_update
-BEFORE UPDATE OF start_time, end_time ON meals
-WHEN EXISTS (
-    SELECT 1 FROM meals
-    WHERE id <> NEW.id AND start_time < NEW.end_time AND NEW.start_time < end_time
-)
-BEGIN
-    SELECT RAISE(ABORT, 'Meal time range overlaps another meal');
-END;
-
--- Slot creation: reject a slot that does not fit inside one meal range, then link the meal.
-CREATE TRIGGER IF NOT EXISTS slots_require_meal_insert
-BEFORE INSERT ON slots
-WHEN NOT EXISTS (
-    SELECT 1 FROM meals
-    WHERE start_time <= NEW.start_time AND NEW.end_time <= end_time
-)
-BEGIN
-    SELECT RAISE(ABORT, 'Slot does not fit inside a meal time range');
-END;
-
 -- Slots of the same day may not overlap. The service checks this first to
 -- suggest a free time; these triggers guard every other write (seed, MH-19).
 CREATE TRIGGER IF NOT EXISTS slots_no_overlap_insert
@@ -175,35 +137,4 @@ WHEN EXISTS (
 )
 BEGIN
     SELECT RAISE(ABORT, 'Slot overlaps another slot');
-END;
-
-CREATE TRIGGER IF NOT EXISTS slots_resolve_meal_insert
-AFTER INSERT ON slots
-BEGIN
-    UPDATE slots SET meal_id = (
-        SELECT id FROM meals
-        WHERE start_time <= NEW.start_time AND NEW.start_time < end_time
-    )
-    WHERE id = NEW.id;
-END;
-
--- Same rules when a slot is moved to another time.
-CREATE TRIGGER IF NOT EXISTS slots_require_meal_update
-BEFORE UPDATE OF start_time, end_time ON slots
-WHEN NOT EXISTS (
-    SELECT 1 FROM meals
-    WHERE start_time <= NEW.start_time AND NEW.end_time <= end_time
-)
-BEGIN
-    SELECT RAISE(ABORT, 'Slot does not fit inside a meal time range');
-END;
-
-CREATE TRIGGER IF NOT EXISTS slots_resolve_meal_update
-AFTER UPDATE OF start_time ON slots
-BEGIN
-    UPDATE slots SET meal_id = (
-        SELECT id FROM meals
-        WHERE start_time <= NEW.start_time AND NEW.start_time < end_time
-    )
-    WHERE id = NEW.id;
 END;

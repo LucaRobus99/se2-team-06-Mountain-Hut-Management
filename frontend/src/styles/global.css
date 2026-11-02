@@ -388,3 +388,24 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible { 
   html { scroll-behavior: auto; }
   .eh-button { transition: none; }
 }
+
+/* Refined hiker account dropdown. Placeholder actions remain disabled until their story exists. */
+.eh-navbar .eh-account-menu .dropdown-toggle { max-width:none; display:flex; align-items:center; padding:.36rem .5rem; border-radius:2rem; gap:.5rem; }
+.eh-navbar .eh-account-menu .dropdown-toggle::after { margin-left:.4rem; }
+.eh-navbar .eh-account-menu .dropdown-toggle:hover { background:#eaf0e7; }
+.eh-account-trigger { display:flex; align-items:center; gap:9px; max-width:175px; }
+.eh-account-trigger-name { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; max-width:132px; font-size:1rem; }
+.eh-account-avatar { display:grid; place-items:center; width:35px; height:35px; flex:0 0 35px; border-radius:50%; background:#dce9dc; color:#33583e; font:700 .74rem system-ui,sans-serif; letter-spacing:.02em; }
+.eh-navbar .eh-account-menu .dropdown-menu { min-width:264px; padding:10px; border:1px solid #dde7da; border-radius:15px; box-shadow:0 18px 45px #193b2130; background:#fffdfa; }
+.eh-navbar .eh-account-menu .dropdown-header { display:grid; gap:4px; padding:13px 13px 10px; }
+.eh-account-dropdown-title { font:700 1.18rem Georgia,serif; color:#263c2b; white-space:normal; }
+.eh-account-dropdown-caption { color:#76907a; font-size:.67rem; font-weight:800; letter-spacing:.12em; }
+.eh-navbar .eh-account-menu .dropdown-item { display:flex; align-items:center; min-height:43px; font-family:system-ui,sans-serif; font-size:.91rem; color:#354537; gap:11px; border-radius:8px; padding:9px 11px; }
+.eh-navbar .eh-account-menu .dropdown-item:hover:not(.disabled) { background:#edf4eb; color:#25422c; }
+.eh-navbar .eh-account-menu .dropdown-item.disabled { color:#a3aaa2; opacity:1; }
+.eh-account-item-icon { width:21px; text-align:center; font-size:1.1rem; color:#69816c; }
+.eh-navbar .eh-account-menu .dropdown-item small { font-size:.63rem; color:#a0a8a0; margin-left:auto; }
+.eh-navbar .eh-account-menu .dropdown-divider { border-color:#edf0ea; margin:6px 3px; }
+.eh-navbar .eh-account-menu .eh-account-logout { color:#9b4d49; }
+.eh-navbar .eh-account-menu .eh-account-logout .eh-account-item-icon { color:#9b4d49; }
+@media(max-width:991px) { .eh-navbar .eh-account-menu .dropdown-menu { position:static!important; width:100%; box-shadow:none; margin-top:8px; } .eh-account-trigger { max-width:none; } }

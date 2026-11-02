@@ -61,15 +61,12 @@ export function createSlotDao(db) {
       return rows;
     },
 
-    /** The meal whose range [start_time, end_time) contains `time`, or null. */
-    async findMealAt(...args) {
+    /** Look up the employee-selected meal category, independent of time of day. */
+    async findMealByType(...args) {
       const { db: exec, args: a } = executorOf(args);
-      const time = a[0];
       const { rows } = await exec.query(
-        `SELECT id, meal_type, start_time, end_time
-         FROM meals
-         WHERE start_time <= $1 AND $1 < end_time`,
-        [time]
+        'SELECT id, meal_type FROM meals WHERE meal_type = $1',
+        [a[0]]
       );
       return rows[0] ?? null;
     },
@@ -106,10 +103,10 @@ export function createSlotDao(db) {
       const { db: exec, args: a } = executorOf(args);
       const slot = a[0];
       const { rows } = await exec.query(
-        `INSERT INTO slots (date, start_time, end_time, status)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO slots (date, start_time, end_time, meal_id, status)
+         VALUES ($1, $2, $3, $4, $5)
          RETURNING id`,
-        [slot.date, slot.startTime, slot.endTime ?? null, slot.status ?? 'available']
+        [slot.date, slot.startTime, slot.endTime, slot.mealId, slot.status ?? 'available']
       );
       return rows[0].id;
     },

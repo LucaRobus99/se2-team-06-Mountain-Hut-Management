@@ -15,7 +15,9 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, loadingAuth, signIn } = useAuth();
-  const destination = location.state?.from === '/book' ? '/book' : '/';
+  const destination = (user?.role === 'employee' || user?.role === 'warden')
+    ? '/staff'
+    : (location.state?.from === '/book' ? '/book' : '/');
   const bookingDraft = location.state?.bookingDraft;
   const loginNotice = location.state?.notice;
   const [email, setEmail] = useState('');

@@ -5,7 +5,7 @@ import '../styles/alpine-booking-fields.css';
 export const MEAL_OPTIONS = [
   { value: 'breakfast', label: 'Breakfast' },
   { value: 'lunch', label: 'Lunch' },
-  { value: 'aperitivo', label: 'Happy hour' },
+  { value: 'aperitivo', label: 'Aperitivo' },
   { value: 'dinner', label: 'Dinner' }
 ];
 
