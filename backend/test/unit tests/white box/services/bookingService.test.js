@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createBookingService } from '../../../src/services/bookingService.js';
-import { ValidationError, AppError, NotFoundError } from '../../../src/errors/AppError.js';
+import { createBookingService } from '../../../../src/services/bookingService.js';
+import { ValidationError, AppError, NotFoundError } from '../../../../src/errors/AppError.js';
 
 describe('bookingService - White-Box Tests', () => {
   let db;

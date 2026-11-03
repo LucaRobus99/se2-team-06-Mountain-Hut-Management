@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createBookingService } from '../../../src/services/bookingService.js';
+import { createBookingService } from '../../../../src/services/bookingService.js';
 import { 
   UnauthorizedError, 
   ValidationError, 
   NotFoundError, 
   ConflictError,
   UnprocessableEntityError 
-} from '../../../src/errors/AppError.js';
+} from '../../../../src/errors/AppError.js';
 
 describe('bookingService - Black-Box Tests', () => {
   let db;

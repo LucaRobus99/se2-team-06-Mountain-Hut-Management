@@ -42,13 +42,11 @@ describe('SlotDao - Integration Tests', () => {
   describe('listByDate', () => {
     
     it('should return all slots for a given date ordered by start time', async () => {
-      // The updated listByDate function takes the date as the first argument
       const slots = await slotDao.listByDate('2026-11-15');
 
       expect(slots).toBeInstanceOf(Array);
       expect(slots.length).toBeGreaterThan(0);
       
-      // Verify ordering and presence of key fields
       expect(slots[0].date).toBe('2026-11-15');
       expect(slots[0].start_time).toBe('09:00');
       expect(slots[0].meal).toBe('breakfast');
@@ -61,16 +59,17 @@ describe('SlotDao - Integration Tests', () => {
 
   });
 
-  describe('findMealAt', () => {
-    it('should return the correct meal for a time falling within its range', async () => {
-      const meal = await slotDao.findMealAt('12:30');
+  describe('findMealByType', () => {
+    it('should return the correct meal record when a valid meal type exists', async () => {
+      const meal = await slotDao.findMealByType('lunch');
       expect(meal).toBeDefined();
       expect(meal).not.toBeNull();
       expect(meal.meal_type).toBe('lunch');
+      expect(meal).toHaveProperty('id');
     });
 
-    it('should return null if no meal matches the given time', async () => {
-      const meal = await slotDao.findMealAt('04:00');
+    it('should return null if no meal matches the given type', async () => {
+      const meal = await slotDao.findMealByType('brunch');
       expect(meal).toBeNull();
     });
   });
@@ -123,10 +122,13 @@ describe('SlotDao - Integration Tests', () => {
 
   describe('Slot and Table Creation / Management', () => {
     it('should create a new slot and return its ID', async () => {
+      const meal = await slotDao.findMealByType('lunch');
+
       const newSlotId = await slotDao.createSlot({
         date: '2026-12-01',
         startTime: '13:00',
         endTime: '15:00',
+        mealId: meal.id,
         status: 'available'
       });
       expect(newSlotId).toBeDefined();
@@ -147,10 +149,13 @@ describe('SlotDao - Integration Tests', () => {
     });
 
     it('should add a table to a slot', async () => {
+      const meal = await slotDao.findMealByType('lunch');
+
       const slotId = await slotDao.createSlot({
         date: '2026-12-02',
         startTime: '10:00',
-        endTime: '11:00'
+        endTime: '11:00',
+        mealId: meal.id,
       });
       const tableId = await slotDao.createTable({ label: 'SlotTestTable' });
 

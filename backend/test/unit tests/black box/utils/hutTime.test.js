@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { zonedTimeToUtc, isSlotTooLate } from '../../../src/utils/hutTime.js'; // Replace with the actual file path
+import { zonedTimeToUtc, isSlotTooLate, todayInZone, isInPast } from '../../../../src/utils/hutTime.js';
 
 describe('hutTime - Black-Box Tests', () => {
 
@@ -58,6 +58,42 @@ describe('hutTime - Black-Box Tests', () => {
       expect(result).toBe(true);
     });
 
+  });
+
+  describe('todayInZone', () => {
+    it('should correctly return today date as YYYY-MM-DD in the specified time zone', () => {
+      // Fixed UTC instant corresponding to August 14, 2026, at 23:30 UTC
+      // In Europe/Rome (UTC+2 in summer), this is already August 15, 2026, at 01:30 local time
+      const now = new Date('2026-08-14T23:30:00.000Z');
+      const result = todayInZone('Europe/Rome', now);
+      expect(result).toBe('2026-08-15');
+    });
+  });
+
+  describe('isInPast', () => {
+    it('should return true if the given wall-clock date/time is already in the past', () => {
+      const date = '2026-08-14';
+      const time = '10:00';
+      const timeZone = 'Europe/Rome';
+      
+      // Current time set to 10:01 local time (08:01:00 UTC) -> target time is in the past
+      const now = new Date('2026-08-14T08:01:00.000Z');
+
+      const result = isInPast(date, time, { timeZone, now });
+      expect(result).toBe(true);
+    });
+
+    it('should return false if the given wall-clock date/time is still in the future', () => {
+      const date = '2026-08-14';
+      const time = '10:00';
+      const timeZone = 'Europe/Rome';
+      
+      // Current time set to 09:59 local time (07:59:00 UTC) -> target time is in the future
+      const now = new Date('2026-08-14T07:59:00.000Z');
+
+      const result = isInPast(date, time, { timeZone, now });
+      expect(result).toBe(false);
+    });
   });
 
 });

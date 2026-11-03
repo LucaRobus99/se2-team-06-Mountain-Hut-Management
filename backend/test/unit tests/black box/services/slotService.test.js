@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createSlotService } from '../../../src/services/slotService.js';
-import { ValidationError, NotFoundError, ConflictError, UnprocessableEntityError } from '../../../src/errors/AppError.js';
+import { createSlotService } from '../../../../src/services/slotService.js';
+import { ValidationError, NotFoundError, ConflictError, UnprocessableEntityError } from '../../../../src/errors/AppError.js';
 
 describe('slotService - Black-Box Tests', () => {
   let slotDao;
@@ -28,6 +28,7 @@ describe('slotService - Black-Box Tests', () => {
       getTablesWithFreeForSlots: vi.fn(),
       findById: vi.fn(),
       findMealAt: vi.fn(),
+      findMealByType: vi.fn(),
       createSlot: vi.fn(),
       addTableToSlot: vi.fn(),
       findTableByLabel: vi.fn(),
@@ -51,7 +52,7 @@ describe('slotService - Black-Box Tests', () => {
       ).rejects.toThrow(ValidationError);
     });
 
-    it('should return filtered and sorted available slots successfully', async () => {
+    it('should return filtered and sorted available slots successfully including meal property', async () => {
       slotDao.listByDate.mockResolvedValue([
         { id: 101, date: '2026-08-14', start_time: '14:00', end_time: '15:00', meal: 'lunch', status: 'available' },
         { id: 102, date: '2026-08-14', start_time: '12:00', end_time: '13:00', meal: 'lunch', status: 'available' },
@@ -78,6 +79,7 @@ describe('slotService - Black-Box Tests', () => {
             id: 102,
             startTime: '12:00',
             endTime: '13:00',
+            meal: 'lunch',
             availableSeats: 4,
             tables: [{ tableId: 1, tableLabel: 'T1', seats: 4, freeSeats: 4 }],
           },
@@ -85,6 +87,7 @@ describe('slotService - Black-Box Tests', () => {
             id: 101,
             startTime: '14:00',
             endTime: '15:00',
+            meal: 'lunch',
             availableSeats: 4,
             tables: [{ tableId: 1, tableLabel: 'T1', seats: 4, freeSeats: 4 }],
           },
@@ -155,17 +158,15 @@ describe('slotService - Black-Box Tests', () => {
     });
 
     it('should successfully create a new slot when valid body and staff user are provided', async () => {
-      slotDao.findMealAt.mockResolvedValue({
+      slotDao.findMealByType.mockResolvedValue({
+        id: 2,
         meal_type: 'lunch',
-        start_time: '12:00',
-        end_time: '15:00',
       });
-      slotDao.listByDate.mockResolvedValue([]); // No overlaps
+      slotDao.listByDate.mockResolvedValue([]);
       slotDao.createSlot.mockResolvedValue(105);
       slotDao.findTableByLabel.mockResolvedValue({ id: 1 });
       slotDao.addTableToSlot.mockResolvedValue();
       
-      // Mock for getSlot called at the end of createSlot
       slotDao.findById.mockResolvedValue({
         id: 105,
         date: '2026-08-14',
@@ -182,6 +183,7 @@ describe('slotService - Black-Box Tests', () => {
         date: '2026-08-14',
         startTime: '12:30',
         endTime: '13:30',
+        meal: 'lunch',
         tables: [{ tableIdentifier: 'T1', seats: 4 }]
       });
 

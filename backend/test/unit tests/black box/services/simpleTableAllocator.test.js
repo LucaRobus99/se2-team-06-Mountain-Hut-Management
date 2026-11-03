@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SimpleTableAllocator } from '../../../src/services/SimpleTableAllocator.js'; // Sostituisci con il percorso corretto
+import { SimpleTableAllocator } from '../../../../src/services/SimpleTableAllocator.js'; // Sostituisci con il percorso corretto
 
 describe('SimpleTableAllocator - Black-Box Tests', () => {
   let allocator;
@@ -90,6 +90,34 @@ describe('SimpleTableAllocator - Black-Box Tests', () => {
       expect(result.assignments.length).toBe(2);
       // Total free = 6, size = 5, wasted seats = 6 - 5 = 1
       expect(result.score).toEqual({ tablesUsed: 2, wastedSeats: 1 });
+    });
+
+    it('should return a failure object if party argument is missing or null', () => {
+      const tables = [{ id: 1, label: 'T1', capacity: 4, occupied: 0 }];
+      const result = allocator.allocate(null, tables);
+
+      expect(result.ok).toBe(false);
+      expect(result.code).toBe('INVALID_PARTY_SIZE');
+    });
+
+    it('should throw a TypeError if table capacity or occupied values are invalid (e.g., negative or non-integers)', () => {
+      const invalidTables = [
+        { id: 1, label: 'T1', capacity: -4, occupied: 0 }
+      ];
+      expect(() => allocator.allocate({ size: 2 }, invalidTables)).toThrow(TypeError);
+    });
+
+    it('should correctly return updated tables occupancy and free seats in the allocation success response', () => {
+      const tables = [
+        { id: 1, label: 'T1', capacity: 4, occupied: 0 } // 4 free
+      ];
+      const result = allocator.allocate({ size: 2 }, tables);
+
+      expect(result.ok).toBe(true);
+      // T1 had 0 occupied, 2 guests assigned -> now 2 occupied and 2 free left
+      const t1Result = result.tables.find(t => t.id === 1);
+      expect(t1Result.occupied).toBe(2);
+      expect(t1Result.free).toBe(2);
     });
 
   });

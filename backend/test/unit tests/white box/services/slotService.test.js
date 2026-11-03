@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createSlotService } from '../../../src/services/slotService.js';
-import { ValidationError, ForbiddenError } from '../../../src/errors/AppError.js';
+import { createSlotService } from '../../../../src/services/slotService.js';
+import { ValidationError, ForbiddenError } from '../../../../src/errors/AppError.js';
 
 describe('slotService - White-Box Tests', () => {
   let slotDao;

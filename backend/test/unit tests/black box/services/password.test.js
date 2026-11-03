@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hashPassword, isPasswordHash, verifyPassword } from '../../../src/services/password.js'; // Sostituisci con il percorso corretto
+import { hashPassword, isPasswordHash, verifyPassword } from '../../../../src/services/password.js'; // Sostituisci con il percorso corretto
 
 describe('password - Black-Box Tests', () => {
 

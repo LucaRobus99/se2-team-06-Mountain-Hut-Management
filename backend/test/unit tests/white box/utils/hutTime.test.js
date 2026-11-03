@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { zonedTimeToUtc, isSlotTooLate, BOOKING_LEAD_MS } from '../../../src/utils/hutTime.js';
+import { zonedTimeToUtc, isSlotTooLate, BOOKING_LEAD_MS } from '../../../../src/utils/hutTime.js';
 
 describe('hutTime - White-Box Tests', () => {
 
@@ -39,6 +39,19 @@ describe('hutTime - White-Box Tests', () => {
       expect(firstCall).toBeInstanceOf(Date);
       expect(secondCall).toBeInstanceOf(Date);
       expect(thirdCall).toBeInstanceOf(Date);
+    });
+
+  });
+
+  describe('Internal partsInZone & timezone mapping validation', () => {
+    
+    it('should correctly map UTC instants to zone-specific components (exercising internal partsInZone logic via zonedTimeToUtc precision)', () => {
+      // Verifying that reverse lookup and components extraction match expected local offsets accurately
+      const utcDate = new Date('2026-08-14T11:00:00.000Z');
+      // Converting back via zonedTimeToUtc should yield the exact wall-clock synchronization point
+      const reconstructedUtc = zonedTimeToUtc('2026-08-14', '13:00', 'Europe/Rome');
+      
+      expect(reconstructedUtc.getTime()).toBe(utcDate.getTime());
     });
 
   });

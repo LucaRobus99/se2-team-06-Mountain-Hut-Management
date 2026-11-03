@@ -6,6 +6,9 @@ async function createEmptyDb() {
   const db = createSqliteDb(':memory:');
   await db.query('DELETE FROM slot_tables');
   await db.query('DELETE FROM slots');
+  await db.query('DELETE FROM meals');
+  // Insert a default meal to satisfy the meal_id NOT NULL constraint on slots
+  await db.query("INSERT INTO meals (id, meal_type) VALUES (1, 'lunch')");
   return db;
 }
 
@@ -14,7 +17,7 @@ describe('SQLite transaction helper', () => {
     const db = await createEmptyDb();
     try {
       await db.transaction(async (tx) => {
-        await tx.query("INSERT INTO slots (date, start_time, end_time) VALUES ('2026-12-01', '12:00', '13:00')");
+        await tx.query("INSERT INTO slots (meal_id, date, start_time, end_time) VALUES (1, '2026-12-01', '12:00', '13:00')");
       });
       const { rows } = await db.query('SELECT status FROM slots');
       expect(rows).toEqual([{ status: 'available' }]);
@@ -27,7 +30,7 @@ describe('SQLite transaction helper', () => {
     const db = await createEmptyDb();
     try {
       await expect(db.transaction(async (tx) => {
-        await tx.query("INSERT INTO slots (date, start_time, end_time) VALUES ('2026-12-01', '12:00', '13:00')");
+        await tx.query("INSERT INTO slots (meal_id, date, start_time, end_time) VALUES (1, '2026-12-01', '12:00', '13:00')");
         throw new Error('not enough seats');
       })).rejects.toThrow('not enough seats');
 
@@ -41,7 +44,7 @@ describe('SQLite transaction helper', () => {
   it('runs transactions one at a time, so the first one saved wins', async () => {
     const db = await createEmptyDb();
     try {
-      await db.query("INSERT INTO slots (id, date, start_time, end_time) VALUES (1, '2026-12-01', '12:00', '13:00')");
+      await db.query("INSERT INTO slots (id, meal_id, date, start_time, end_time) VALUES (1, 1, '2026-12-01', '12:00', '13:00')");
       const seatsLeft = 2;
 
       // Two bookings for the last 2 seats, started at the same moment.

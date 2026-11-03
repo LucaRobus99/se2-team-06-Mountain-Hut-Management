@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeSeating, canSeat } from '../../../src/services/seating.js'; // Sostituisci con il percorso corretto
+import { computeSeating, canSeat } from '../../../../src/services/seating.js'; // Sostituisci con il percorso corretto
 
 describe('seating - Black-Box Tests', () => {
 
@@ -71,6 +71,18 @@ describe('seating - Black-Box Tests', () => {
         { tableId: 2, tableLabel: 'T2', seats: 1 },
       ]);
       expect(result.explanation).toBeDefined();
+    });
+
+    it('should correctly parse string numbers for seats and free slots when mapping table rows', () => {
+      const tableRows = [
+        { id: 1, label: 'T1', seats: '4', free: '4' },
+      ];
+      // Party size 3 should fit even if rows contain string numbers instead of pure integers
+      expect(canSeat(3, tableRows)).toBe(true);
+      
+      const result = computeSeating(3, tableRows);
+      expect(result).not.toBeNull();
+      expect(result.fit).toBe('single_table');
     });
 
   });

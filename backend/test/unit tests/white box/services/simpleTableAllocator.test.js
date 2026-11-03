@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SimpleTableAllocator } from '../../../src/services/SimpleTableAllocator.js';
+import { SimpleTableAllocator } from '../../../../src/services/SimpleTableAllocator.js';
 
 describe('SimpleTableAllocator - White-Box Tests', () => {
   let allocator;

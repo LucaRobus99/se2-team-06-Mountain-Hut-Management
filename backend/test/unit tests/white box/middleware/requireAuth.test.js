@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createRequireAuth } from '../../../src/middleware/requireAuth.js';
-import { UnauthorizedError, ForbiddenError } from '../../../src/errors/AppError.js';
-import { SESSION_TTL_MS } from '../../../src/auth/session.js';
+import { createRequireAuth } from '../../../../src/middleware/requireAuth.js';
+import { UnauthorizedError, ForbiddenError } from '../../../../src/errors/AppError.js';
+import { SESSION_TTL_MS } from '../../../../src/auth/session.js';
 
 describe('requireAuth Middleware - Unit Tests', () => {
   let req, res, next, requireAuth;
@@ -86,4 +86,27 @@ describe('requireAuth Middleware - Unit Tests', () => {
     expect(next).toHaveBeenCalledWith(); 
   });
 
+  it('should use createdAt as fallback if lastAccessAt is null or undefined when checking session TTL', () => {
+    req.session.lastAccessAt = null;
+    req.session.createdAt = mockNow - SESSION_TTL_MS - 5000; // Scaduto basandosi su createdAt
+    const middleware = requireAuth();
+
+    middleware(req, res, next);
+
+    expect(req.session.destroy).toHaveBeenCalled();
+    expect(next.mock.calls[0][0]).toBeInstanceOf(UnauthorizedError);
+  });
+
+  it('should allow a custom forbidden message when ForbiddenError is thrown', () => {
+    req.user.role = 'hiker';
+    const customMessage = 'Only staff members can access this resource.';
+    const authFactory = createRequireAuth({ now: () => mockNow });
+    const middleware = authFactory(['warden'], customMessage);
+
+    middleware(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next.mock.calls[0][0]).toBeInstanceOf(ForbiddenError);
+    expect(next.mock.calls[0][0].message).toBe(customMessage);
+  });
 });
