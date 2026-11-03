@@ -133,7 +133,9 @@ function toBookingResponse(booking, assignments) {
   return response;
 }
 
-export function createBookingService({ db, bookingDao, slotDao, timeZone, now = () => new Date() }) {
+export function createBookingService({ db, bookingDao, slotDao, timeZone, now = () => new Date(), emailService = null, mailer = null, email = null, mailService = null }) {
+  const notifier = emailService || mailer || email || mailService || null;
+
   return {
     /**
      * A hiker books for themself (hiker_id). Staff book on someone's behalf
@@ -188,6 +190,38 @@ export function createBookingService({ db, bookingDao, slotDao, timeZone, now = 
       } catch (err) {
         if (err instanceof AppError) throw err;
         throw new AppError(500, 'Internal Server Error', 'An unexpected error occurred.', 'INTERNAL_ERROR');
+      }
+
+      // Send the booking confirmation email (best-effort: never fail the booking).
+      if (notifier) {
+        const sender =
+          typeof notifier === 'function'
+            ? notifier
+            : notifier.sendBookingConfirmation ||
+              notifier.sendConfirmation ||
+              notifier.send ||
+              notifier.sendEmail ||
+              null;
+
+        if (typeof sender === 'function') {
+          const booking = result.booking;
+          const fields = {
+            name: booking.contact_name ?? user.displayName ?? null,
+            date: booking.slot_date,
+            start_time: booking.slot_start_time,
+            end_time: booking.slot_end_time,
+            meal: booking.meal,
+            guests: booking.party_size,
+            split: result.assignments.length > 1,
+            booking_id: booking.id,
+          };
+          const recipient = booking.email ?? user.email ?? null;
+          try {
+            await sender.call(notifier, recipient, fields);
+          } catch (err) {
+            console.error('Failed to send booking confirmation email:', err);
+          }
+        }
       }
 
       return toBookingResponse(result.booking, result.assignments);
