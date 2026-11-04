@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Spinner } from 'react-bootstrap';
 import { createStaffSlot, listStaffSlots, mealLabel, todayInHut } from '../api/slots.js';
+import SlotConfirmModal from '../components/SlotConfirmModal.jsx';
 import StaffDatePicker from '../components/StaffDatePicker.jsx';
 import StaffSelect from '../components/StaffSelect.jsx';
 import StaffTimePicker from '../components/StaffTimePicker.jsx';
@@ -51,6 +52,8 @@ export default function SlotManagementPage() {
   const [loadingSource, setLoadingSource] = useState(false);
   const [sourceError, setSourceError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingSlot, setPendingSlot] = useState(null);
   const [createdSlot, setCreatedSlot] = useState(null);
   const successRef = useRef(null);
   const scheduleRef = useRef(null);
@@ -121,19 +124,34 @@ export default function SlotManagementPage() {
     return Object.keys(errors).length === 0;
   }
 
-  async function handleSubmit(event) {
+  function handleSubmit(event) {
     event.preventDefault();
     setFormError('');
     if (!validate() || saving) return;
+    const payload = { date, startTime, endTime, meal };
+    if (mode === 'copy') payload.copyTablesFromSlotId = Number(sourceId);
+    else payload.tables = tables.map((table) => ({
+      tableIdentifier: table.tableIdentifier.trim(), seats: Number(table.seats),
+    }));
+    const slotTables = mode === 'copy' ? selectedSource.tables : payload.tables;
+    // Snapshot the summary so the modal keeps its content while the form resets and it fades out.
+    setPendingSlot({
+      payload,
+      summary: {
+        date: formatDate(date), meal: mealLabel(meal), startTime, endTime, tables: slotTables, seats: capacity(slotTables),
+        copiedFrom: mode === 'copy' ? `${formatDate(sourceDate)} · ${selectedSource.startTime}–${selectedSource.endTime} · ${mealLabel(selectedSource.meal)}` : null,
+      },
+    });
+    setConfirmOpen(true);
+  }
+
+  async function handleConfirm() {
+    if (saving) return;
     setCreatedSlot(null);
     setSaving(true);
     try {
-      const payload = { date, startTime, endTime, meal };
-      if (mode === 'copy') payload.copyTablesFromSlotId = Number(sourceId);
-      else payload.tables = tables.map((table) => ({
-        tableIdentifier: table.tableIdentifier.trim(), seats: Number(table.seats),
-      }));
-      const result = await createStaffSlot(payload);
+      const result = await createStaffSlot(pendingSlot.payload);
+      setConfirmOpen(false);
       setCreatedSlot(result);
       setViewDate(date);
       setRefresh((n) => n + 1);
@@ -148,6 +166,7 @@ export default function SlotManagementPage() {
       // Keep the selected date for consecutive services; reset all other fields.
       requestAnimationFrame(() => successRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
     } catch (error) {
+      setConfirmOpen(false);
       setFormError(error.message || 'Could not create the slot.');
       const fieldMessages = {};
       for (const detail of error.details || []) {
@@ -270,6 +289,8 @@ export default function SlotManagementPage() {
 
         </form>
       </section>
+
+      <SlotConfirmModal show={confirmOpen} summary={pendingSlot?.summary} onCancel={() => setConfirmOpen(false)} onConfirm={handleConfirm} busy={saving} />
     </div>
   );
 }
