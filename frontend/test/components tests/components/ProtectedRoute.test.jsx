@@ -1,26 +1,28 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router';
-import ProtectedRoute from '../../src/components/ProtectedRoute.jsx';
-import { useAuth } from '../../src/auth/AuthContext.jsx';
+import ProtectedRoute from '../../../src/components/ProtectedRoute.jsx';
+import { useAuth } from '../../../src/auth/AuthContext.jsx';
 
 // Mock the useAuth hook to control user state and loading status in tests
-vi.mock('../../src/auth/AuthContext.jsx', () => ({
+vi.mock('../../../src/auth/AuthContext.jsx', () => ({
   useAuth: vi.fn(),
 }));
 
 describe('ProtectedRoute Component Integration Tests', () => {
 
-  it('should render nothing (null) while authentication is loading', () => {
+  it('should render loading status element while authentication is loading', () => {
     useAuth.mockReturnValue({ user: null, loadingAuth: true });
 
-    const { container } = render(
+    render(
       <MemoryRouter>
         <ProtectedRoute />
       </MemoryRouter>
     );
 
-    expect(container.firstChild).toBeNull();
+    const loadingElement = screen.getByRole('status');
+    expect(loadingElement).toBeInTheDocument();
+    expect(loadingElement).toHaveTextContent('Loading…');
   });
 
   it('should redirect to /login when user is not authenticated', () => {
@@ -88,6 +90,23 @@ describe('ProtectedRoute Component Integration Tests', () => {
     );
 
     expect(screen.getByText('Staff Content')).toBeInTheDocument();
+  });
+
+  it('should redirect staff to /staff when they try to access a hiker-only route', () => {
+    useAuth.mockReturnValue({ user: { id: 2, role: 'employee' }, loadingAuth: false });
+
+    render(
+      <MemoryRouter initialEntries={['/hiker-page']}>
+        <Routes>
+          <Route path="/staff" element={<div>Staff Dashboard</div>} />
+          <Route element={<ProtectedRoute hikerOnly={true} />}>
+            <Route path="/hiker-page" element={<div>Hiker Content</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Staff Dashboard')).toBeInTheDocument();
   });
 
 });

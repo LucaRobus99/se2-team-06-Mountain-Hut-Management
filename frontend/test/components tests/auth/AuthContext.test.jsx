@@ -1,28 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { AuthProvider, useAuth } from '../../src/auth/AuthContext.jsx';
-import { getCurrentUser, login as apiLogin, logout as apiLogout } from '../../src/api/auth.js';
+import { AuthProvider, useAuth } from '../../../src/auth/AuthContext.jsx';
+import { getCurrentUser, login as apiLogin, logout as apiLogout, registerHiker as apiRegister } from '../../../src/api/auth.js';
 
 // Mock the underlying API module functions
-vi.mock('../../src/api/auth.js', () => ({
+vi.mock('../../../src/api/auth.js', () => ({
   getCurrentUser: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
+  registerHiker: vi.fn(),
 }));
 
 // Helper component to consume AuthContext values and expose actions to tests
 function TestConsumer() {
-  const { user, loadingAuth, authError, signIn, signOut, refreshUser } = useAuth();
+  const { user, loadingAuth, authError, signIn, signUp, signOut, refreshUser } = useAuth();
 
   return (
     <div>
       <div data-testid="loading">{loadingAuth ? 'loading' : 'loaded'}</div>
       <div data-testid="user">{user ? JSON.stringify(user) : 'no-user'}</div>
       <div data-testid="error">{authError || 'no-error'}</div>
-      
+
       <button onClick={() => signIn({ email: 'test@hiker.com', password: 'password' }).catch(() => {})}>
         Sign In
+      </button>
+      <button onClick={() => signUp({ name: 'New User', email: 'new@hiker.com', password: 'password' }).catch(() => {})}>
+        Sign Up
       </button>
       <button onClick={() => signOut().catch(() => {})}>Sign Out</button>
       <button onClick={() => refreshUser().catch(() => {})}>Refresh User</button>
@@ -102,6 +106,32 @@ describe('AuthContext Component Integration Tests', () => {
     expect(screen.getByTestId('error')).toHaveTextContent('no-error');
   });
 
+  it('should successfully sign up a new user', async () => {
+    getCurrentUser.mockRejectedValueOnce(new Error('Not logged in'));
+    const mockRegisteredUser = { id: 3, displayName: 'New Hiker', role: 'hiker' };
+    apiRegister.mockResolvedValueOnce(mockRegisteredUser);
+
+    const user = userEvent.setup();
+
+    render(
+      <AuthProvider>
+        <TestConsumer />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('loading')).toHaveTextContent('loaded');
+    });
+
+    await user.click(screen.getByRole('button', { name: /sign up/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('user')).toHaveTextContent(JSON.stringify(mockRegisteredUser));
+    });
+    expect(apiRegister).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('error')).toHaveTextContent('no-error');
+  });
+
   it('should successfully sign out a user', async () => {
     const mockUser = { id: 1, displayName: 'Mario Rossi', role: 'hiker' };
     getCurrentUser.mockResolvedValueOnce(mockUser);
@@ -126,6 +156,34 @@ describe('AuthContext Component Integration Tests', () => {
       expect(screen.getByTestId('user')).toHaveTextContent('no-user');
     });
     expect(apiLogout).toHaveBeenCalledTimes(1);
+  });
+
+  it('should handle refreshUser and set user to null on 401 unauthorized', async () => {
+    const mockUser = { id: 1, displayName: 'Mario Rossi', role: 'hiker' };
+    getCurrentUser.mockResolvedValueOnce(mockUser);
+
+    const user = userEvent.setup();
+
+    render(
+      <AuthProvider>
+        <TestConsumer />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('user')).toHaveTextContent(JSON.stringify(mockUser));
+    });
+
+    // Simulate refresh failing with a 401 error
+    const authError401 = new Error('Session expired');
+    authError401.status = 401;
+    getCurrentUser.mockRejectedValueOnce(authError401);
+
+    await user.click(screen.getByRole('button', { name: /refresh user/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('user')).toHaveTextContent('no-user');
+    });
   });
 
   it('should throw an error if useAuth is used outside of AuthProvider', () => {

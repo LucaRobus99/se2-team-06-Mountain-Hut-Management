@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import EdelweissBrand from '../../src/components/EdelweissBrand.jsx';
+import EdelweissBrand from '../../../src/components/EdelweissBrand.jsx';
 
 describe('EdelweissBrand Component Tests', () => {
 

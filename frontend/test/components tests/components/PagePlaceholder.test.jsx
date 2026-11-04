@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import PagePlaceholder from '../../src/components/PagePlaceholder.jsx';
+import PagePlaceholder from '../../../src/components/PagePlaceholder.jsx';
 
 describe('PagePlaceholder Component Tests', () => {
   

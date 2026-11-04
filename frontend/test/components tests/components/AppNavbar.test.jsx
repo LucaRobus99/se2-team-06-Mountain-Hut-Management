@@ -1,12 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
-import AppNavbar from '../../src/components/AppNavbar.jsx';
-import { useAuth } from '../../src/auth/AuthContext.jsx';
+import AppNavbar from '../../../src/components/AppNavbar.jsx';
+import { useAuth } from '../../../src/auth/AuthContext.jsx';
 
 // Mock the useAuth hook to control user authentication state and actions
-vi.mock('../../src/auth/AuthContext.jsx', () => ({
+vi.mock('../../../src/auth/AuthContext.jsx', () => ({
   useAuth: vi.fn(),
 }));
 
@@ -29,13 +29,11 @@ describe('AppNavbar Component Integration Tests', () => {
     expect(screen.getByRole('link', { name: /^home$/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /^menu$/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /^availability$/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /^about$/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^find us$/i })).toBeInTheDocument();
 
-    // Verify staff link is NOT present
-    expect(screen.queryByRole('link', { name: /manage slots/i })).not.toBeInTheDocument();
-
-    // Verify Log in link is visible, and account dropdown is not
+    // Verify Log in and Register links are visible, and account dropdown is not
     expect(screen.getByRole('link', { name: /^log in$/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^register$/i })).toBeInTheDocument();
   });
 
   it('should render hiker user account info and correct booking link when logged in as a hiker', () => {
@@ -53,12 +51,9 @@ describe('AppNavbar Component Integration Tests', () => {
 
     // Verify user display name appears in the dropdown toggle title
     expect(screen.getByRole('button', { name: /mario rossi/i })).toBeInTheDocument();
-
-    // Verify staff management link is NOT shown for hikers
-    expect(screen.queryByRole('link', { name: /manage slots/i })).not.toBeInTheDocument();
   });
 
-  it('should render staff management link when logged in as an employee or warden', () => {
+  it('should render employee user account info correctly when logged in as an employee or warden', () => {
     useAuth.mockReturnValue({
       user: { id: 2, displayName: 'Staff Member', role: 'employee' },
       loadingAuth: false,
@@ -71,8 +66,8 @@ describe('AppNavbar Component Integration Tests', () => {
       </MemoryRouter>
     );
 
-    // Verify staff slot management link is visible
-    expect(screen.getByRole('link', { name: /manage slots/i })).toBeInTheDocument();
+    // Verify staff user display name appears in the dropdown toggle title
+    expect(screen.getByRole('button', { name: /staff member/i })).toBeInTheDocument();
   });
 
   it('should call signOut and handle successful logout flow', async () => {

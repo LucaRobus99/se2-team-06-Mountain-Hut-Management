@@ -2,16 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
-import AvailabilityPage from '../../src/pages/AvailabilityPage.jsx';
-import { useAuth } from '../../src/auth/AuthContext.jsx';
-import { getAvailableSlots, getSlotSeating } from '../../src/api/booking.js';
+import AvailabilityPage from '../../../src/pages/AvailabilityPage.jsx';
+import { useAuth } from '../../../src/auth/AuthContext.jsx';
+import { getAvailableSlots, getSlotSeating } from '../../../src/api/booking.js';
 
 // Mock AuthContext and API functions
-vi.mock('../../src/auth/AuthContext.jsx', () => ({
+vi.mock('../../../src/auth/AuthContext.jsx', () => ({
   useAuth: vi.fn(),
 }));
 
-vi.mock('../../src/api/booking.js', () => ({
+vi.mock('../../../src/api/booking.js', () => ({
   getAvailableSlots: vi.fn(),
   getSlotSeating: vi.fn(),
 }));
@@ -25,7 +25,6 @@ describe('AvailabilityPage Component Integration Tests', () => {
 
   it('should render the availability form inputs and initial headings', () => {
     useAuth.mockReturnValue({ user: null });
-    // Nessun URL con parametri, quindi l'useEffect iniziale non fa fetch automatiche
 
     render(
       <MemoryRouter>
@@ -33,7 +32,6 @@ describe('AvailabilityPage Component Integration Tests', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('Public page')).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: 'Check availability' })).toBeInTheDocument();
 
     expect(screen.getByLabelText(/date/i)).toBeInTheDocument();
@@ -53,7 +51,6 @@ describe('AvailabilityPage Component Integration Tests', () => {
         { id: 102, startTime: '13:15', availableSeats: 4 }
       ]
     };
-    // Mockiamo la risposta per la chiamata scatenata dal submit del form
     getAvailableSlots.mockResolvedValueOnce(mockSlotsResponse);
 
     const user = userEvent.setup();
@@ -71,7 +68,7 @@ describe('AvailabilityPage Component Integration Tests', () => {
 
     const timeElement = await screen.findByText('12:30');
     expect(timeElement).toBeInTheDocument();
-    expect(screen.getByText(/6 seats available/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/available for your group/i)[0]).toBeInTheDocument();
   });
 
   it('should handle slot selection and display seating details panel', async () => {
@@ -105,14 +102,14 @@ describe('AvailabilityPage Component Integration Tests', () => {
 
     await screen.findByText('12:30');
 
-    await user.click(screen.getByRole('button', { name: /12:306 seats available/i }));
+    // Click on the slot card matching the 12:30 time slot button
+    const slotButton = screen.getByRole('button', { name: /12:30/i });
+    await user.click(slotButton);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { level: 3, name: 'Selected slot: 12:30' })).toBeInTheDocument();
+      expect(screen.getByText(/single table/i)).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/single table/i)).toBeInTheDocument();
-    expect(screen.getByText(/Table 4: 2/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /continue to booking/i })).toBeInTheDocument();
   });
 

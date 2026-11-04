@@ -2,11 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
-import LoginPage from '../../src/pages/LoginPage.jsx';
-import { useAuth } from '../../src/auth/AuthContext.jsx';
+import LoginPage from '../../../src/pages/LoginPage.jsx';
+import { useAuth } from '../../../src/auth/AuthContext.jsx';
 
 // Mock AuthContext
-vi.mock('../../src/auth/AuthContext.jsx', () => ({
+vi.mock('../../../src/auth/AuthContext.jsx', () => ({
   useAuth: vi.fn(),
 }));
 
@@ -25,14 +25,16 @@ describe('LoginPage Component Integration Tests', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole('heading', { level: 1, name: /sign in/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: /welcome back/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^sign in$/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/password/i, { selector: 'input' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^log in$/i })).toBeInTheDocument();
   });
 
-  it('should show error message if fields are left empty on submit', async () => {
+  it('should show error messages if fields are left empty on submit', async () => {
     useAuth.mockReturnValue({ user: null, loadingAuth: false, signIn: vi.fn() });
+
+    const user = userEvent.setup();
 
     render(
       <MemoryRouter>
@@ -40,12 +42,11 @@ describe('LoginPage Component Integration Tests', () => {
       </MemoryRouter>
     );
 
-    // Eseguiamo il submit bypassando la validazione HTML nativa per testare la validazione React
-    const form = screen.getByRole('button', { name: /^sign in$/i }).closest('form');
-    fireEvent.submit(form);
+    const submitButton = screen.getByRole('button', { name: /^log in$/i });
+    await user.click(submitButton);
 
-    const errorAlert = await screen.findByText(/please enter your email and password/i);
-    expect(errorAlert).toBeInTheDocument();
+    expect(await screen.findByText(/enter your email address/i)).toBeInTheDocument();
+    expect(screen.getByText(/enter your password/i)).toBeInTheDocument();
   });
 
   it('should call signIn and handle successful authentication', async () => {
@@ -61,8 +62,8 @@ describe('LoginPage Component Integration Tests', () => {
     );
 
     await user.type(screen.getByLabelText(/email/i), 'mario@hiker.com');
-    await user.type(screen.getByLabelText(/password/i), 'password123');
-    await user.click(screen.getByRole('button', { name: /^sign in$/i }));
+    await user.type(screen.getByLabelText(/password/i, { selector: 'input' }), 'password123');
+    await user.click(screen.getByRole('button', { name: /^log in$/i }));
 
     expect(mockSignIn).toHaveBeenCalledWith({
       email: 'mario@hiker.com',
@@ -70,8 +71,8 @@ describe('LoginPage Component Integration Tests', () => {
     });
   });
 
-  it('should display error message when signIn throws an error', async () => {
-    const mockSignIn = vi.fn().mockRejectedValueOnce(new Error('Invalid credentials'));
+  it('should display error message when signIn throws a general error', async () => {
+    const mockSignIn = vi.fn().mockRejectedValueOnce(new Error('Unable to sign in. Please try again.'));
     useAuth.mockReturnValue({ user: null, loadingAuth: false, signIn: mockSignIn });
 
     const user = userEvent.setup();
@@ -83,11 +84,11 @@ describe('LoginPage Component Integration Tests', () => {
     );
 
     await user.type(screen.getByLabelText(/email/i), 'wrong@hiker.com');
-    await user.type(screen.getByLabelText(/password/i), 'wrongpass');
-    await user.click(screen.getByRole('button', { name: /^sign in$/i }));
+    await user.type(screen.getByLabelText(/password/i, { selector: 'input' }), 'wrongpass');
+    await user.click(screen.getByRole('button', { name: /^log in$/i }));
 
-    const errorAlert = await screen.findByText(/invalid credentials/i);
-    expect(errorAlert).toBeInTheDocument();
+    const errorAlert = await screen.findByRole('alert');
+    expect(errorAlert).toHaveTextContent(/unable to sign in/i);
   });
 
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { login, getCurrentUser, logout } from '../../../src/api/auth.js';
+import { login, getCurrentUser, logout, registerHiker } from '../../../../src/api/auth.js';
 
 describe('Auth API - White-Box Unit Tests', () => {
   
@@ -80,6 +80,16 @@ describe('Auth API - White-Box Unit Tests', () => {
       expect(user).toBeNull();
     });
 
+    it('should rethrow unexpected errors during getCurrentUser', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => ({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'DB Down' } })
+      }));
+
+      await expect(getCurrentUser()).rejects.toThrow('DB Down');
+    });
+
   });
 
   describe('logout', () => {
@@ -106,6 +116,68 @@ describe('Auth API - White-Box Unit Tests', () => {
 
       // Should not throw errors if 401 is received during logout
       await expect(logout()).resolves.toBeUndefined();
+    });
+
+    it('should throw unexpected errors during logout (other than 401)', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => ({ error: { message: 'Server error' } })
+      }));
+
+      await expect(logout()).rejects.toThrow('Server error');
+    });
+
+  });
+
+  describe('registerHiker', () => {
+
+    it('should successfully register a new hiker and return user data', async () => {
+      const mockNewUser = { id: 2, email: 'newhiker@hut.test', role: 'hiker' };
+
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        status: 201,
+        json: async () => ({ user: mockNewUser })
+      }));
+
+      const newHikerData = {
+        name: 'New Hiker',
+        email: 'newhiker@hut.test',
+        password: 'Password123!',
+        phone: '+393331234567'
+      };
+
+      const user = await registerHiker(newHikerData);
+
+      expect(user).toEqual(mockNewUser);
+      expect(fetch).toHaveBeenCalledTimes(1);
+      
+      const [url, options] = fetch.mock.calls[0];
+      expect(url).toBe('/api/auth/register');
+      expect(options.method).toBe('POST');
+      expect(options.credentials).toBe('include');
+      expect(options.headers).toEqual({ 'Content-Type': 'application/json' });
+      // Parse the JSON body to compare object keys independently of string serialization order
+      expect(JSON.parse(options.body)).toEqual(newHikerData);
+    });
+
+    it('should map EMAIL_ALREADY_REGISTERED error code to a friendly message during registration', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({ error: { code: 'EMAIL_ALREADY_REGISTERED', message: 'Email in use' } })
+      }));
+
+      const duplicateUser = {
+        name: 'Duplicate',
+        email: 'existing@hut.test',
+        password: 'Password123!',
+        phone: '+393331234567'
+      };
+
+      await expect(registerHiker(duplicateUser))
+        .rejects.toThrow('This email already has an account. Please log in instead.');
     });
 
   });
