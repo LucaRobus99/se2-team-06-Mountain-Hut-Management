@@ -6,6 +6,7 @@ import { createSlotDao } from './dao/slotDao.js';
 import { createBookingDao } from './dao/bookingDao.js';
 import { createSlotService } from './services/slotService.js';
 import { createBookingService } from './services/bookingService.js';
+import { createEmailService } from './services/emailService.js';
 import { createAuthRouter } from './routes/authRoutes.js';
 import { createRegistrationService } from './services/registrationService.js';
 import { createAvailabilityRouter } from './routes/availabilityRoutes.js';
@@ -33,8 +34,16 @@ export function createApp({ db, timeZone = config.hutTimeZone, now = () => new D
 
   const requireAuth = createRequireAuth({ now: () => now().getTime() });
 
+  const emailService = createEmailService({
+    apiKey: config.mailgunApiKey,
+    domain: config.mailgunDomain,
+    from: config.mailgunFrom,
+    template: config.mailgunTemplate,
+    url: config.mailgunUrl,
+  });
+
   const slotService = createSlotService({ slotDao, db, timeZone, now });
-  const bookingService = createBookingService({ db, bookingDao, slotDao, timeZone, now });
+  const bookingService = createBookingService({ db, bookingDao, slotDao, timeZone, now, emailService });
   const registrationService = createRegistrationService({ userDao });
 
   // Health check
