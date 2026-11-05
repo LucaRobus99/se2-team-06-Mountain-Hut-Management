@@ -8,6 +8,11 @@ import {
   UnprocessableEntityError 
 } from '../../../../src/errors/AppError.js';
 
+// Mock isStaff to ensure staff roles are correctly recognized in tests
+vi.mock('../../../../src/auth/roles.js', () => ({
+  isStaff: vi.fn((user) => user?.role === 'staff' || user?.id === 1),
+}));
+
 describe('bookingService - Black-Box Tests', () => {
   let db;
   let bookingDao;
@@ -24,7 +29,16 @@ describe('bookingService - Black-Box Tests', () => {
     role: 'hiker',
   };
 
+  const mockStaff = {
+    id: 1,
+    displayName: 'Staff Admin',
+    email: 'staff@hut.com',
+    role: 'staff',
+  };
+
   beforeEach(() => {
+    vi.clearAllMocks();
+
     // Mock database transaction wrapper
     db = {
       transaction: vi.fn(async (callback) => callback('mock-tx')),
@@ -114,6 +128,40 @@ describe('bookingService - Black-Box Tests', () => {
       ).rejects.toThrow(ConflictError);
     });
 
+    it('should throw a ValidationError if a hiker sends unauthorized contact fields', async () => {
+      slotDao.findById.mockResolvedValue({ 
+        id: 101, 
+        status: 'available', 
+        start_time: '14:00', 
+        date: '2026-08-14' 
+      });
+
+      await expect(
+        bookingService.createBooking(mockHiker, { 
+          slotId: 101, 
+          partySize: 2, 
+          contactName: 'Not Allowed' 
+        })
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it('should throw a ValidationError if staff provides no contact details', async () => {
+      slotDao.findById.mockResolvedValue({ 
+        id: 101, 
+        status: 'available', 
+        start_time: '14:00', 
+        date: '2026-08-14' 
+      });
+
+      await expect(
+        bookingService.createBooking(mockStaff, { 
+          slotId: 101, 
+          partySize: 2 
+          // Missing contactName, email, and contactNumber
+        })
+      ).rejects.toThrow(ValidationError);
+    });
+
     it('should successfully create a booking when all conditions and seating fit are met', async () => {
       slotDao.findById.mockResolvedValue({ 
         id: 101, 
@@ -125,12 +173,11 @@ describe('bookingService - Black-Box Tests', () => {
       });
       bookingDao.findConfirmedByHikerAndSlot.mockResolvedValue(null);
       
-      // Free table available
       slotDao.getTablesWithFreeForSlot.mockResolvedValue([
         { id: 1, label: 'T1', seats: 4, free: 4 }
       ]);
 
-      bookingDao.create.mockResolvedValue(100); // New booking ID
+      bookingDao.create.mockResolvedValue(100);
       bookingDao.findById.mockResolvedValue({
         id: 100,
         status: 'confirmed',
@@ -181,6 +228,87 @@ describe('bookingService - Black-Box Tests', () => {
       expect(bookingDao.insertSeats).toHaveBeenCalled();
     });
 
+    it('should successfully handle group split across multiple tables with a notice', async () => {
+      slotDao.findById.mockResolvedValue({ 
+        id: 101, 
+        status: 'available', 
+        start_time: '14:00', 
+        end_time: '16:00',
+        date: '2026-08-14',
+        meal: 'lunch'
+      });
+      bookingDao.findConfirmedByHikerAndSlot.mockResolvedValue(null);
+      
+      slotDao.getTablesWithFreeForSlot.mockResolvedValue([
+        { id: 1, label: 'T1', seats: 2, free: 2 },
+        { id: 2, label: 'T2', seats: 2, free: 2 }
+      ]);
+
+      bookingDao.create.mockResolvedValue(101);
+      bookingDao.findById.mockResolvedValue({
+        id: 101,
+        status: 'confirmed',
+        hiker_id: 10,
+        created_by: null,
+        slot_id: 101,
+        slot_date: '2026-08-14',
+        slot_start_time: '14:00',
+        slot_end_time: '16:00',
+        meal: 'lunch',
+        party_size: 4,
+        contact_name: 'Mario Rossi',
+        email: 'mario.rossi@example.com',
+        phone: '+393331234567',
+        created_at: '2026-08-14T07:05:00.000Z',
+      });
+      bookingDao.getSeatAssignments.mockResolvedValue([
+        { tableId: 1, tableLabel: 'T1', seats: 2 },
+        { tableId: 2, tableLabel: 'T2', seats: 2 }
+      ]);
+
+      const result = await bookingService.createBooking(mockHiker, {
+        slotId: 101,
+        partySize: 4,
+      });
+
+      expect(result.split).toBe(true);
+      expect(result.notice).toEqual({
+        code: 'GROUP_SPLIT',
+        message: 'The group will be seated across multiple tables.',
+      });
+    });
+
+    it('should succeed even if email notification service throws an error', async () => {
+      const failingNotifier = {
+        send: vi.fn().mockRejectedValue(new Error('SMTP Down')),
+      };
+
+      const serviceWithEmail = createBookingService({
+        db,
+        bookingDao,
+        slotDao,
+        timeZone,
+        now: () => fixedNow,
+        emailService: failingNotifier,
+      });
+
+      slotDao.findById.mockResolvedValue({ 
+        id: 101, status: 'available', start_time: '14:00', end_time: '16:00', date: '2026-08-14', meal: 'lunch' 
+      });
+      bookingDao.findConfirmedByHikerAndSlot.mockResolvedValue(null);
+      slotDao.getTablesWithFreeForSlot.mockResolvedValue([{ id: 1, label: 'T1', seats: 4, free: 4 }]);
+      bookingDao.create.mockResolvedValue(100);
+      bookingDao.findById.mockResolvedValue({
+        id: 100, status: 'confirmed', hiker_id: 10, slot_id: 101, slot_date: '2026-08-14',
+        slot_start_time: '14:00', slot_end_time: '16:00', meal: 'lunch', party_size: 2,
+        contact_name: 'Mario', email: 'm@example.com', phone: '123', created_at: '2026-08-14T07:05:00.000Z'
+      });
+      bookingDao.getSeatAssignments.mockResolvedValue([{ tableId: 1, tableLabel: 'T1', seats: 2 }]);
+
+      const result = await serviceWithEmail.createBooking(mockHiker, { slotId: 101, partySize: 2 });
+      expect(result.id).toBe(100);
+    });
+
   });
 
   describe('getBooking', () => {
@@ -202,7 +330,7 @@ describe('bookingService - Black-Box Tests', () => {
     it('should throw a NotFoundError if a hiker tries to access another hiker\'s booking', async () => {
       bookingDao.findById.mockResolvedValue({
         id: 100,
-        hiker_id: 99, // Different hiker ID
+        hiker_id: 99,
       });
 
       await expect(
@@ -210,11 +338,38 @@ describe('bookingService - Black-Box Tests', () => {
       ).rejects.toThrow(NotFoundError);
     });
 
+    it('should allow staff to read any booking regardless of hiker_id', async () => {
+      bookingDao.findById.mockResolvedValue({
+        id: 100,
+        status: 'confirmed',
+        hiker_id: 99,
+        created_by: 1,
+        slot_id: 101,
+        slot_date: '2026-08-14',
+        slot_start_time: '14:00',
+        slot_end_time: '16:00',
+        meal: 'lunch',
+        party_size: 2,
+        contact_name: 'Guest Guest',
+        email: 'guest@example.com',
+        phone: '987654321',
+        created_at: '2026-08-14T07:05:00.000Z',
+      });
+      bookingDao.getSeatAssignments.mockResolvedValue([
+        { tableId: 1, tableLabel: 'T1', seats: 2 }
+      ]);
+
+      const result = await bookingService.getBooking(100, mockStaff);
+
+      expect(result.id).toBe(100);
+      expect(result.hikerId).toBe(99);
+    });
+
     it('should successfully return booking details for the authorized hiker', async () => {
       bookingDao.findById.mockResolvedValue({
         id: 100,
         status: 'confirmed',
-        hiker_id: 10, // Matches mockHiker.id
+        hiker_id: 10,
         created_by: null,
         slot_id: 101,
         slot_date: '2026-08-14',
@@ -225,7 +380,7 @@ describe('bookingService - Black-Box Tests', () => {
         contact_name: 'Mario Rossi',
         email: 'mario.rossi@example.com',
         phone: '+393331234567',
-        created_at: '2026-08-14T07:05:00.000Data.000Z',
+        created_at: '2026-08-14T07:05:00.000Z',
       });
       bookingDao.getSeatAssignments.mockResolvedValue([
         { tableId: 1, tableLabel: 'T1', seats: 2 }
