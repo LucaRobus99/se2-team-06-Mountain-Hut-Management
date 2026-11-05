@@ -18,6 +18,8 @@
   "dependencies": {
     "express": "^5.2.1",
     "express-session": "^1.19.0",
+    "form-data": "^4.0.1",
+    "mailgun.js": "^11.1.0",
     "passport": "^0.7.0",
     "passport-local": "^1.0.0"
   },
