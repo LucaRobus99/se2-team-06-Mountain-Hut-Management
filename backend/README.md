@@ -1,51 +1,60 @@
-# Mountain Hut Management – Backend
+# Edelweiss Hut — Backend
 
-**Stack:** Node.js 22.13+, Express 5, native `node:sqlite`, Passport local authentication with `express-session`.
+**Stack:** Node.js >=22.13, Express 5, native `node:sqlite`, Passport Local and `express-session`, Mailgun (`mailgun.js`).
 
 ## Run locally
 
-```sh
-cd backend
+From `backend/`:
+
+```bash
 npm install
 npm run dev
 ```
 
-The backend listens on `http://localhost:8080`. The frontend Vite dev server proxies `/api` to port 8080.
-The initial database is created automatically from `scripts/01-schema.sql` and `02-seed.sql`.
+The API listens on `http://localhost:8080`. Both `npm run dev` and `npm start` read an optional local `.env` file via `--env-file-if-exists=.env`. **Copy `.env.example` to `.env` and add your Mailgun credentials** if you want confirmation emails. Never commit `.env` or an API key.
 
-If you already have **an old local SQLite database** from an earlier schema, back it up first and then run `npm run db:reset` while the server is stopped. This deletes the local SQLite database and recreates the example data at next startup. **Do not reset a database containing data you need to keep.** Newly added Hiker profile columns are migrated automatically for databases already using the current slot schema.
+The first startup creates an SQLite database from `scripts/01-schema.sql` and `scripts/02-seed.sql`. Existing current-schema Hiker records are migrated when necessary. For legacy schema errors, back up the DB before resetting.
 
-## Current endpoints
+**Destructive command:** `npm run db:reset` permanently removes `backend/database/database.sqlite` while the server is stopped. Do not run it against a database with important bookings.
 
-| Method | Path | Access | Purpose |
-|---|---|---|---|
-| `GET` | `/api/health` | Public | Health check |
-| `POST` | `/api/auth/register` | Public | Create a Hiker account and sign in |
-| `POST` | `/api/auth/login` | Public | Sign in |
-| `GET` | `/api/auth/me` | Authenticated | Current user |
-| `POST` | `/api/auth/logout` | Authenticated | Sign out |
-| `GET` | `/api/availability` | Public | Available slots for date, meal, partySize (MH-04) |
-| `GET` | `/api/availability/:slotId/seating` | Public | Seat preview (MH-01) |
-| `POST` | `/api/bookings` | Authenticated | Create booking (MH-01) |
-| `GET` | `/api/bookings/:bookingId` | Authenticated | Read booking |
-| `GET`, `POST` | `/api/slots` | Staff as applicable | Work in progress for MH-02 |
+## API routes
 
-Registration fields: `name`, `email`, `phone`, `password` are required; `notes` and `emergencyContact` are optional. Only the `hiker` role can self-register. Passwords are stored as salted `scrypt` hashes, never returned to clients. Successful registration returns `201 { "user": ... }` and a session cookie (`sid`). Existing staff accounts remain seeded.
+| Method | Route | Access | Purpose |
+| --- | --- | --- | --- |
+| GET | `/api/health` | Public | Health check |
+| POST | `/api/auth/register` | Public | Register a Hiker, automatically sign in |
+| POST | `/api/auth/login` | Public | Sign in |
+| GET | `/api/auth/me` | Authenticated | Current user |
+| POST | `/api/auth/logout` | Authenticated | Sign out |
+| GET | `/api/availability` | Public | Slots with seats for date, meal, party size |
+| GET | `/api/availability/:slotId/seating` | Public | Table-level proposed seating |
+| POST | `/api/bookings` | Authenticated | Create booking (regular UI: Hiker) |
+| GET | `/api/bookings/:bookingId` | Owner or staff | Read a booking |
+| GET | `/api/slots` | Employee/Warden | List slots, optionally filtered by date/meal |
+| GET | `/api/slots/:slotId` | Employee/Warden | Slot detail |
+| POST | `/api/slots` | Employee/Warden | Create flexible-time slot and table layout |
 
-The current app manages **one hut**; slot capacities come from `slot_tables` and booking assignments from `booking_seats`. Slots without assigned tables offer zero seats. Error responses are JSON of the form `{ "error": { "code": "...", "message": "...", "details": [...] } }`.
+The application serves one hut. Slot creation uses `startTime` and `endTime`, not a requested `durationMinutes`; routes containing `/api/huts/:hutId/slots` are not part of the current API.
 
-## Testing
+## Email confirmation (MH-03)
 
-```sh
-npm test
-# Dependency-light focused tests for SQL, registration, MH-01 and MH-04:
-node --disable-warning=ExperimentalWarning --test test/registration.booking.node.test.mjs
+Once a booking is saved, the service attempts to send the confirmation through Mailgun using the saved booking details. The **POST** response also contains:
+
+```json
+"confirmationEmail": { "status": "sent" }
 ```
 
-For Vitest on another operating system, run `npm install` locally to install its platform-specific native dependencies (do not copy `node_modules` from Windows to Linux or vice versa).
+Statuses: `sent` means Mailgun accepted the request, `failed` means submission failed, and `skipped` means email was not configured or no recipient was available. **The booking stays confirmed in all cases.** `GET /api/bookings/:bookingId` does not include this property because the notification result is not persisted.
 
-## Notes
+Configure `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_FROM` (optional) and `MAILGUN_TEMPLATE` in `backend/.env`. In the Mailgun dashboard, create or update an email template whose name matches `MAILGUN_TEMPLATE` (for example, `booking confirmation`). If using a sandbox domain, authorize the recipient address before sending a confirmation. The email template is managed in Mailgun; no local `docs/` directory is required to run the application.
 
-- The SQLite wrapper binds `$1`, `$2`, ... as **named parameters**, including when one is repeated in a query, to avoid the Node 22 `column index out of range` error.
-- Local development uses session storage in memory: sessions end when the server restarts. In production set `SESSION_SECRET` in the environment and use a persistent session store if running multiple instances.
-- Follow the official Mountain Hut user stories and recorded Product Owner clarifications for business rules.
+## Session and database notes
+
+- Session cookie `sid` is HttpOnly/SameSite=Lax; production cookies are Secure. Development sessions are stored in process memory (lost on restart); use a persistent session store for a multi-instance deployment.
+- Booking and seat allocation are performed inside a serialized SQLite transaction; availability and seating previews do not reserve seats.
+- Slotted table capacity can vary across meal/date/time. Slot overlap is currently prohibited, **pending the answer to the Product Owner's issue #31**.
+- The backend assumes `HUT_TIMEZONE` (default `Europe/Rome`) for slot dates and booking cutoffs.
+
+## Testing (not changed by this patch)
+
+The repository already includes existing test suites. This patch does not modify or claim to validate them. Later, follow the course's Definition of Done and use the current suites when the team is ready.

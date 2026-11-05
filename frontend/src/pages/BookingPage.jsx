@@ -47,6 +47,8 @@ export default function BookingPage() {
   const shownMeal = booking?.slot.meal || draft?.meal;
   const shownGuests = booking?.partySize || Number(draft?.partySize);
   const groupIsSplit = booking ? booking.split : seating?.fit === 'split';
+  const confirmationEmailStatus = booking?.confirmationEmail?.status;
+  const confirmationAddress = booking?.email || user?.email;
   const mealLabel = shownMeal === 'aperitivo'
     ? 'Happy hour'
     : shownMeal ? `${shownMeal[0].toUpperCase()}${shownMeal.slice(1)}` : '';
@@ -160,6 +162,27 @@ export default function BookingPage() {
             <div><dt>Guests</dt><dd>{shownGuests} {shownGuests === 1 ? 'person' : 'people'}</dd></div>
             <div className="eh-booking-seating-detail"><dt>Seating</dt><dd>{groupIsSplit ? 'Across multiple tables' : 'Together at one table'}</dd></div>
           </dl>
+
+          {booking && (
+            <div className={`eh-booking-email-notice eh-booking-email-notice--${confirmationEmailStatus || 'unknown'}`} role="status">
+              <strong>
+                {confirmationEmailStatus === 'sent' ? 'Confirmation email sent' :
+                  confirmationEmailStatus === 'failed' ? 'Email could not be sent' :
+                  confirmationEmailStatus === 'skipped' ? 'Email confirmation unavailable' :
+                  'Booking saved'}
+              </strong>
+              <p>
+                {confirmationEmailStatus === 'sent' ? (
+                  <>We sent your booking details to {confirmationAddress ? <b>{confirmationAddress}</b> : 'your registered email address'}. Please check your inbox (and spam folder).</>
+                ) : confirmationEmailStatus === 'failed' ? (
+                  'Your reservation is confirmed, but the email could not be sent. Please save the booking reference shown below.'
+                ) : (
+                  'Your reservation is confirmed. We cannot confirm that an email was sent, so please keep the booking reference shown below.'
+                )}
+              </p>
+              <p className="eh-booking-email-reference">Booking reference: <b>#{booking.id}</b></p>
+            </div>
+          )}
 
           {error && <Alert variant="danger" role="alert" className="eh-booking-error">{error}</Alert>}
 

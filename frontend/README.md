@@ -1,17 +1,10 @@
-# Mountain Hut Management — Frontend skeleton (MHM-16)
+# Edelweiss Hut — Frontend
 
-React + Vite (JavaScript/JSX), React Router, Bootstrap and React-Bootstrap.
+**Stack:** React 19, Vite, React Router 7, Bootstrap/React-Bootstrap.
 
-This directory is meant to live **beside `backend/`** in the existing team repository.
-No existing backend files need to be replaced.
+The frontend is functional for the Sprint 1 stories (MH-01 to MH-04). This is **not** the former MHM-16 placeholder skeleton: login, registration, public availability, booking confirmation and staff slot management are implemented.
 
-## Requirements
-
-Node.js 22.13+ (the backend requires the same minimum version) and npm.
-
-## Start the frontend
-
-From the team repository:
+## Run
 
 ```bash
 cd frontend
@@ -19,55 +12,30 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173/. For production build: `npm run build`.
+Open `http://localhost:5173`. In another terminal, run `cd backend && npm run dev` from the repository root. Vite proxies `/api` to `http://localhost:8080`.
 
-To run the existing backend, in a **second terminal**:
+## Routes and pages
 
-```bash
-cd backend
-npm install
-npm run dev
-```
+| Route | Page | Access |
+| --- | --- | --- |
+| `/` | General hut homepage | Public |
+| `/find-us` | Location / how to get there | Public |
+| `/menu` | Menu page | Public |
+| `/availability` | Check availability (redirects logged-in Hikers to `/book`) | Public |
+| `/register` | Register a Hiker | Public |
+| `/login` | Log in | Public |
+| `/book` | Search available slots; review and confirm a booking after selection | Hiker |
+| `/staff` | Staff dashboard | Employee/Warden |
+| `/staff/slots` | Create/list slots and table capacity | Employee/Warden |
+| `/staff/reservations` | Not yet implemented | Employee/Warden |
 
-The backend listens on http://localhost:8080. Vite proxies `/api/*` to that
-backend, so future frontend requests can use paths such as `fetch('/api/health')`.
-There is **no login/session implementation yet** and the story-specific
-endpoints are **not implemented** in the uploaded backend.
+The booking review UI is `src/pages/BookingPage.jsx`. After `POST /api/bookings`, it shows the booking reference and **only claims that the email was sent if the backend returned `confirmationEmail.status === 'sent'`**. On `failed`/`skipped`, the booking still succeeds and the user is asked to keep the reference. The visual styles live in `src/styles/edelweiss-pages.css`.
 
-## Pages and responsibilities
+`src/api/booking.js`, `src/api/slots.js` and `src/api/auth.js` hold the API clients. `src/auth/AuthContext.jsx` owns session state; protected routes guard the UI, and the backend independently enforces permissions.
 
-| Route | Page | Owner / task |
-|---|---|---|
-| `/` | Home | Skeleton page; hut-specific location/details TBD |
-| `/availability` | Availability | Gaia, MHM-4 — public (placeholder) |
-| `/book` | Booking | Gaia, MHM-1 — hiker (placeholder) |
-| `/staff/slots` | Slot configuration | Gaia, MHM-2 — employee (placeholder) |
-| `/login` | Login | Gaia, separate horizontal task (placeholder) |
-| `*` | Not found | Generic fallback page |
+## Current scope limits
 
-In `src/main.jsx`, `BrowserRouter` wraps the application.
-`src/App.jsx` declares its routes. `src/layouts/MainLayout.jsx` uses `Outlet`
-for shared navigation and footer. `src/components/` holds reusable UI elements;
-`src/pages/` contains individual page components. `src/api/` is kept for
-future Fetch API helpers **after Luca and the team finish the API contract**.
-
-## Important scope boundaries
-
-- **MHM-16 is only the skeleton and routing.** The booking/availability/slot
-  forms and the login page are future tasks, so their pages display honest
-  placeholders instead of fake working functionality.
-- `/book` and `/staff/slots` are **not guarded yet**. The team should add
-  authentication/authorization and route guards during the separate tasks.
-  The Express backend must independently enforce roles and permissions.
-- Do not hard-code private credentials, invent hut location/details, or
-  commit `node_modules/` or `.env` files.
-- The backend schema already contains tables for the first stories; frontend
-  work must not duplicate database logic.
-
-## Suggested next task order
-
-1. Agree on the API endpoints and data formats (MHM-20).
-2. Implement login and session management in its separate task.
-3. Replace placeholders one at a time with React forms, using Fetch API.
-4. Keep error handling consistent with the backend's JSON error shape:
-   `type`, `title`, `status`, `detail`.
+- The public availability search uses `date + meal + partySize` and then lists eligible time slots; a separate exact-time search is not exposed.
+- Hiker-supplied dietary/party requirements (MH-05) are not yet implemented, so no such details appear in outgoing emails.
+- Do not expose Mailgun keys in frontend code; configuration belongs exclusively to the backend.
+- Existing Cypress and other automated tests are intentionally **not updated by this patch**; their current status must be checked separately before the Definition of Done.

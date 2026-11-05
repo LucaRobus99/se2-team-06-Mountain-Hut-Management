@@ -21,11 +21,9 @@ export const config = {
   sessionSecret: process.env.SESSION_SECRET ?? 'mountain-hut-dev-secret',
 
   /** Mailgun settings used to send booking confirmation emails. */
-  mailgunApiKey: process.env.API_KEY ?? process.env.MAILGUN_API_KEY ?? null,
-  mailgunDomain: process.env.MAILGUN_DOMAIN ?? 'sandboxf071e817c7b74f16a313d07310d9f3bc.mailgun.org',
-  mailgunFrom:
-    process.env.MAILGUN_FROM ??
-    'Mailgun Sandbox <postmaster@sandboxf071e817c7b74f16a313d07310d9f3bc.mailgun.org>',
+  mailgunApiKey: process.env.MAILGUN_API_KEY || process.env.API_KEY || null,
+  mailgunDomain: process.env.MAILGUN_DOMAIN || null,
+  mailgunFrom: process.env.MAILGUN_FROM || null,
   mailgunTemplate: process.env.MAILGUN_TEMPLATE ?? 'booking confirmation',
   mailgunUrl: process.env.MAILGUN_URL ?? null,
 

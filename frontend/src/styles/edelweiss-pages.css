@@ -664,6 +664,27 @@
   border-color: #dae6d8;
   background: #eaf1e8;
 }
+/* Email status is shown only after the booking POST has completed. */
+.eh-booking-email-notice {
+  margin-top: 1.1rem;
+  padding: .9rem 1rem;
+  background: #eef5eb;
+  border: 1px solid #c9ddc8;
+  border-radius: .7rem;
+  color: #2b5037;
+  font: 400 .92rem/1.48 Georgia, serif;
+  overflow-wrap: anywhere;
+}
+.eh-booking-email-notice--failed,
+.eh-booking-email-notice--skipped,
+.eh-booking-email-notice--unknown {
+  background: #fff8e8;
+  border-color: #ead8ab;
+  color: #695326;
+}
+.eh-booking-email-notice strong { display: block; margin-bottom: .25rem; }
+.eh-booking-email-notice p { margin: 0 0 .45rem; }
+.eh-booking-email-notice .eh-booking-email-reference { margin: .5rem 0 0; }
 .eh-booking-error { margin: 1.15rem 0 0; }
 .eh-booking-actions {
   display: flex;
