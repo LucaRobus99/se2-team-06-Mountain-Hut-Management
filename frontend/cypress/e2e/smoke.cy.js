@@ -12,15 +12,15 @@ describe('Mountain Hut - Basic Navigation & Smoke Tests', () => {
     // 1. Start from the availability page
     cy.visit('http://localhost:5173/availability');
 
-    // 2. Click on the login link using its specific class or text
-    cy.get('.eh-login-link').click();
+    // 2. Click on the login link using its specific href attribute (selecting the first one if duplicated)
+    cy.get('a[href="/login"]').first().click();
 
     // 3. Verify successful redirection to the login page
     cy.url().should('include', '/login');
     cy.get('form').should('be.visible');
 
-    // 4. Click on the Availability link in the navbar to return back
-    cy.contains('nav a', /availability/i).click();
+    // 4. Click on the Availability link in the navbar to return back (selecting the first one)
+    cy.get('a[href="/availability"]').first().click();
     cy.url().should('include', '/availability');
   });
 

@@ -82,4 +82,37 @@ describe('BookingRoutes - Integration Tests', () => {
 
   });
 
+  describe('Edge cases and error handling', () => {
+
+    it('should return 400 or error status when trying to create a booking with invalid payload/slot', async () => {
+      // Login first as a hiker
+      await agent
+        .post('/api/auth/login')
+        .send({ email: 'hiker@hut.test', password: 'password' });
+
+      // Send invalid booking payload (e.g. non-existent slot or missing partySize)
+      const response = await agent
+        .post('/api/bookings')
+        .send({ slotId: 9999, partySize: -5 });
+
+      // Expecting a client error status (400, 404, or 422 depending on business validation)
+      expect([400, 404, 422, 409]).toContain(response.status);
+      expect(response.body).toHaveProperty('error');
+    });
+
+    it('should return 404 when fetching a non-existent booking ID', async () => {
+      // Login first
+      await agent
+        .post('/api/auth/login')
+        .send({ email: 'hiker@hut.test', password: 'password' });
+
+      const response = await agent
+        .get('/api/bookings/999999');
+
+      expect(response.status).toBe(404);
+      expect(response.body).toHaveProperty('error');
+    });
+
+  });
+
 });
