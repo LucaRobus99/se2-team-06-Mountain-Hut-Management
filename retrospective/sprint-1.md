@@ -31,7 +31,7 @@
 |:---|:---:|:---:|
 | Federico Morello | 0h 59m | 0h 33m |
 | Gaia Martignone | 1h 17m | 0h 47m |
-| Jenisse | 1h 02m | 0h 37m |
+| Jenisse Vereau | 1h 02m | 0h 37m |
 | Luca Robustelli | 1h 23m | 0h 46m |
 
 ## 1.4 Total Task Estimation Error Ratio
