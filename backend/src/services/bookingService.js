@@ -192,7 +192,10 @@ export function createBookingService({ db, bookingDao, slotDao, timeZone, now = 
         throw new AppError(500, 'Internal Server Error', 'An unexpected error occurred.', 'INTERNAL_ERROR');
       }
 
-      // Send the booking confirmation email (best-effort: never fail the booking).
+      // Best-effort notification: the booking stays confirmed even if Mailgun fails.
+      // Return the provider submission outcome on this POST response only; do not
+      // claim that an email was sent when credentials are missing or sending fails.
+      let confirmationEmail = { status: 'skipped' };
       if (notifier) {
         const sender =
           typeof notifier === 'function'
@@ -215,16 +218,20 @@ export function createBookingService({ db, bookingDao, slotDao, timeZone, now = 
             split: result.assignments.length > 1,
             booking_id: booking.id,
           };
-          const recipient = booking.email ?? user.email ?? null;
+          // Staff may create a reservation without a guest email. Never send that
+          // guest's confirmation to the employee's own account by accident.
+          const recipient = booking.email ?? (staff ? null : user.email ?? null);
           try {
-            await sender.call(notifier, recipient, fields);
+            const delivery = await sender.call(notifier, recipient, fields);
+            confirmationEmail = { status: delivery?.skipped ? 'skipped' : 'sent' };
           } catch (err) {
+            confirmationEmail = { status: 'failed' };
             console.error('Failed to send booking confirmation email:', err);
           }
         }
       }
 
-      return toBookingResponse(result.booking, result.assignments);
+      return { ...toBookingResponse(result.booking, result.assignments), confirmationEmail };
     },
 
     async getBooking(bookingIdRaw, user) {

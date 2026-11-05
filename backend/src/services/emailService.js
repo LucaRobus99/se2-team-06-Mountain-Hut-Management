@@ -51,6 +51,8 @@ export function createEmailService({
         guests: data.guests ?? null,
         split: data.split ?? null,
         booking_id: data.booking_id ?? null,
+        // MH-05 is not implemented yet. The template hides this field when absent.
+        party_requirements: data.party_requirements ?? null,
       };
 
       const senderName = (typeof data.name === 'string' && data.name.trim()) || 'Guest';
