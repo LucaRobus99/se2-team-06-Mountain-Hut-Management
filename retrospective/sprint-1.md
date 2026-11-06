@@ -72,8 +72,8 @@ $$\frac{Total Hours Estimated}{Total Hours Spent} - 1 =\frac{\sum_i estimation_{
 |:---|---:|
 | Total Hours Estimated | 3h 30m |
 | Total Hours Spent | 4h 35m |
-| Automated Unit Test Cases | 237 |
-| Code Coverage | 72.1% |
+| Automated Unit Test Cases | 357 |
+| Code Coverage (all tests) | 89.6% |
 
 ## 2.2 Integration Testing
 
