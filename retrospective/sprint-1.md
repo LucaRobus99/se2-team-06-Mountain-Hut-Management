@@ -21,11 +21,15 @@
 | Story #2 | 7 | 5 | 8h 15m | 7h 55m |
 | Story #3 | 6 | 8 | 4h 30m | 4h 50m |
 | Story #4 | 7 | 5 | 8h 30m | 8h 00m |
+| TOTAL:   | 41| 31| 64h 00m | 66h 15m |
 
 
 *Note: Story #0 includes technical tasks not directly associated with any user story. Story points are therefore not applicable.*
 
+
 ## 1.3 Hours per Task per Person
+
+### 1.3.1 Actual Hours per Task per Person
 
 | Team Member | Average (hours/task) | Standard Deviation |
 |:---|:---:|:---:|
@@ -34,17 +38,29 @@
 | Jenisse Vereau | 1h 02m | 0h 37m |
 | Luca Robustelli | 1h 23m | 0h 46m |
 
+### 1.3.2 Estimated Hours per Task per Person
+
+| Team Member | Average (hours/task) | Standard Deviation |
+|:---|:---:|:---:|
+| Federico Morello | 1h 02m | 0h 20m |
+| Gaia Martignone | 1h 12m | 0h 36m |
+| Jenisse Vereau | 0h 57m | 0h 28m |
+| Luca Robustelli | 1h 19m | 0h 36m |
+
+*Note: For shared tasks, estimated hours were divided equally among the team members involved.*
+
 ## 1.4 Total Task Estimation Error Ratio
 
-The estimation error ratio is calculated using the following formula:
-
-`(Total Hours Estimated / Total Hours Spent) - 1`
 
 | Metric | Value |
 |:---|---:|
 | Total Hours Estimated | 64h 00m |
 | Total Hours Spent | 66h 15m |
-| **Estimation Error Ratio** | **−0.03 (−3.40%)** |
+| **Estimation Error Ratio** | **−0.03 (−3.25%)** |
+
+The estimation error ratio is calculated using the following formula:
+
+$$\frac{Total Hours Estimated}{Total Hours Spent} - 1 =\frac{\sum_i estimation_{task_i}}{\sum_i spent_{task_i}} - 1 = \frac{64.00}{66.15} - 1 \approx 0.0325 = 3.25\% $$
 
 ---
 
