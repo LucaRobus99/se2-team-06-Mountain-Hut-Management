@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Spinner } from 'react-bootstrap';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { getPendingBooking } from '../utils/pendingBooking.js';
 import EdelweissBrand from '../components/EdelweissBrand.jsx';
 import interiorBackground from '../assets/edelweiss-login-interior.png';
 
@@ -15,11 +16,18 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, loadingAuth, signIn } = useAuth();
+  // Preserve the same booking whether the hiker logs in directly, follows
+  // the Create account link, or refreshes during authentication.
+  const [storedDraft] = useState(() => getPendingBooking());
+  const bookingDraft = location.state?.bookingDraft || storedDraft;
   const destination = (user?.role === 'employee' || user?.role === 'warden')
     ? '/staff'
-    : (location.state?.from === '/book' ? '/book' : '/');
-  const bookingDraft = location.state?.bookingDraft;
-  const loginNotice = location.state?.notice;
+    : (bookingDraft ? '/book' : (location.state?.from === '/book' ? '/availability' : '/'));
+  // The booking flow goes directly from Availability to Login, without
+  // passing through ProtectedRoute. Show the same notice for both entry paths.
+  const loginNotice = (location.state?.from === '/book' || location.state?.bookingDraft)
+    ? 'To book a table, please log in or create an account. Your selection will be kept.'
+    : location.state?.notice;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -56,7 +64,13 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      await signIn({ email: email.trim(), password });
+      const signedInUser = await signIn({ email: email.trim(), password });
+      const next = (signedInUser?.role === 'employee' || signedInUser?.role === 'warden')
+        ? '/staff' : destination;
+      navigate(next, {
+        replace: true,
+        state: next === '/book' ? { bookingDraft } : null,
+      });
     } catch (err) {
       // Intentionally do not disclose whether the email or the password
       // is wrong: revealing which account exists would leak information.
@@ -80,7 +94,7 @@ export default function LoginPage() {
       <div className="eh-login-card">
         <div className="eh-login-brand"><EdelweissBrand /></div>
         <h1>Welcome back.</h1>
-        {loginNotice && !user && <Alert variant="info" className="eh-login-alert">{loginNotice}</Alert>}
+        {loginNotice && !user && <Alert variant="success" role="status" className="eh-login-alert">{loginNotice}</Alert>}
         {generalError && <Alert variant="danger" role="alert" className="eh-login-alert">{generalError}</Alert>}
         <form onSubmit={handleSubmit} className="eh-login-form" noValidate>
           <label htmlFor="login-email"><FieldIcon type="mail" />Email</label>
@@ -96,7 +110,7 @@ export default function LoginPage() {
             {loading || loadingAuth ? <><Spinner animation="border" size="sm" /> Signing in...</> : 'Log in'}
           </button>
         </form>
-        <p className="eh-login-note">New to the hut?{' '}<Link to="/register" state={location.state}>Create an account</Link></p>
+        <p className="eh-login-note">New to the hut?{' '}<Link to="/register" state={{ ...location.state, from: bookingDraft ? '/book' : location.state?.from, bookingDraft }}>Create an account</Link></p>
       </div>
     </section>
   );

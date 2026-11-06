@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Spinner } from 'react-bootstrap';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { getPendingBooking } from '../utils/pendingBooking.js';
 import EdelweissBrand from '../components/EdelweissBrand.jsx';
 import interiorBackground from '../assets/edelweiss-login-interior.png';
 
@@ -49,8 +50,9 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, loadingAuth, signUp } = useAuth();
-  const destination = location.state?.from === '/book' ? '/book' : '/';
-  const bookingDraft = location.state?.bookingDraft;
+  const [storedDraft] = useState(() => getPendingBooking());
+  const bookingDraft = location.state?.bookingDraft || storedDraft;
+  const destination = bookingDraft ? '/book' : (location.state?.from === '/book' ? '/availability' : '/');
   const [form, setForm] = useState(EMPTY_FORM);
   const [touched, setTouched] = useState({});
   const [serverErrors, setServerErrors] = useState({});
@@ -110,6 +112,12 @@ export default function RegisterPage() {
         name: form.name.trim(), email: form.email.trim(), phone: form.phone.trim(),
         password: form.password, notes: form.notes.trim(),
         emergencyContact: form.emergencyContact.trim(),
+      });
+      // Sign-up also authenticates the user. Navigate immediately rather than
+      // relying solely on a later AuthContext re-render.
+      navigate(destination, {
+        replace: true,
+        state: destination === '/book' ? { bookingDraft } : null,
       });
     } catch (err) {
       if (err.code === 'EMAIL_ALREADY_REGISTERED') {
@@ -188,7 +196,7 @@ export default function RegisterPage() {
             {disabled ? <><Spinner animation="border" size="sm" /> Creating account...</> : 'Create account'}
           </button>
         </form>
-        <p className="eh-login-note">Already registered?{' '}<Link to="/login" state={location.state}>Log in</Link></p>
+        <p className="eh-login-note">Already registered?{' '}<Link to="/login" state={{ ...location.state, from: bookingDraft ? '/book' : location.state?.from, bookingDraft }}>Log in</Link></p>
       </div>
     </section>
   );

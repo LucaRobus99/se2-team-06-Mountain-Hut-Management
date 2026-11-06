@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { Alert, Modal } from 'react-bootstrap';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { getPendingBooking, clearPendingBooking } from '../utils/pendingBooking.js';
 import SplitSeatingModal from '../components/SplitSeatingModal.jsx';
 import bookingBackground from '../assets/edelweiss-booking-background.jpg';
 import EdelweissBrand from '../components/EdelweissBrand.jsx';
@@ -27,7 +28,8 @@ export default function BookingPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, loadingAuth, refreshUser } = useAuth();
-  const draft = location.state?.bookingDraft;
+  const [storedDraft] = useState(() => getPendingBooking());
+  const draft = location.state?.bookingDraft || storedDraft;
   const [seating, setSeating] = useState(draft?.seating || null);
   const [splitAcknowledged, setSplitAcknowledged] = useState(Boolean(draft?.seating?.requiresConfirmation));
   const [pendingSplit, setPendingSplit] = useState(null);
@@ -89,6 +91,7 @@ export default function BookingPage() {
         slotId: draft.selectedSlotId, partySize: Number(draft.partySize),
       });
       setBooking(confirmed);
+      clearPendingBooking();
       setPendingSplit(null);
     } catch (err) {
       handleBookingError(err);

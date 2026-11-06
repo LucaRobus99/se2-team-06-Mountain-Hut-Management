@@ -14,6 +14,7 @@ import AboutPage from './pages/AboutPage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import { useAuth } from './auth/AuthContext.jsx';
+import { getPendingBooking } from './utils/pendingBooking.js';
 
 const isStaff = (user) => user?.role === 'employee' || user?.role === 'warden';
 
@@ -34,7 +35,7 @@ function AvailabilityEntry() {
 
 function BookingEntry() {
   const location = useLocation();
-  return location.state?.bookingDraft ? <BookingPage /> : <AvailabilityPage />;
+  return (location.state?.bookingDraft || getPendingBooking()) ? <BookingPage /> : <AvailabilityPage />;
 }
 
 export default function App() {

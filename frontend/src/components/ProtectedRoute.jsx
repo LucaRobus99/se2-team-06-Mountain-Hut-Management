@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { getPendingBooking } from '../utils/pendingBooking.js';
 
 const STAFF_ROLES = ['employee', 'warden'];
 
@@ -11,7 +12,7 @@ export default function ProtectedRoute({ staffOnly = false, hikerOnly = false })
   if (!user) {
     return <Navigate to="/login" replace state={{
       from: location.pathname,
-      bookingDraft: location.state?.bookingDraft,
+      bookingDraft: location.state?.bookingDraft || (location.pathname === '/book' ? getPendingBooking() : null),
       notice: location.pathname === '/book' ? 'Please log in to complete your booking.' : undefined,
     }} />;
   }

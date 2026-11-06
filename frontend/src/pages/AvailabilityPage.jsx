@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert } from 'react-bootstrap';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { savePendingBooking } from '../utils/pendingBooking.js';
 import { getAvailableSlots, getSlotSeating } from '../api/booking.js';
 import { AlpineDatePicker, AlpineMealSelect, MEAL_OPTIONS } from '../components/AlpineBookingFields.jsx';
 import AvailabilitySlotCard from '../components/AvailabilitySlotCard.jsx';
@@ -98,8 +99,9 @@ export default function AvailabilityPage() {
   function handleContinue() {
     if (!result || selectedSlotId === null || !seating) return;
     const bookingDraft = { date, meal, partySize, result, selectedSlotId, seating };
+    savePendingBooking(bookingDraft);
     if (user?.role === 'hiker') navigate('/book', { state: { bookingDraft } });
-    else navigate('/login', { state: { from: '/book', bookingDraft } });
+    else navigate('/login', { state: { from: '/book', bookingDraft, notice: 'To book a table, please log in or create an account. Your selection will be kept.' } });
   }
 
   const selectedSlot = result?.slots?.find(slot => slot.id === selectedSlotId);

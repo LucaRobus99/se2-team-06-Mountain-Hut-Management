@@ -132,6 +132,6 @@ Finally, we aim to follow the ideal Burndown more closely, particularly in the I
 
 ## 3.6 One thing you are proud of as a Team!
 
-We are proud of our ability to work together and successfully complete all the stories we committed to, while staying within our estimated working hours. Despite personal difficulties, limited availability and occasional communication and organizational challenges, we managed to maintain a collaborative and supportive environment.
+We are proud of our ability to work together and successfully complete all the stories we committed to, while staying nearly our estimated working hours. Despite personal difficulties, limited availability and occasional communication and organizational challenges, we managed to maintain a collaborative and supportive environment.
 
 We also demonstrated flexibility, good organization and the ability to manage stress constructively, turning potential difficulties into opportunities to improve our teamwork and achieve our common goals.

@@ -1,35 +1,56 @@
 import { defineConfig } from "cypress";
 import { DatabaseSync } from "node:sqlite";
-import path from "path";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+// Percorso assoluto calcolato a partire da questo file (non dalla directory
+// dalla quale si lancia Cypress).
+const configDirectory = path.dirname(fileURLToPath(import.meta.url));
+const dbPath = path.resolve(configDirectory, "../backend/database/database.sqlite");
 
 export default defineConfig({
   e2e: {
     setupNodeEvents(on, config) {
-      on('task', {
+      on("task", {
         resetDb() {
+          let db;
+
           try {
-            // Sale di un livello (fuori da frontend) ed entra in backend/database/database.sqlite
-            const dbPath = path.resolve('../backend/database/database.sqlite');
-            console.log("Tentativo di apertura DB in:", dbPath);
-            
-            const db = new DatabaseSync(dbPath);
-            
-            // Pulizia delle prenotazioni e relativi posti
-            db.exec('DELETE FROM booking_seats;');
-            db.exec('DELETE FROM bookings;');
-            
-            // Pulizia delle tabelle relative agli slot (prima le dipendenze, poi gli slot)
-            db.exec('DELETE FROM slot_tables;');
-            db.exec('DELETE FROM slots;');
-            
-            db.close();
-            console.log("Database pulito con successo!");
+            // Evita che SQLite crei silenziosamente un database vuoto
+            // se il percorso è sbagliato o il backend non è stato inizializzato.
+            if (!existsSync(dbPath)) {
+              throw new Error(`Database non trovato: ${dbPath}`);
+            }
+
+            db = new DatabaseSync(dbPath);
+            db.exec("PRAGMA foreign_keys = ON;");
+
+            // Pulizia atomica: rimuove SOLO le prenotazioni create dai test.
+            // Gli slot e i relativi tavoli del seed devono rimanere disponibili
+            // per i successivi test di prenotazione e disponibilità.
+            db.exec("BEGIN IMMEDIATE;");
+            try {
+              db.exec("DELETE FROM booking_seats;");
+              db.exec("DELETE FROM bookings;");
+              db.exec("COMMIT;");
+            } catch (error) {
+              db.exec("ROLLBACK;");
+              throw error;
+            }
+
+            console.log("Prenotazioni di test eliminate; slot e tavoli preservati.");
+            return null;
           } catch (error) {
-            console.error("Errore critico sul DB:", error);
+            // Cypress deve fallire se il reset non è riuscito.
+            console.error("Errore critico nel reset del database:", error);
+            throw error;
+          } finally {
+            db?.close();
           }
-          return null;
         },
       });
+
       return config;
     },
   },
