@@ -224,6 +224,7 @@ describe('bookingService - Black-Box Tests', () => {
           { tableId: 1, tableLabel: 'T1', seats: 2 }
         ],
         createdAt: '2026-08-14T07:05:00.000Z',
+        confirmationEmail: { status: 'skipped' },
       });
       expect(bookingDao.insertSeats).toHaveBeenCalled();
     });
