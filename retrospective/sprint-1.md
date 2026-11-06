@@ -56,11 +56,11 @@
 |:---|---:|
 | Total Hours Estimated | 64h 00m |
 | Total Hours Spent | 66h 15m |
-| **Estimation Error Ratio** | **−0.03 (−3.25%)** |
+| **Estimation Error Ratio** | **−0.034 (−3.40%)** |
 
 The estimation error ratio is calculated using the following formula:
 
-$$\frac{Total Hours Estimated}{Total Hours Spent} - 1 =\frac{\sum_i estimation_{task_i}}{\sum_i spent_{task_i}} - 1 = \frac{64.00}{66.15} - 1 \approx 0.0325 = 3.25\% $$
+$$\frac{Total\ Hours\ Estimated}{Total\ Hours\ Spent} - 1 = \frac{\sum_i estimation_{task_i}}{\sum_i spent_{task_i}} - 1 \approx -0.03396 = -3.40\%$$
 
 ---
 
