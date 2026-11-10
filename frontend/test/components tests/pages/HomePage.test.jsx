@@ -113,4 +113,12 @@ describe('HomePage Component Tests', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
+  it('starts a new search instead of reopening an old booking for authenticated hikers', async () => {
+    useAuth.mockReturnValue({ user: { id: 1, role: 'hiker' }, loadingAuth: false });
+    const user = userEvent.setup();
+    render(<MemoryRouter><HomePage /></MemoryRouter>);
+    await user.click(screen.getByRole('button', { name: /search/i }));
+    expect(mockNavigate).toHaveBeenCalledWith(expect.stringMatching(/^\/availability\?date=/));
+  });
+
 });

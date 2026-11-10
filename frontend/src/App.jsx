@@ -26,13 +26,9 @@ function VisitorLayout() {
   return <MainLayout />;
 }
 
-function AvailabilityEntry() {
-  const { user } = useAuth();
-  const location = useLocation();
-  if (user?.role === 'hiker') return <Navigate to={`/book${location.search}`} replace />;
-  return <AvailabilityPage />;
-}
-
+// Availability is the single search page for visitors AND authenticated hikers.
+// Never redirect an authenticated hiker to /book here: /book may still contain
+// a saved draft and would trap Back / Choose another time in a navigation loop.
 function BookingEntry() {
   const location = useLocation();
   return (location.state?.bookingDraft || getPendingBooking()) ? <BookingPage /> : <AvailabilityPage />;
@@ -44,9 +40,10 @@ export default function App() {
       <Route element={<VisitorLayout />}>
         <Route index element={<HomePage />} />
         <Route path="menu" element={<MenuPage />} />
-        <Route path="availability" element={<AvailabilityEntry />} />
+        <Route path="availability" element={<AvailabilityPage />} />
         <Route element={<ProtectedRoute hikerOnly />}>
           <Route path="book" element={<BookingEntry />} />
+          <Route path="book/confirmation/:bookingId" element={<BookingPage />} />
         </Route>
         <Route path="find-us" element={<AboutPage />} />
         <Route path="about" element={<Navigate to="/find-us" replace />} />

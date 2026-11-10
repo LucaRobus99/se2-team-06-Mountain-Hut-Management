@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import BookingPage from '../../../src/pages/BookingPage.jsx';
 import { useAuth } from '../../../src/auth/AuthContext.jsx';
-import { createBooking, getSlotSeating } from '../../../src/api/booking.js';
+import { createBooking, getBooking, getSlotSeating } from '../../../src/api/booking.js';
+import { getPendingBooking, savePendingBooking } from '../../../src/utils/pendingBooking.js';
 
 // Mock AuthContext and Booking API functions
 vi.mock('../../../src/auth/AuthContext.jsx', () => ({
@@ -14,6 +15,7 @@ vi.mock('../../../src/auth/AuthContext.jsx', () => ({
 vi.mock('../../../src/api/booking.js', () => ({
   getSlotSeating: vi.fn(),
   createBooking: vi.fn(),
+  getBooking: vi.fn(),
   bookingErrorMessage: vi.fn((err) => err.message || 'Error'),
 }));
 
@@ -40,6 +42,7 @@ describe('BookingPage Component Integration Tests', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    window.sessionStorage.clear();
     vi.spyOn(window, 'confirm').mockImplementation(() => true);
   });
 
@@ -67,7 +70,7 @@ describe('BookingPage Component Integration Tests', () => {
 
     getSlotSeating.mockResolvedValueOnce(mockDraft.seating);
     createBooking.mockResolvedValueOnce({
-      id: 'REF-12345',
+      id: 281,
       slot: { date: '2026-11-15', meal: 'lunch', startTime: '12:30' },
       partySize: 2,
       contactName: 'Mario',
@@ -75,11 +78,19 @@ describe('BookingPage Component Integration Tests', () => {
       seatAssignments: [{ tableLabel: 'Table 4', seats: 2 }]
     });
 
+    getBooking.mockResolvedValue({
+      id: 281,
+      slot: { date: '2026-11-15', meal: 'lunch', startTime: '12:30', endTime: '14:00' },
+      partySize: 2, split: false, email: 'mario@example.org',
+    });
     const user = userEvent.setup();
 
-    render(
+    const view = render(
       <MemoryRouter initialEntries={[{ pathname: '/book', state: { bookingDraft: mockDraft } }]}>
-        <BookingPage />
+        <Routes>
+          <Route path="/book" element={<BookingPage />} />
+          <Route path="/book/confirmation/:bookingId" element={<BookingPage />} />
+        </Routes>
       </MemoryRouter>
     );
 
@@ -93,6 +104,84 @@ describe('BookingPage Component Integration Tests', () => {
     expect(screen.getByText(/You’re all set! Your table is reserved/i)).toBeInTheDocument();
     expect(screen.getByText(/Book another table/i)).toBeInTheDocument();
     expect(screen.getByText(/Back to home/i)).toBeInTheDocument();
+    expect(createBooking).toHaveBeenCalledTimes(1);
+    expect(getBooking).toHaveBeenCalledWith(281);
+
+    // F5 remounts the app on the receipt URL without the review draft.
+    view.unmount();
+    render(
+      <MemoryRouter initialEntries={['/book/confirmation/281']}>
+        <Routes><Route path="/book/confirmation/:bookingId" element={<BookingPage />} /></Routes>
+      </MemoryRouter>
+    );
+    expect(await screen.findByRole('heading', { name: 'Booking confirmed!' })).toBeInTheDocument();
+    expect(createBooking).toHaveBeenCalledTimes(1); // A refresh never creates another booking.
+    expect(getBooking).toHaveBeenCalledTimes(2);
+  });
+
+  it('Back returns to availability and discards the previous booking draft', async () => {
+    useAuth.mockReturnValue({ user: { id: 1, role: 'hiker' }, loadingAuth: false });
+    savePendingBooking(mockDraft);
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/book', state: { bookingDraft: mockDraft } }]}>
+        <Routes>
+          <Route path="/book" element={<BookingPage />} />
+          <Route path="/availability" element={<div>Availability search</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await user.click(screen.getByRole('link', { name: 'Back' }));
+    expect(screen.getByText('Availability search')).toBeInTheDocument();
+    expect(getPendingBooking()).toBeNull();
+  });
+
+  it('an already booked slot can return to availability to select another time', async () => {
+    const mockHiker = { id: 1, role: 'hiker' };
+    useAuth.mockReturnValue({ user: mockHiker, loadingAuth: false, refreshUser: vi.fn().mockResolvedValue(mockHiker) });
+    getSlotSeating.mockResolvedValue(mockDraft.seating);
+    createBooking.mockRejectedValue(Object.assign(new Error('Duplicate booking'), { code: 'BOOKING_ALREADY_EXISTS', status: 409 }));
+    savePendingBooking(mockDraft);
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/book', state: { bookingDraft: mockDraft } }]}>
+        <Routes>
+          <Route path="/book" element={<BookingPage />} />
+          <Route path="/availability" element={<div>Availability search</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Confirm booking' }));
+    expect(await screen.findByRole('dialog')).toHaveTextContent('You already have a reservation');
+    await user.click(screen.getByRole('button', { name: 'Choose another time' }));
+    expect(screen.getByText('Availability search')).toBeInTheDocument();
+    expect(getPendingBooking()).toBeNull();
+  });
+
+  it('Choose another time in the split-seating dialog returns to Availability', async () => {
+    const mockHiker = { id: 1, role: 'hiker' };
+    useAuth.mockReturnValue({ user: mockHiker, loadingAuth: false, refreshUser: vi.fn().mockResolvedValue(mockHiker) });
+    getSlotSeating.mockResolvedValue({ fit: 'split', requiresConfirmation: true, seatAssignments: [{ seats: 1 }, { seats: 1 }] });
+    savePendingBooking(mockDraft);
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/book', state: { bookingDraft: mockDraft } }]}>
+        <Routes>
+          <Route path="/book" element={<BookingPage />} />
+          <Route path="/availability" element={<div>Availability search</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+    await user.click(screen.getByRole('button', { name: 'Confirm booking' }));
+    await user.click(await screen.findByRole('button', { name: 'Choose another time' }));
+    expect(screen.getByText('Availability search')).toBeInTheDocument();
+    expect(createBooking).not.toHaveBeenCalled();
+    expect(getPendingBooking()).toBeNull();
   });
 
 });

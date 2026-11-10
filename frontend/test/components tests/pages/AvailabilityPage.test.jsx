@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router';
 import AvailabilityPage from '../../../src/pages/AvailabilityPage.jsx';
 import { useAuth } from '../../../src/auth/AuthContext.jsx';
 import { getAvailableSlots, getSlotSeating } from '../../../src/api/booking.js';
@@ -132,6 +132,27 @@ describe('AvailabilityPage Component Integration Tests', () => {
 
     const errorAlert = await screen.findByText(/database connection error/i);
     expect(errorAlert).toBeInTheDocument();
+  });
+
+  it('updates the form and searches again after internal URL navigation', async () => {
+    useAuth.mockReturnValue({ user: { id: 1, role: 'hiker' } });
+    getAvailableSlots.mockImplementation(async ({ date, meal, partySize }) => ({ date, meal, partySize, slots: [] }));
+    function ChangeQuery() {
+      const navigate = useNavigate();
+      return <button onClick={() => navigate('/availability?date=2030-11-20&meal=dinner&guests=4')}>Change URL</button>;
+    }
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/availability?date=2030-11-15&meal=lunch&guests=2']}>
+        <ChangeQuery />
+        <Routes><Route path="/availability" element={<AvailabilityPage />} /></Routes>
+      </MemoryRouter>
+    );
+    await waitFor(() => expect(getAvailableSlots).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole('button', { name: 'Change URL' }));
+    await waitFor(() => expect(getAvailableSlots).toHaveBeenCalledTimes(2));
+    expect(getAvailableSlots).toHaveBeenLastCalledWith({ date: '2030-11-20', meal: 'dinner', partySize: 4 });
+    expect(screen.getByLabelText(/guests/i)).toHaveValue(4);
   });
 
 });

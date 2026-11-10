@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import LoginPage from '../../../src/pages/LoginPage.jsx';
 import { useAuth } from '../../../src/auth/AuthContext.jsx';
 
@@ -89,6 +89,24 @@ describe('LoginPage Component Integration Tests', () => {
 
     const errorAlert = await screen.findByRole('alert');
     expect(errorAlert).toHaveTextContent(/unable to sign in/i);
+  });
+
+  it('returns to a confirmed receipt after login when the session has expired', async () => {
+    const mockSignIn = vi.fn().mockResolvedValue({ id: 1, role: 'hiker' });
+    useAuth.mockReturnValue({ user: null, loadingAuth: false, signIn: mockSignIn });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/login', state: { from: '/book/confirmation/281' } }]}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/book/confirmation/:bookingId" element={<div>Confirmed receipt</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+    await user.type(screen.getByLabelText(/email/i), 'mario@hiker.com');
+    await user.type(screen.getByLabelText(/password/i, { selector: 'input' }), 'password123');
+    await user.click(screen.getByRole('button', { name: /^log in$/i }));
+    expect(await screen.findByText('Confirmed receipt')).toBeInTheDocument();
   });
 
 });

@@ -72,7 +72,9 @@ export default function HomePage() {
     }
     setFormError('');
     const params = new URLSearchParams({ date, meal, guests: String(guests) });
-    navigate(`${bookingDestination}?${params.toString()}`);
+    // A submitted search always starts from Availability, even when a previous
+    // booking draft exists. /book is reserved for reviewing a selected slot.
+    navigate(`/availability?${params.toString()}`);
   }
 
   return (

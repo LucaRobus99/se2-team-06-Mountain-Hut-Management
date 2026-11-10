@@ -20,9 +20,13 @@ export default function LoginPage() {
   // the Create account link, or refreshes during authentication.
   const [storedDraft] = useState(() => getPendingBooking());
   const bookingDraft = location.state?.bookingDraft || storedDraft;
+  // A signed-out hiker refreshing a confirmed receipt should return to that
+  // same receipt after login, not the homepage or an old booking draft.
+  const receiptDestination = /^\/book\/confirmation\/[1-9]\d*$/.test(location.state?.from || '')
+    ? location.state.from : null;
   const destination = (user?.role === 'employee' || user?.role === 'warden')
     ? '/staff'
-    : (bookingDraft ? '/book' : (location.state?.from === '/book' ? '/availability' : '/'));
+    : (receiptDestination || (bookingDraft ? '/book' : (location.state?.from === '/book' ? '/availability' : '/')));
   // The booking flow goes directly from Availability to Login, without
   // passing through ProtectedRoute. Show the same notice for both entry paths.
   const loginNotice = (location.state?.from === '/book' || location.state?.bookingDraft)

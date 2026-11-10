@@ -1,12 +1,12 @@
-import { useRef, useState } from 'react';
-import { Link, Navigate, useLocation, useNavigate } from 'react-router';
+import { useEffect, useRef, useState } from 'react';
+import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router';
 import { Alert, Modal } from 'react-bootstrap';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { getPendingBooking, clearPendingBooking } from '../utils/pendingBooking.js';
 import SplitSeatingModal from '../components/SplitSeatingModal.jsx';
 import bookingBackground from '../assets/edelweiss-booking-background.jpg';
 import EdelweissBrand from '../components/EdelweissBrand.jsx';
-import { createBooking, getSlotSeating, bookingErrorMessage } from '../api/booking.js';
+import { createBooking, getBooking, getSlotSeating, bookingErrorMessage } from '../api/booking.js';
 
 function friendlyDate(iso) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || '')) return iso || '';
@@ -27,14 +27,19 @@ function availabilityUrl(draft) {
 export default function BookingPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { bookingId } = useParams();
   const { user, loadingAuth, refreshUser } = useAuth();
   const [storedDraft] = useState(() => getPendingBooking());
-  const draft = location.state?.bookingDraft || storedDraft;
+  // Once confirmed, the server record (not a possibly stale review draft)
+  // is the source of truth for both refresh and direct links.
+  const draft = bookingId ? null : (location.state?.bookingDraft || storedDraft);
   const [seating, setSeating] = useState(draft?.seating || null);
   const [splitAcknowledged, setSplitAcknowledged] = useState(Boolean(draft?.seating?.requiresConfirmation));
   const [pendingSplit, setPendingSplit] = useState(null);
   const [duplicateBooking, setDuplicateBooking] = useState(false);
   const [booking, setBooking] = useState(null);
+  const [receiptLoading, setReceiptLoading] = useState(Boolean(bookingId));
+  const [receiptError, setReceiptError] = useState('');
   const [error, setError] = useState('');
   const [staleSelection, setStaleSelection] = useState(false);
   const [checkingSeating, setCheckingSeating] = useState(false);
@@ -51,6 +56,27 @@ export default function BookingPage() {
   const groupIsSplit = booking ? booking.split : seating?.fit === 'split';
   const confirmationEmailStatus = booking?.confirmationEmail?.status;
   const confirmationAddress = booking?.email || user?.email;
+  useEffect(() => {
+    if (!bookingId) return;
+    let active = true;
+    setReceiptLoading(true);
+    setReceiptError('');
+    setBooking(null);
+    // GET checks that the current hiker owns this booking. Never rely solely
+    // on browser history state to display a confirmed reservation.
+    getBooking(Number(bookingId))
+      .then((confirmed) => {
+        if (!active) return;
+        const emailStatus = location.state?.bookingId === confirmed.id
+          ? location.state?.emailStatus : null;
+        setBooking(emailStatus
+          ? { ...confirmed, confirmationEmail: { status: emailStatus } }
+          : confirmed);
+      })
+      .catch((err) => { if (active) setReceiptError(bookingErrorMessage(err)); })
+      .finally(() => { if (active) setReceiptLoading(false); });
+    return () => { active = false; };
+  }, [bookingId, location.state?.bookingId, location.state?.emailStatus]);
   const mealLabel = shownMeal === 'aperitivo'
     ? 'Happy hour'
     : shownMeal ? `${shownMeal[0].toUpperCase()}${shownMeal.slice(1)}` : '';
@@ -62,6 +88,21 @@ export default function BookingPage() {
         notice: 'Please log in to complete your booking. Your selection will be kept.',
       },
     });
+  }
+
+  function returnToAvailability(message) {
+    // An abandoned review must never become the next booking draft.
+    clearPendingBooking();
+    setPendingSplit(null);
+    setDuplicateBooking(false);
+    navigate(backToAvailability, {
+      replace: true,
+      state: message ? { bookingNotice: message } : null,
+    });
+  }
+
+  function chooseAnotherTime() {
+    returnToAvailability('You already have a reservation for the previous time. Please choose another time slot.');
   }
 
   function handleBookingError(err) {
@@ -90,9 +131,14 @@ export default function BookingPage() {
       const confirmed = await createBooking({
         slotId: draft.selectedSlotId, partySize: Number(draft.partySize),
       });
-      setBooking(confirmed);
       clearPendingBooking();
       setPendingSplit(null);
+      // The URL identifies a confirmed booking and survives a browser refresh.
+      // The GET on that route verifies ownership and reloads the details.
+      navigate(`/book/confirmation/${confirmed.id}`, {
+        replace: true,
+        state: { bookingId: confirmed.id, emailStatus: confirmed.confirmationEmail?.status },
+      });
     } catch (err) {
       handleBookingError(err);
     } finally {
@@ -133,7 +179,18 @@ export default function BookingPage() {
     await saveBooking();
   }
 
-  if (!draft || !selectedSlot || !seating) {
+  if (bookingId && (receiptLoading || (!receiptError && String(booking?.id) !== bookingId))) {
+    return <main className="eh-booking-page eh-route-loading" role="status">Loading your booking confirmation…</main>;
+  }
+  if (bookingId && (receiptError || !booking)) {
+    return (
+      <main className="eh-booking-page">
+        <Alert variant="danger" role="alert">{receiptError || 'Unable to load the booking confirmation.'}</Alert>
+        <Link to="/availability" className="eh-button eh-button--green">Check availability</Link>
+      </main>
+    );
+  }
+  if (!bookingId && (!draft || !selectedSlot || !seating)) {
     return <Navigate to={backToAvailability} replace />;
   }
 
@@ -197,7 +254,7 @@ export default function BookingPage() {
               </>
             ) : (
               <>
-                <Link to={backToAvailability} className="eh-button eh-button--outline">
+                <Link to={backToAvailability} replace onClick={clearPendingBooking} className="eh-button eh-button--outline">
                   {staleSelection ? 'Check availability again' : 'Back'}
                 </Link>
                 {!staleSelection && (
@@ -213,12 +270,14 @@ export default function BookingPage() {
       </section>
       <SplitSeatingModal
         show={Boolean(pendingSplit)} seating={pendingSplit}
-        busy={bookingLoading} onCancel={() => setPendingSplit(null)} onContinue={acceptSplit}
+        busy={bookingLoading}
+        onCancel={() => returnToAvailability('Choose a different time slot if you prefer not to split your party.')}
+        onContinue={acceptSplit}
       />
       <Modal show={duplicateBooking} onHide={() => setDuplicateBooking(false)} centered aria-labelledby="duplicate-booking-title" dialogClassName="eh-split-modal">
         <Modal.Header closeButton><Modal.Title id="duplicate-booking-title">You already have a reservation</Modal.Title></Modal.Header>
         <Modal.Body><p>You already have a confirmed booking for this time slot. Please select a different time to make another reservation.</p></Modal.Body>
-        <Modal.Footer><button type="button" className="eh-button eh-button--green" onClick={() => navigate(backToAvailability)}>Choose another time</button></Modal.Footer>
+        <Modal.Footer><button type="button" className="eh-button eh-button--green" onClick={chooseAnotherTime}>Choose another time</button></Modal.Footer>
       </Modal>
     </main>
   );

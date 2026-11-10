@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-bootstrap';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { savePendingBooking } from '../utils/pendingBooking.js';
+import { savePendingBooking, clearPendingBooking } from '../utils/pendingBooking.js';
 import { getAvailableSlots, getSlotSeating } from '../api/booking.js';
 import { AlpineDatePicker, AlpineMealSelect, MEAL_OPTIONS } from '../components/AlpineBookingFields.jsx';
 import AvailabilitySlotCard from '../components/AvailabilitySlotCard.jsx';
@@ -23,6 +23,7 @@ function formatDate(iso) {
 
 export default function AvailabilityPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [date, setDate] = useState(searchParams.get('date') || todayInHut());
@@ -33,48 +34,91 @@ export default function AvailabilityPage() {
   const [seating, setSeating] = useState(null);
   const [pendingSplit, setPendingSplit] = useState(null);
   const [error, setError] = useState('');
+  const [bookingNotice, setBookingNotice] = useState(location.state?.bookingNotice || '');
   const [loading, setLoading] = useState(false);
   const [checkingSeating, setCheckingSeating] = useState(false);
+  const searchRequest = useRef(0);
   const searchReady = useMemo(() => Boolean(date && meal && /^\d+$/.test(partySize) && Number(partySize) > 0), [date, meal, partySize]);
 
   function resetSelection() { setSelectedSlotId(null); setSeating(null); setPendingSplit(null); }
   function onFieldChange(setter, value) {
     setter(value);
     resetSelection();
+    searchRequest.current += 1; // Ignore responses for an earlier form selection.
+    setLoading(false);
     setResult(null); // Never show stale availability for a new party/date/meal.
     setError('');
+    setBookingNotice('');
   }
 
   async function performSearch(values) {
+    const request = ++searchRequest.current;
     setLoading(true);
+    setResult(null);
     setError('');
     resetSelection();
     try {
       const data = await getAvailableSlots({ date: values.date, meal: values.meal, partySize: Number(values.partySize) });
-      setResult(data);
+      if (request === searchRequest.current) setResult(data);
     } catch (err) {
-      setError(err.message || 'Unable to check availability.');
-      setResult(null);
-    } finally { setLoading(false); }
+      if (request === searchRequest.current) {
+        setError(err.message || 'Unable to check availability.');
+        setResult(null);
+      }
+    } finally {
+      if (request === searchRequest.current) setLoading(false);
+    }
   }
 
   useEffect(() => {
-    if (searchReady && searchParams.get('date')) performSearch({ date, meal, partySize });
-    // Run only on initial navigation; clicking Search handles later searches.
+    // A new Availability search must never accidentally reuse an old draft.
+    clearPendingBooking();
+    const params = new URLSearchParams(location.search);
+    const next = {
+      date: params.get('date') || todayInHut(),
+      meal: params.get('meal') || 'lunch',
+      partySize: params.get('guests') || '2',
+    };
+    setDate(next.date);
+    setMeal(next.meal);
+    setPartySize(next.partySize);
+    setResult(null);
+    resetSelection();
+    if (params.has('date')) {
+      // This runs on initial load AND internal navigation/back/forward when
+      // search parameters change, not just once when the component mounts.
+      performSearch(next);
+    } else {
+      searchRequest.current += 1;
+      setLoading(false);
+      setError('');
+    }
+    // Route query changes are the source of truth for prefilled searches.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [location.search]);
+
+  useEffect(() => {
+    setBookingNotice(location.state?.bookingNotice || '');
+  }, [location.key, location.state?.bookingNotice]);
 
   async function handleSubmit(event) {
     event.preventDefault();
     if (!searchReady || loading || checkingSeating) return;
-    setSearchParams({ date, meal, guests: partySize });
-    await performSearch({ date, meal, partySize });
+    const newParams = new URLSearchParams({ date, meal, guests: partySize });
+    if (newParams.toString() === searchParams.toString()) {
+      // Search again even if the URL was already identical.
+      await performSearch({ date, meal, partySize });
+    } else {
+      // The URL-change effect makes exactly one request with the new values.
+      setSearchParams(newParams);
+    }
   }
 
   async function handleSelectSlot(slot) {
     if (checkingSeating || loading) return;
     setCheckingSeating(true);
     setError('');
+    setBookingNotice('');
     resetSelection();
     try {
       const data = await getSlotSeating({ slotId: slot.id, partySize: Number(partySize) });
@@ -134,6 +178,7 @@ export default function AvailabilityPage() {
           </button>
         </form>
 
+        {bookingNotice && <Alert variant="info" role="status" className="eh-availability-error">{bookingNotice}</Alert>}
         {error && <Alert variant="danger" role="alert" className="eh-availability-error">{error}</Alert>}
         {loading && <p className="eh-search-message" role="status">Looking for available times...</p>}
 
