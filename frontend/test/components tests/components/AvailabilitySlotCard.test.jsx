@@ -6,28 +6,34 @@ import AvailabilitySlotCard, { getTableAvailability } from '../../../src/compone
 describe('AvailabilitySlotCard Component and Utils Tests', () => {
 
   describe('getTableAvailability', () => {
-    it('should return default green availability when tables is not an array', () => {
+    it('should show availability without a color when the table count is unknown', () => {
       const slot = { tables: null };
       const result = getTableAvailability(slot, 4);
-      expect(result).toEqual({ label: 'Available for your group', tone: 'green' });
+      expect(result).toEqual({ label: 'Available for your group', tone: null });
     });
 
-    it('should return red tone with 1 table when exactly one table fits', () => {
+    it('should return yellow tone with 1 table when exactly one table fits', () => {
       const slot = { tables: [{ freeSeats: 5 }, { freeSeats: 2 }] };
       const result = getTableAvailability(slot, 4);
-      expect(result).toEqual({ label: '1 table available', tone: 'red' });
+      expect(result).toEqual({ label: '1 table available', tone: 'yellow' });
     });
 
-    it('should return green tone with multiple tables when more than one table fits', () => {
+    it('should return yellow tone when exactly 2 tables fit', () => {
       const slot = { tables: [{ freeSeats: 6 }, { freeSeats: 5 }] };
       const result = getTableAvailability(slot, 4);
-      expect(result).toEqual({ label: '2 tables available', tone: 'green' });
+      expect(result).toEqual({ label: '2 tables available', tone: 'yellow' });
     });
 
-    it('should return amber tone for multiple-table seating when no single table fits', () => {
+    it('should return green tone with 3 or more suitable tables', () => {
+      const slot = { tables: [{ freeSeats: 6 }, { freeSeats: 5 }, { freeSeats: 4 }, { freeSeats: 1 }] };
+      const result = getTableAvailability(slot, 4);
+      expect(result).toEqual({ label: '3 tables available', tone: 'green' });
+    });
+
+    it('should return orange tone for split seating when no single table fits', () => {
       const slot = { tables: [{ freeSeats: 2 }, { freeSeats: 2 }] };
       const result = getTableAvailability(slot, 4);
-      expect(result).toEqual({ label: 'Multiple-table seating available', tone: 'amber' });
+      expect(result).toEqual({ label: 'Multiple-table seating available', tone: 'orange' });
     });
   });
 
@@ -51,6 +57,21 @@ describe('AvailabilitySlotCard Component and Utils Tests', () => {
 
       expect(screen.getByText('12:30')).toBeInTheDocument();
       expect(screen.getByText('1 table available')).toBeInTheDocument();
+      expect(screen.getByText('1 table available').querySelector('.eh-status-dot--yellow')).toBeInTheDocument();
+    });
+
+    it('should render orange status for split seating', () => {
+      render(
+        <AvailabilitySlotCard
+          slot={{ startTime: '13:00', tables: [{ freeSeats: 2 }, { freeSeats: 2 }] }}
+          index={1}
+          partySize={4}
+          selected={false}
+          disabled={false}
+          onClick={() => {}}
+        />
+      );
+      expect(screen.getByText('Multiple-table seating available').querySelector('.eh-status-dot--orange')).toBeInTheDocument();
     });
 
     it('should apply selected class and aria-pressed when selected is true', () => {

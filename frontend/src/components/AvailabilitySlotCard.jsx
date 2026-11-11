@@ -10,14 +10,15 @@ const slotPhotos = [interiorPhoto, heroPhoto, mountainPhoto, terracePhoto];
  */
 export function getTableAvailability(slot, partySize) {
   if (!Array.isArray(slot.tables)) {
-    return { label: 'Available for your group', tone: 'green' };
+    return { label: 'Available for your group', tone: null }; // No table count: avoid a misleading color.
   }
   const wanted = Number(partySize);
   const singles = slot.tables.filter(table => Number(table.freeSeats) >= wanted).length;
-  if (singles === 1) return { label: '1 table available', tone: 'red' };
-  if (singles > 1) return { label: `${singles} tables available`, tone: 'green' };
+  if (singles === 1) return { label: '1 table available', tone: 'yellow' };
+  if (singles === 2) return { label: '2 tables available', tone: 'yellow' };
+  if (singles >= 3) return { label: `${singles} tables available`, tone: 'green' };
   // The API returns only slots for which a valid seating assignment exists.
-  return { label: 'Multiple-table seating available', tone: 'amber' };
+  return { label: 'Multiple-table seating available', tone: 'orange' };
 }
 
 export default function AvailabilitySlotCard({ slot, index, partySize, selected, disabled, onClick }) {
@@ -35,7 +36,7 @@ export default function AvailabilitySlotCard({ slot, index, partySize, selected,
         <span className="eh-slot-tile-info">
           <strong>{slot.startTime}</strong>
           <span className="eh-slot-availability">
-            <span className={`eh-status-dot eh-status-dot--${tone}`} />
+            {tone && <span className={`eh-status-dot eh-status-dot--${tone}`} aria-hidden="true" />}
             {label}
           </span>
         </span>
