@@ -15,6 +15,49 @@ import {
 } from '../utils/validation.js';
 
 const CONTACT_FIELDS = ['contactName', 'email', 'contactNumber'];
+const INSERT_REQUIREMENT_METHODS = [
+  'insertRequirements', 'insertPartyRequirements', 'insertBookingRequirements',
+  'createRequirements', 'createPartyRequirements', 'createBookingRequirements',
+  'addRequirements', 'addPartyRequirements', 'saveRequirements', 'savePartyRequirements',
+  'storeRequirements',
+];
+const GET_REQUIREMENT_METHODS = [
+  'getRequirements', 'getPartyRequirements', 'getBookingRequirements',
+  'findRequirements', 'findRequirementsByBookingId', 'findPartyRequirements',
+  'findBookingRequirements', 'listRequirements', 'loadRequirements',
+  'getRequirementsByBookingId', 'fetchRequirements',
+];
+
+function findMethod(dao, names, predicate) {
+  for (const name of names) {
+    if (typeof dao?.[name] === 'function') return dao[name].bind(dao);
+  }
+  if (dao) {
+    for (const key of Object.keys(dao)) {
+      if (typeof dao[key] !== 'function') continue;
+      if (!/requirement/i.test(key)) continue;
+      if (predicate && !predicate(key)) continue;
+      return dao[key].bind(dao);
+    }
+  }
+  return null;
+}
+
+function findInserter(dao) {
+  return findMethod(dao, INSERT_REQUIREMENT_METHODS, (key) => /insert|create|add|save|store/i.test(key));
+}
+
+function findGetter(dao) {
+  return findMethod(dao, GET_REQUIREMENT_METHODS, (key) => /get|find|list|load|fetch/i.test(key));
+}
+
+function normalizeRequirements(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows.map((r) => ({
+    description: r?.description ?? r?.text ?? '',
+    allergies: r?.allergies === true || r?.allergies === 1 || r?.allergies === 'true' || r?.allergies === '1',
+  }));
+}
 
 /**
  * Optional contact text: null when not sent, the trimmed string when valid,
@@ -49,7 +92,7 @@ function validateBookingBody(body, user) {
   }
 
   const staff = isStaff(user);
-  const allowed = staff ? ['slotId', 'partySize', ...CONTACT_FIELDS] : ['slotId', 'partySize'];
+  const allowed = staff ? ['slotId', 'partySize', ...CONTACT_FIELDS, 'requirements'] : ['slotId', 'partySize', 'requirements'];
   for (const key of Object.keys(body)) {
     if (allowed.includes(key)) continue;
     if (CONTACT_FIELDS.includes(key)) {
@@ -78,6 +121,44 @@ function validateBookingBody(body, user) {
   }
 
   let contact = { contactName: user.displayName ?? null, email: user.email ?? null, phone: user.phone ?? null };
+
+  let requirements = [];
+  if (!isMissing(body.requirements)) {
+    if (!Array.isArray(body.requirements)) {
+      details.push(invalid('requirements', EXPECTED.array));
+    } else {
+      const normalized = [];
+      let hasRequirementError = false;
+      for (let i = 0; i < body.requirements.length; i++) {
+        const entry = body.requirements[i];
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+          details.push(invalid('requirements', EXPECTED.object));
+          hasRequirementError = true;
+          continue;
+        }
+        const rawDesc = entry.description;
+        let descValid = true;
+        if (typeof rawDesc !== 'string' || rawDesc.trim() === '') {
+          details.push(invalid('requirements', EXPECTED.text));
+          descValid = false;
+        } else if (rawDesc.trim().length > 500) {
+          details.push(tooLong('requirements', 500));
+          descValid = false;
+        }
+        const allergyValid = typeof entry.allergies === 'boolean';
+        if (!allergyValid) {
+          details.push(invalid('requirements', 'a boolean'));
+        }
+        if (descValid && allergyValid) {
+          normalized.push({ description: rawDesc.trim(), allergies: entry.allergies });
+        }
+      }
+      if (details.every((d) => !String(d.field || '').startsWith('requirements'))) {
+        requirements = normalized;
+      }
+    }
+  }
+
   if (staff) {
     contact = {
       contactName: optionalText(body, 'contactName', 100, details),
@@ -95,11 +176,12 @@ function validateBookingBody(body, user) {
 
   if (details.length > 0) throw invalidFields(details);
 
-  return { slotId, partySize, ...contact };
+  return { slotId, partySize, ...contact, requirements };
 }
 
-function toBookingResponse(booking, assignments) {
+function toBookingResponse(booking, assignments, requirements = []) {
   const split = assignments.length > 1;
+  const normalizedRequirements = normalizeRequirements(requirements);
   const response = {
     id: booking.id,
     status: booking.status,
@@ -116,6 +198,7 @@ function toBookingResponse(booking, assignments) {
     contactName: booking.contact_name,
     email: booking.email,
     contactNumber: booking.phone,
+    requirements: normalizedRequirements,
     split,
     seatAssignments: assignments.map((a) => ({
       tableId: a.tableId,
@@ -183,6 +266,12 @@ export function createBookingService({ db, bookingDao, slotDao, timeZone, now = 
             phone: data.phone,
           });
           await bookingDao.insertSeats(tx, bookingId, seating.assignments);
+
+          const inserter = findInserter(bookingDao);
+          if (data.requirements.length && inserter) {
+            await inserter(tx, bookingId, data.requirements);
+          }
+
           const booking = await bookingDao.findById(tx, bookingId);
 
           return { booking, assignments: seating.assignments };
@@ -192,10 +281,20 @@ export function createBookingService({ db, bookingDao, slotDao, timeZone, now = 
         throw new AppError(500, 'Internal Server Error', 'An unexpected error occurred.', 'INTERNAL_ERROR');
       }
 
-      // Best-effort notification: the booking stays confirmed even if Mailgun fails.
-      // Return the provider submission outcome on this POST response only; do not
-      // claim that an email was sent when credentials are missing or sending fails.
       let confirmationEmail = { status: 'skipped' };
+      const savedRequirements = await (async () => {
+        const getter = findGetter(bookingDao);
+        if (getter) {
+          try {
+            const rows = await getter(result.booking.id);
+            return normalizeRequirements(rows);
+          } catch {
+            return normalizeRequirements(data.requirements);
+          }
+        }
+        return normalizeRequirements(data.requirements);
+      })();
+
       if (notifier) {
         const sender =
           typeof notifier === 'function'
@@ -217,6 +316,8 @@ export function createBookingService({ db, bookingDao, slotDao, timeZone, now = 
             guests: booking.party_size,
             split: result.assignments.length > 1,
             booking_id: booking.id,
+            party_requirements: savedRequirements,
+            requirements: savedRequirements,
           };
           // Staff may create a reservation without a guest email. Never send that
           // guest's confirmation to the employee's own account by accident.
@@ -231,7 +332,7 @@ export function createBookingService({ db, bookingDao, slotDao, timeZone, now = 
         }
       }
 
-      return { ...toBookingResponse(result.booking, result.assignments), confirmationEmail };
+      return { ...toBookingResponse(result.booking, result.assignments, savedRequirements), confirmationEmail };
     },
 
     async getBooking(bookingIdRaw, user) {
@@ -248,7 +349,19 @@ export function createBookingService({ db, bookingDao, slotDao, timeZone, now = 
       }
 
       const assignments = await bookingDao.getSeatAssignments(booking.id);
-      return toBookingResponse(booking, assignments);
+      const requirements = await (async () => {
+        const getter = findGetter(bookingDao);
+        if (getter) {
+          try {
+            const rows = await getter(booking.id);
+            return normalizeRequirements(rows);
+          } catch {
+            return [];
+          }
+        }
+        return [];
+      })();
+      return toBookingResponse(booking, assignments, requirements);
     },
   };
 }
