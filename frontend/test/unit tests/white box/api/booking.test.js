@@ -100,6 +100,43 @@ describe('Booking API - White-Box Unit Tests', () => {
         })
       );
     });
+
+    it('sends each dietary requirement independently when supplied', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        status: 201,
+        json: async () => ({ id: 12 }),
+      }));
+      await createBooking({ slotId: 3, partySize: 4, requirements: [
+        { id: 4, description: ' 2 vegetarian guests ', allergies: false },
+        { id: 5, description: '1 peanut allergy', allergies: true },
+      ] });
+      const request = JSON.parse(fetch.mock.calls[0][1].body);
+      expect(request).toEqual({
+        slotId: 3,
+        partySize: 4,
+        requirements: [
+          { description: '2 vegetarian guests', allergies: false },
+          { description: '1 peanut allergy', allergies: true },
+        ],
+      });
+    });
+
+    it('does not silently discard requirements rejected by the backend', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: {
+          code: 'VALIDATION_ERROR',
+          details: [{ field: 'requirements', rule: 'unknown' }],
+        } }),
+      }));
+      await expect(createBooking({
+        slotId: 3, partySize: 2,
+        requirements: [{ description: 'Peanut allergy', allergies: true }],
+      })).rejects.toMatchObject({ code: 'VALIDATION_ERROR', status: 400 });
+    });
+
   });
 
 });

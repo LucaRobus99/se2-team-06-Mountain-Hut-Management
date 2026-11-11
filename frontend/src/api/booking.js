@@ -1,6 +1,8 @@
 // MH-01 / public MH-04: real REST calls. No client-side seat reservations.
 // Vite proxies /api to Express on localhost:8080 in development.
 // The system serves a single hut, so no hut id appears in the paths.
+import { validatePartyRequirements, serializePartyRequirements } from '../utils/partyRequirements.js';
+
 const VALID_MEALS = new Set(['breakfast', 'lunch', 'aperitivo', 'dinner']);
 
 function positiveInteger(value) {
@@ -55,16 +57,23 @@ export async function getSlotSeating({ slotId, partySize }) {
   return apiRequest(`/api/availability/${slotId}/seating?${new URLSearchParams({ partySize: String(partySize) })}`);
 }
 
-export async function createBooking({ slotId, partySize }) {
+export async function createBooking({ slotId, partySize, requirements = [] }) {
   if (!positiveInteger(slotId) || !positiveInteger(partySize)) {
     throw new Error('Please select an available time and a valid number of guests.');
   }
+  const requirementsError = validatePartyRequirements(requirements);
+  if (requirementsError) throw new Error(requirementsError);
   // The server derives hikerId from the session cookie, and recomputes seats
   // transactionally. Do not send acceptSplit, table IDs, or client auth state.
   return apiRequest('/api/bookings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ slotId, partySize }),
+    // Omit requirements when empty to retain compatibility with MH-01 bookings.
+    // An MH-05 booking MUST include them: never silently drop allergy details.
+    body: JSON.stringify({
+      slotId, partySize,
+      ...(requirements.length ? { requirements: serializePartyRequirements(requirements) } : {}),
+    }),
   });
 }
 
@@ -83,7 +92,11 @@ export function bookingErrorMessage(error) {
     case 'SLOT_NOT_AVAILABLE': return 'This time is no longer open for booking. Please choose another.';
     case 'SLOT_TOO_LATE': return 'Bookings close two hours before the selected time. Please choose another.';
     case 'SLOT_NOT_FOUND': return 'This time is no longer available. Please search again.';
-    case 'VALIDATION_ERROR': return error?.details?.[0]?.message || 'Please check the information entered.';
+    case 'VALIDATION_ERROR':
+      if (error?.details?.some((detail) => String(detail.field || '').startsWith('requirements'))) {
+        return 'The server did not accept the dietary requirements. No booking was created. Please contact the team to enable this feature.';
+      }
+      return error?.details?.[0]?.message || 'Please check the information entered.';
     case 'NETWORK_ERROR': return 'We cannot reach the server. Check your connection and try again.';
     default: return error?.message || 'Something went wrong. Please try again.';
   }

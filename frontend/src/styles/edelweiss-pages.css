@@ -664,6 +664,47 @@
   border-color: #dae6d8;
   background: #eaf1e8;
 }
+/* MH-05: dietary requirements belong to the booking review, not the public availability search. */
+.eh-party-requirements {
+  margin-top: 1.5rem;
+  border-top: 1px solid #e2e7dc;
+  padding-top: 1.35rem;
+  color: #263e2f;
+  font-family: Georgia, serif;
+}
+.eh-party-requirements-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: .6rem; }
+.eh-party-requirements h2, .eh-party-confirmed h2 { margin: 0; color: #1f4030; font: 700 1.25rem/1.35 Georgia, serif; }
+.eh-party-optional { font: 700 .72rem/1.2 Georgia, serif; color: #667769; background: #eef3ea; padding: .3rem .5rem; border-radius: .4rem; }
+.eh-party-explanation { font: 400 .94rem/1.52 Georgia, serif; color: #607265; margin: .55rem 0 .85rem; }
+.eh-party-empty { font: italic .9rem/1.5 Georgia, serif; color: #728073; margin: .5rem 0 1rem; }
+.eh-party-entries { display: grid; gap: .85rem; }
+.eh-party-entry { background: #f8faf5; border: 1px solid #dfe7da; border-radius: .75rem; padding: 1rem; }
+.eh-party-entry-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: .7rem; }
+.eh-party-entry h3 { margin: 0; color: #2d5139; font: 700 1rem/1.4 Georgia, serif; }
+.eh-party-remove { border: 0; background: none; padding: .2rem .3rem; text-decoration: underline; text-underline-offset: .18rem; color: #81553e; font: 700 .86rem/1.4 Georgia, serif; }
+.eh-party-remove:hover { color: #a44c29; }
+.eh-party-label { display: block; margin-bottom: .35rem; font: 700 .86rem/1.3 Georgia, serif; }
+.eh-party-textarea { display: block; width: 100%; min-height: 77px; padding: .7rem .8rem; resize: vertical; border-radius: .5rem; border: 1px solid #b6c8b7; background: #fff; font: 400 .97rem/1.45 Georgia, serif; color: #253c2e; }
+.eh-party-textarea:focus-visible, .eh-party-add:focus-visible, .eh-party-remove:focus-visible, .eh-party-allergy input:focus-visible { outline: 3px solid #7fa98b; outline-offset: 2px; }
+.eh-party-textarea.is-invalid { border-color: #b34c3d; }
+.eh-party-field-hint { display: block; margin-top: .35rem; font: 400 .77rem/1.4 Georgia, serif; color: #69796b; }
+.eh-party-error { display: block; margin-top: .35rem; font: 700 .81rem/1.4 Georgia, serif; color: #a02e27; }
+.eh-party-allergy { display: flex; align-items: flex-start; gap: .7rem; margin-top: .9rem; cursor: pointer; }
+.eh-party-allergy input { width: 18px; height: 18px; accent-color: #b5592f; flex: 0 0 auto; margin-top: .1rem; }
+.eh-party-allergy span { display: grid; gap: .2rem; }
+.eh-party-allergy strong { font: 700 .9rem/1.3 Georgia, serif; color: #394f3d; }
+.eh-party-allergy small { font: 400 .81rem/1.4 Georgia, serif; color: #6c786d; }
+.eh-party-add { display: inline-flex; align-items: center; gap: .5rem; background: #f1f6ef; color: #28573a; border: 1px solid #aac4ab; border-radius: .55rem; padding: .65rem .9rem; margin-top: .95rem; font: 700 .9rem/1.4 Georgia, serif; }
+.eh-party-add:hover { background: #e5f0e4; }
+.eh-party-add span { font: 700 1.3rem/1 Arial, sans-serif; }
+.eh-party-privacy { font: 400 .77rem/1.45 Georgia, serif; color: #6b786e; margin: .6rem 0 0; }
+.eh-party-login-note { color: #5e735f; background: #f3f7f0; border-radius: .5rem; font: 400 .93rem/1.4 Georgia, serif; margin: 1rem 0 0; padding: .7rem .9rem; }
+.eh-party-confirmed { padding: 1rem; margin-top: 1rem; border-radius: .7rem; background: #f3f8f0; border: 1px solid #d7e6d0; }
+.eh-party-confirmed ul { padding-left: 1.25rem; margin: .65rem 0 0; }
+.eh-party-confirmed li { margin: .5rem 0; font: 400 .95rem/1.4 Georgia, serif; overflow-wrap: anywhere; }
+.eh-party-allergy-marker { display: block; margin-top: .2rem; color: #9a4a23; font: 700 .8rem/1.4 Georgia, serif; }
+.eh-party-add:disabled, .eh-party-remove:disabled, .eh-party-allergy input:disabled { opacity: .6; cursor: not-allowed; }
+
 /* Email status is shown only after the booking POST has completed. */
 .eh-booking-email-notice {
   margin-top: 1.1rem;

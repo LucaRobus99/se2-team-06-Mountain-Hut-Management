@@ -184,4 +184,73 @@ describe('BookingPage Component Integration Tests', () => {
     expect(getPendingBooking()).toBeNull();
   });
 
+  it('collects multiple independent requirements and sends their allergy flags on booking', async () => {
+    const hiker = { id: 1, role: 'hiker' };
+    useAuth.mockReturnValue({ user: hiker, loadingAuth: false, refreshUser: vi.fn().mockResolvedValue(hiker) });
+    getSlotSeating.mockResolvedValue(mockDraft.seating);
+    createBooking.mockResolvedValue({ id: 282, confirmationEmail: { status: 'skipped' } });
+    getBooking.mockResolvedValue({
+      id: 282,
+      slot: { date: '2026-11-15', meal: 'lunch', startTime: '12:30', endTime: '14:00' },
+      partySize: 2, split: false,
+      requirements: [
+        { description: '1 guest with peanut allergy', allergies: true },
+        { description: '1 vegetarian guest', allergies: false },
+      ],
+    });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/book', state: { bookingDraft: mockDraft } }]}>
+        <Routes>
+          <Route path="/book" element={<BookingPage />} />
+          <Route path="/book/confirmation/:bookingId" element={<BookingPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    await user.click(screen.getByRole('button', { name: /add dietary requirement/i }));
+    await user.click(screen.getByRole('button', { name: /add dietary requirement/i }));
+    await user.type(screen.getAllByRole('textbox')[0], '1 guest with peanut allergy');
+    await user.type(screen.getAllByRole('textbox')[1], '1 vegetarian guest');
+    await user.click(screen.getAllByRole('checkbox')[0]);
+    await user.click(screen.getByRole('button', { name: 'Confirm booking' }));
+    await waitFor(() => expect(createBooking).toHaveBeenCalledWith({
+      slotId: 101,
+      partySize: 2,
+      requirements: [
+        { id: 1, description: '1 guest with peanut allergy', allergies: true },
+        { id: 2, description: '1 vegetarian guest', allergies: false },
+      ],
+    }));
+    expect(await screen.findByRole('heading', { name: 'Booking confirmed!' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: /confirmed dietary requirements/i })).toHaveTextContent('peanut allergy');
+    expect(screen.getByRole('region', { name: /confirmed dietary requirements/i })).toHaveTextContent('Allergy — special care required');
+  });
+
+  it('does not submit booking while a dietary entry has no description', async () => {
+    const hiker = { id: 1, role: 'hiker' };
+    useAuth.mockReturnValue({ user: hiker, loadingAuth: false, refreshUser: vi.fn().mockResolvedValue(hiker) });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/book', state: { bookingDraft: mockDraft } }]}>
+        <BookingPage />
+      </MemoryRouter>
+    );
+    await user.click(screen.getByRole('button', { name: /add dietary requirement/i }));
+    await user.click(screen.getByRole('button', { name: 'Confirm booking' }));
+    expect(screen.getByText(/Please describe dietary requirement 1/i)).toBeInTheDocument();
+    expect(getSlotSeating).not.toHaveBeenCalled();
+    expect(createBooking).not.toHaveBeenCalled();
+  });
+
+  it('hides sensitive requirement fields until the hiker has signed in', () => {
+    useAuth.mockReturnValue({ user: null, loadingAuth: false });
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/book', state: { bookingDraft: mockDraft } }]}>
+        <BookingPage />
+      </MemoryRouter>
+    );
+    expect(screen.getByText(/Sign in to add dietary requirements/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /add dietary requirement/i })).not.toBeInTheDocument();
+  });
+
 });

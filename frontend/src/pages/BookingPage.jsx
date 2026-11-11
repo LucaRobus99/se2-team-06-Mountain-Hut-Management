@@ -4,6 +4,8 @@ import { Alert, Modal } from 'react-bootstrap';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { getPendingBooking, clearPendingBooking } from '../utils/pendingBooking.js';
 import SplitSeatingModal from '../components/SplitSeatingModal.jsx';
+import PartyRequirementsFields from '../components/PartyRequirementsFields.jsx';
+import { validatePartyRequirements } from '../utils/partyRequirements.js';
 import bookingBackground from '../assets/edelweiss-booking-background.jpg';
 import EdelweissBrand from '../components/EdelweissBrand.jsx';
 import { createBooking, getBooking, getSlotSeating, bookingErrorMessage } from '../api/booking.js';
@@ -34,6 +36,10 @@ export default function BookingPage() {
   // is the source of truth for both refresh and direct links.
   const draft = bookingId ? null : (location.state?.bookingDraft || storedDraft);
   const [seating, setSeating] = useState(draft?.seating || null);
+  // Allergy information remains in React memory until submitted; do not store it
+  // in pendingBooking/sessionStorage, which is reserved for non-sensitive choices.
+  const [partyRequirements, setPartyRequirements] = useState([]);
+  const [showRequirementErrors, setShowRequirementErrors] = useState(false);
   const [splitAcknowledged, setSplitAcknowledged] = useState(Boolean(draft?.seating?.requiresConfirmation));
   const [pendingSplit, setPendingSplit] = useState(null);
   const [duplicateBooking, setDuplicateBooking] = useState(false);
@@ -130,6 +136,7 @@ export default function BookingPage() {
     try {
       const confirmed = await createBooking({
         slotId: draft.selectedSlotId, partySize: Number(draft.partySize),
+        requirements: partyRequirements,
       });
       clearPendingBooking();
       setPendingSplit(null);
@@ -150,6 +157,9 @@ export default function BookingPage() {
   async function confirmBooking() {
     if (!draft || !seating || !selectedSlot || busy || booking || staleSelection || loadingAuth) return;
     if (!user) { goToLogin(); return; }
+    setShowRequirementErrors(true);
+    const requirementsError = validatePartyRequirements(partyRequirements);
+    if (requirementsError) { setError(requirementsError); return; }
     if (user.role !== 'hiker') { setError('Only Hiker accounts can book online.'); return; }
     setCheckingSeating(true);
     setError('');
@@ -222,6 +232,32 @@ export default function BookingPage() {
             <div><dt>Guests</dt><dd>{shownGuests} {shownGuests === 1 ? 'person' : 'people'}</dd></div>
             <div className="eh-booking-seating-detail"><dt>Seating</dt><dd>{groupIsSplit ? 'Across multiple tables' : 'Together at one table'}</dd></div>
           </dl>
+
+          {booking && Array.isArray(booking.requirements) && booking.requirements.length > 0 && (
+            <section className="eh-party-confirmed" aria-label="Confirmed dietary requirements">
+              <h2>Dietary requirements</h2>
+              <ul>
+                {booking.requirements.map((item, index) => (
+                  <li key={index}>
+                    <span>{item.description}</span>
+                    {item.allergies && <strong className="eh-party-allergy-marker">Allergy — special care required</strong>}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {!booking && user?.role === 'hiker' && !loadingAuth && (
+            <PartyRequirementsFields
+              requirements={partyRequirements}
+              onChange={(next) => { setPartyRequirements(next); setError(''); }}
+              showErrors={showRequirementErrors}
+              disabled={busy}
+            />
+          )}
+          {!booking && !loadingAuth && !user && (
+            <p className="eh-party-login-note">Sign in to add dietary requirements before placing your booking.</p>
+          )}
 
           {booking && (
             <div className={`eh-booking-email-notice eh-booking-email-notice--${confirmationEmailStatus || 'unknown'}`} role="status">
