@@ -26,8 +26,9 @@ export default function PartyRequirementsFields({ requirements, onChange, showEr
         <span className="eh-party-optional">Optional</span>
       </div>
       <p className="eh-party-explanation">
-        Tell us about any special dietary needs in your party. Add separate entries for different guests,
-        and mention how many people are affected (for example, “2 vegetarian guests”).
+        Tell us about any special dietary needs in your party.
+        Add separate entries for different guests,
+        and mention how many people are affected.
       </p>
 
       {requirements.length === 0 && (
@@ -63,7 +64,7 @@ export default function PartyRequirementsFields({ requirements, onChange, showEr
               <label className="eh-party-allergy" htmlFor={allergyId}>
                 <input type="checkbox" id={allergyId} checked={entry.allergies} disabled={disabled}
                   onChange={(event) => updateRequirement(entry.id, { allergies: event.target.checked })} />
-                <span><strong>Contains an allergy</strong><small>Check this if any guest in this entry has an allergy. Special care is needed during preparation.</small></span>
+                <span><strong>Contains an allergy</strong><small>Check this if any guest in this entry has an allergy. <br></br> Special care is needed during preparation.</small></span>
               </label>
             </div>
           );

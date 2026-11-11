@@ -77,6 +77,16 @@ export async function createBooking({ slotId, partySize, requirements = [] }) {
   });
 }
 
+// MH-06 / MHM-115: only bookings owned by the authenticated hiker.
+// The backend derives the user from the session cookie.
+export async function getMyBookings() {
+  const result = await apiRequest('/api/bookings');
+  if (!result || !Array.isArray(result.bookings)) {
+    throw new Error('Unexpected bookings response from the server.');
+  }
+  return result.bookings;
+}
+
 export async function getBooking(bookingId) {
   if (!positiveInteger(bookingId)) throw new Error('Invalid booking reference.');
   return apiRequest(`/api/bookings/${bookingId}`);
