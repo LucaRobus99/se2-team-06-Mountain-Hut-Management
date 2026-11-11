@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router';
 import AppNavbar from '../components/AppNavbar.jsx';
 import '../styles/edelweiss-pages.css';
 
-const FULL_WIDTH_ROUTES = new Set(['/', '/login', '/register', '/availability', '/menu', '/about', '/find-us', '/book']);
+const FULL_WIDTH_ROUTES = new Set(['/', '/login', '/register', '/availability', '/menu', '/about', '/find-us', '/book', '/my-bookings']);
 
 export default function MainLayout() {
   const pathname = useLocation().pathname;
