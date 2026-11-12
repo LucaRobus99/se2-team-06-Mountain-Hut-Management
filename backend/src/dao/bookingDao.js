@@ -57,8 +57,32 @@ export function createBookingDao(db) {
       return rows[0] ?? null;
     },
 
-    /** List a hiker's bookings, including cancelled and past reservations. */
-    async findByHikerId(...args) {
+
+    /** MH-06: update the mutable fields (slot and party size) of a booking. */
+    async update(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const bookingId = a[0];
+      const booking = a[1] ?? {};
+      await exec.query(
+        `UPDATE bookings SET slot_id = $2, party_size = $3 WHERE id = $1`,
+        [bookingId, booking.slotId, booking.partySize]
+      );
+    },
+
+    /** MH-06: release the seats a booking currently holds before re-allocating. */
+    async deleteSeats(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      await exec.query('DELETE FROM booking_seats WHERE booking_id = $1', [a[0]]);
+    },
+
+    /** MH-06: remove a booking's requirements before inserting the new ones. */
+    async deleteRequirements(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      await exec.query('DELETE FROM booking_requirements WHERE booking_id = $1', [a[0]]);
+    },
+
+    /** MH-06: every booking owned by a hiker, newest slot first (same row shape as findById). */
+    async listByHiker(...args) {
       const { db: exec, args: a } = executorOf(args);
       const hikerId = a[0];
       const { rows } = await exec.query(
@@ -75,6 +99,7 @@ export function createBookingDao(db) {
       );
       return rows;
     },
+
 
     async getSeatAssignments(...args) {
       const { db: exec, args: a } = executorOf(args);
