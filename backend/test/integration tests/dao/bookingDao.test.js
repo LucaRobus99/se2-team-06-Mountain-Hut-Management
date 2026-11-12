@@ -135,4 +135,55 @@ describe('BookingDao - Integration Tests', () => {
 
   });
 
+  describe('insertRequirements and getRequirements', () => {
+    it('should successfully save and retrieve party requirements and allergy flags for a booking', async () => {
+      // 1. Create a booking
+      const bookingId = await bookingDao.create({
+        slotId: 3,
+        hikerId: 3,
+        contactName: 'Hanna Hiker',
+        email: 'hiker@hut.test',
+        partySize: 2,
+      });
+
+      // 2. Insert requirements with mixed boolean/number allergy flags
+      const requirementsToInsert = [
+        { description: '1 guest with severe peanut allergy', allergies: true },
+        { description: '1 vegetarian guest', allergies: false },
+      ];
+
+      await bookingDao.insertRequirements(bookingId, requirementsToInsert);
+
+      // 3. Retrieve and verify requirements from the database
+      const retrievedRequirements = await bookingDao.getRequirements(bookingId);
+      expect(retrievedRequirements).toBeInstanceOf(Array);
+      expect(retrievedRequirements.length).toBe(2);
+
+      expect(retrievedRequirements[0]).toMatchObject({
+        bookingId: bookingId,
+        description: '1 guest with severe peanut allergy',
+        allergies: 1, // Stored as integer in SQLite
+      });
+
+      expect(retrievedRequirements[1]).toMatchObject({
+        bookingId: bookingId,
+        description: '1 vegetarian guest',
+        allergies: 0,
+      });
+    });
+
+    it('should return an empty array if a booking has no requirements', async () => {
+      const bookingId = await bookingDao.create({
+        slotId: 5,
+        hikerId: 3,
+        contactName: 'Hanna Hiker',
+        email: 'hiker@hut.test',
+        partySize: 1,
+      });
+
+      const requirements = await bookingDao.getRequirements(bookingId);
+      expect(requirements).toEqual([]);
+    });
+  });
+
 });

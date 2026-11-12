@@ -114,4 +114,48 @@ describe('bookingDao - White-Box Tests', () => {
       await expect(dao.findConfirmedByHikerAndSlot(10, 20)).resolves.toBeNull();
     });
   });
+
+  describe('insertRequirements & getRequirements', () => {
+    it('should correctly insert requirements with various boolean/number representations for allergies', async () => {
+      db.query.mockResolvedValue({ rows: [] });
+
+      await dao.insertRequirements(12, [
+        { description: 'Vegan', allergies: true },
+        { description: 'Peanuts', allergies: 1 },
+        { description: 'Gluten', allergies: 'true' },
+        { description: 'Dairy', allergies: '1' },
+        { description: 'None', allergies: false },
+      ]);
+
+      expect(db.query).toHaveBeenCalledTimes(5);
+      expect(db.query.mock.calls[0][1]).toEqual([12, 'Vegan', 1]);
+      expect(db.query.mock.calls[1][1]).toEqual([12, 'Peanuts', 1]);
+      expect(db.query.mock.calls[2][1]).toEqual([12, 'Gluten', 1]);
+      expect(db.query.mock.calls[3][1]).toEqual([12, 'Dairy', 1]);
+      expect(db.query.mock.calls[4][1]).toEqual([12, 'None', 0]);
+    });
+
+    it('should handle object wrapper argument formats for insertRequirements', async () => {
+      db.query.mockResolvedValue({ rows: [] });
+
+      await dao.insertRequirements({ bookingId: 15, requirements: [{ description: 'Vegetarian', allergies: 0 }] });
+
+      expect(db.query).toHaveBeenCalledTimes(1);
+      expect(db.query.mock.calls[0][1]).toEqual([15, 'Vegetarian', 0]);
+    });
+
+    it('should not query database if requirements array is empty or missing', async () => {
+      await dao.insertRequirements(12, []);
+      await dao.insertRequirements(12, null);
+      expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it('should fetch requirements successfully', async () => {
+      const mockReqRows = [{ id: 1, bookingId: 5, description: 'Allergy', allergies: 1 }];
+      db.query.mockResolvedValue({ rows: mockReqRows });
+
+      await expect(dao.getRequirements(5)).resolves.toEqual(mockReqRows);
+      expect(db.query.mock.calls[0][1]).toEqual([5]);
+    });
+  });
 });

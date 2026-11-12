@@ -219,6 +219,7 @@ describe('bookingService - Black-Box Tests', () => {
         contactName: 'Mario Rossi',
         email: 'mario.rossi@example.com',
         contactNumber: '+393331234567',
+        requirements: [],
         split: false,
         seatAssignments: [
           { tableId: 1, tableLabel: 'T1', seats: 2 }
@@ -308,6 +309,48 @@ describe('bookingService - Black-Box Tests', () => {
 
       const result = await serviceWithEmail.createBooking(mockHiker, { slotId: 101, partySize: 2 });
       expect(result.id).toBe(100);
+    });
+
+    it('should throw a ValidationError if party requirements contain a non-boolean allergy flag', async () => {
+      slotDao.findById.mockResolvedValue({ 
+        id: 101, status: 'available', start_time: '14:00', date: '2026-08-14' 
+      });
+
+      await expect(
+        bookingService.createBooking(mockHiker, { 
+          slotId: 101, 
+          partySize: 2, 
+          requirements: [{ description: 'Vegan', allergies: 'yes' }] 
+        })
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it('should successfully create a booking including party requirements', async () => {
+      slotDao.findById.mockResolvedValue({ 
+        id: 101, status: 'available', start_time: '14:00', end_time: '16:00', date: '2026-08-14', meal: 'lunch' 
+      });
+      bookingDao.findConfirmedByHikerAndSlot.mockResolvedValue(null);
+      slotDao.getTablesWithFreeForSlot.mockResolvedValue([{ id: 1, label: 'T1', seats: 4, free: 4 }]);
+      
+      bookingDao.insertRequirements = vi.fn().mockResolvedValue(true);
+      bookingDao.getRequirements = vi.fn().mockResolvedValue([{ description: 'Peanut allergy', allergies: 1 }]);
+
+      bookingDao.create.mockResolvedValue(105);
+      bookingDao.findById.mockResolvedValue({
+        id: 105, status: 'confirmed', hiker_id: 10, slot_id: 101, slot_date: '2026-08-14',
+        slot_start_time: '14:00', slot_end_time: '16:00', meal: 'lunch', party_size: 2,
+        contact_name: 'Mario', email: 'm@example.com', phone: '123', created_at: '2026-08-14T07:05:00.000Z'
+      });
+      bookingDao.getSeatAssignments.mockResolvedValue([{ tableId: 1, tableLabel: 'T1', seats: 2 }]);
+
+      const result = await bookingService.createBooking(mockHiker, {
+        slotId: 101,
+        partySize: 2,
+        requirements: [{ description: 'Peanut allergy', allergies: true }]
+      });
+
+      expect(bookingDao.insertRequirements).toHaveBeenCalled();
+      expect(result.requirements).toEqual([{ description: 'Peanut allergy', allergies: true }]);
     });
 
   });

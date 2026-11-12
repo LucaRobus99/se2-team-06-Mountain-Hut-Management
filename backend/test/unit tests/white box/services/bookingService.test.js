@@ -359,4 +359,75 @@ describe('bookingService - White-Box Tests', () => {
 
   });
 
+  describe('Internal Party Requirements & Validation Branches', () => {
+
+    it('should throw ValidationError if requirements is not an array', async () => {
+      slotDao.findById.mockResolvedValue({ 
+        id: 101, status: 'available', start_time: '14:00', date: '2026-08-14' 
+      });
+
+      await expect(
+        bookingService.createBooking(mockHiker, { 
+          slotId: 101, 
+          partySize: 2, 
+          requirements: 'not-an-array' 
+        })
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it('should throw ValidationError if a requirement entry is not a valid object or has invalid description/allergies', async () => {
+      slotDao.findById.mockResolvedValue({ 
+        id: 101, status: 'available', start_time: '14:00', date: '2026-08-14' 
+      });
+
+      // Test with non-object entry inside array
+      await expect(
+        bookingService.createBooking(mockHiker, { 
+          slotId: 101, 
+          partySize: 2, 
+          requirements: [null] 
+        })
+      ).rejects.toThrow(ValidationError);
+
+      // Test with description too long (>500 chars)
+      await expect(
+        bookingService.createBooking(mockHiker, { 
+          slotId: 101, 
+          partySize: 2, 
+          requirements: [{ description: 'a'.repeat(501), allergies: true }] 
+        })
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it('should fallback to body requirements if getRequirements getter throws an error', async () => {
+      slotDao.findById.mockResolvedValue({ 
+        id: 101, status: 'available', start_time: '14:00', end_time: '16:00', date: '2026-08-14', meal: 'lunch' 
+      });
+      bookingDao.findConfirmedByHikerAndSlot.mockResolvedValue(null);
+      slotDao.getTablesWithFreeForSlot.mockResolvedValue([{ id: 1, label: 'T1', seats: 4, free: 4 }]);
+      
+      bookingDao.insertRequirements = vi.fn().mockResolvedValue(true);
+      // Simulate getter throwing an error to test the catch fallback branch
+      bookingDao.getRequirements = vi.fn().mockRejectedValue(new Error('DB read error'));
+
+      bookingDao.create.mockResolvedValue(105);
+      bookingDao.findById.mockResolvedValue({
+        id: 105, status: 'confirmed', hiker_id: 10, slot_id: 101, slot_date: '2026-08-14',
+        slot_start_time: '14:00', slot_end_time: '16:00', meal: 'lunch', party_size: 2,
+        contact_name: 'Mario', email: 'm@example.com', phone: '123', created_at: '2026-08-14T07:05:00.000Z'
+      });
+      bookingDao.getSeatAssignments.mockResolvedValue([{ tableId: 1, tableLabel: 'T1', seats: 2 }]);
+
+      const result = await bookingService.createBooking(mockHiker, {
+        slotId: 101,
+        partySize: 2,
+        requirements: [{ description: 'Gluten-free', allergies: false }]
+      });
+
+      // Should fallback gracefully and return requirements from body normalization
+      expect(result.requirements).toEqual([{ description: 'Gluten-free', allergies: false }]);
+    });
+
+  });
+
 });
