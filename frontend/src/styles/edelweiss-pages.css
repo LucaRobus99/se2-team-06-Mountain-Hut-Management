@@ -759,3 +759,221 @@
 @media (max-width: 390px) {
   .eh-booking-recap { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* 12 Nov 2026 – gentle, consistent typography for the availability selection. */
+.eh-selection-summary {
+  background: #fffdf8;
+  border-color: #d8dfd3;
+  border-left: 4px solid #547b5d;
+  box-shadow: 0 12px 30px rgba(42, 55, 39, .065);
+  padding: clamp(1.1rem, 2vw, 1.65rem) clamp(1.25rem, 2.6vw, 2.1rem);
+}
+.eh-selection-copy { min-width: 0; }
+.eh-selection-summary .eh-page-eyebrow { color: #8b7050; margin-bottom: .35rem; }
+.eh-selection-main { display: flex; align-items: baseline; gap: .55rem 1.15rem; flex-wrap: wrap; }
+.eh-selection-summary .eh-selection-main h3 {
+  color: #203c2a; font: 700 clamp(1.8rem, 3vw, 2.2rem)/1.15 Georgia, 'Palatino Linotype', serif;
+  letter-spacing: -.045em; margin: 0;
+}
+.eh-selection-seating { color: #415d47; font: 400 1.02rem/1.45 Georgia, 'Palatino Linotype', serif; }
+.eh-selection-summary .eh-selection-meta { margin-top: .38rem; color: #697269; font: 400 .96rem/1.4 Georgia, serif; }
+.eh-selection-meta span { padding-inline: .28rem; color: #a1a69a; }
+.eh-slot-duplicate-notice { margin: 1.1rem 0 0; border-radius: .7rem; font: 400 .98rem/1.45 Georgia, serif; }
+
+/* MHM-115 — review option B: one card with a quiet internal division. */
+.eh-booking-scene { min-height: calc(100svh - 86px); background-size: cover; }
+.eh-booking-card { position: relative; padding: clamp(1.5rem, 3vw, 2.45rem); }
+.eh-booking-card--review { width: min(100%, 860px); }
+.eh-booking-review-heading { margin: 0 0 1.5rem; }
+.eh-booking-card--review h1 { text-align: left; margin: 0 0 .3rem; font-size: clamp(1.95rem, 3vw, 2.4rem); }
+.eh-booking-review-heading > p { margin: 0; font: 400 .99rem/1.45 Georgia, serif; color: #697569; }
+.eh-booking-content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr);
+  gap: 0;
+  border: 1px solid #dedfd2;
+  border-radius: .85rem;
+  background: #fffefa;
+  overflow: hidden;
+}
+.eh-booking-panel { min-width: 0; padding: clamp(1.1rem, 2vw, 1.65rem); }
+.eh-booking-panel--dietary { border-left: 1px solid #dedfd2; }
+.eh-booking-panel .eh-booking-details-heading,
+.eh-booking-panel .eh-party-requirements h2 { color: var(--eh-sienna); font: 700 1.15rem/1.3 Georgia, serif; margin: 0 0 .9rem; }
+.eh-booking-panel .eh-party-requirements { border: 0; margin: 0; padding: 0; }
+.eh-booking-panel .eh-party-requirements-heading { margin-bottom: .3rem; }
+.eh-booking-panel .eh-party-requirements h2 { margin-bottom: 0; }
+.eh-booking-panel .eh-party-explanation { margin: .35rem 0 .85rem; }
+.eh-booking-card--review .eh-party-empty { display: none; }
+.eh-booking-review-date { font: 400 1rem/1.4 Georgia,serif; color: #5e6f63; margin: 0 0 .25rem; }
+.eh-booking-review-time { font: 700 clamp(1.55rem, 2.6vw, 2rem)/1.25 Georgia,serif; color: #1d3b2b; letter-spacing: -.03em; margin: 0 0 .9rem; }
+.eh-booking-review-facts { display: flex; align-items: baseline; flex-wrap: wrap; gap: .35rem .55rem; color: #2f4835; font: 600 .99rem/1.45 Georgia,serif; }
+.eh-booking-review-facts span[aria-hidden] { color: #a0a99a; }
+.eh-booking-review-seating { display: inline-block; margin: 1rem 0 0; padding: .55rem .8rem; border-radius: .5rem; background: #edf3eb; color: #3c6149; font: 500 .91rem/1.4 Georgia,serif; }
+.eh-booking-card--review .eh-booking-actions { margin-top: 1.35rem; max-width: none; }
+
+/* MHM-115 — booking confirmation: calm editorial layout with a distinct dietary section. */
+.eh-booking-card--confirmed {
+  width: min(100%, 740px);
+  border-top: 0;
+  padding: clamp(1.45rem, 3.5vw, 2.7rem);
+}
+.eh-confirmation-heading { text-align: center; margin-bottom: 1.65rem; }
+.eh-confirmation-heading .eh-booking-success-mark {
+  width: 58px;
+  height: 58px;
+  margin: 0 auto 1rem;
+  box-shadow: none;
+}
+.eh-confirmation-heading .eh-booking-success-mark svg { width: 32px; height: 32px; }
+.eh-confirmation-eyebrow {
+  margin: 0 0 .45rem;
+  color: #49714f;
+  font: 700 .76rem/1.3 Georgia, 'Palatino Linotype', serif;
+  text-transform: uppercase;
+  letter-spacing: .16em;
+}
+.eh-booking-card--confirmed .eh-confirmation-heading h1 {
+  margin: 0 0 .4rem;
+  font: 700 clamp(2rem, 3.8vw, 2.75rem)/1.15 Georgia, 'Palatino Linotype', serif;
+  color: #193728;
+  letter-spacing: -.035em;
+}
+.eh-confirmation-subtitle {
+  margin: 0;
+  color: #647365;
+  font: 400 1rem/1.45 Georgia, 'Palatino Linotype', serif;
+}
+.eh-confirmation-reservation {
+  background: #fffefa;
+  border: 1px solid #e0e3d9;
+  border-radius: .95rem;
+  padding: clamp(1.15rem, 2.65vw, 1.75rem);
+}
+.eh-confirmation-reservation h2,
+.eh-confirmation-dietary h2 {
+  margin: 0 0 1rem;
+  font: 700 1.35rem/1.3 Georgia, 'Palatino Linotype', serif;
+  color: #203d2c;
+}
+.eh-confirmation-visit {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  margin: 0;
+  border-radius: .7rem;
+  background: #edf3eb;
+  padding: 1.25rem 1.35rem;
+  gap: 1rem;
+}
+.eh-confirmation-visit > div,
+.eh-confirmation-facts > div { min-width: 0; }
+.eh-confirmation-visit dt,
+.eh-confirmation-facts dt {
+  margin: 0 0 .35rem;
+  color: #637965;
+  font: 700 .82rem/1.3 Georgia, 'Palatino Linotype', serif;
+}
+.eh-confirmation-visit dd {
+  margin: 0;
+  color: #1d402d;
+  font: 700 clamp(1.23rem, 2.25vw, 1.55rem)/1.3 Georgia, 'Palatino Linotype', serif;
+  overflow-wrap: anywhere;
+}
+.eh-confirmation-facts {
+  display: grid;
+  grid-template-columns: .75fr .75fr 1.5fr;
+  margin: 1.3rem 0 0;
+  gap: .9rem;
+}
+.eh-confirmation-facts > div + div { border-left: 1px solid #e3e5dc; padding-left: 1.1rem; }
+.eh-confirmation-facts dd {
+  margin: 0;
+  color: #254130;
+  font: 700 1rem/1.45 Georgia, 'Palatino Linotype', serif;
+  overflow-wrap: anywhere;
+}
+.eh-confirmation-dietary {
+  margin-top: 1.05rem;
+  padding: clamp(1.1rem, 2.5vw, 1.65rem);
+  background: #eef4ec;
+  border: 1px solid #d0dfcf;
+  border-radius: .95rem;
+}
+.eh-confirmation-dietary-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: .4rem .8rem;
+  margin-bottom: .55rem;
+}
+.eh-confirmation-dietary-heading h2 { margin: 0; }
+.eh-confirmation-dietary-heading > span {
+  color: #66816b;
+  font: 600 .86rem/1.35 Georgia, 'Palatino Linotype', serif;
+}
+.eh-confirmation-dietary ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.eh-confirmation-dietary li {
+  padding: .95rem 0;
+  overflow-wrap: anywhere;
+}
+.eh-confirmation-dietary li + li { border-top: 1px solid #d6e2d4; }
+.eh-confirmation-dietary-description {
+  display: block;
+  color: #263f30;
+  font: 600 1.06rem/1.5 Georgia, 'Palatino Linotype', serif;
+}
+.eh-confirmation-allergy-label {
+  display: inline-block;
+  margin-top: .45rem;
+  padding: .35rem .7rem;
+  border-radius: .4rem;
+  background: #fff0e7;
+  border: 1px solid #ebc6b2;
+  color: #94432d;
+  font: 700 .81rem/1.35 Georgia, 'Palatino Linotype', serif;
+}
+.eh-booking-card--confirmed .eh-confirmation-email {
+  margin-top: 1.05rem;
+  padding: .85rem 1.1rem;
+  font: 400 .9rem/1.5 Georgia, 'Palatino Linotype', serif;
+}
+.eh-confirmation-email strong { margin-bottom: .15rem; }
+.eh-confirmation-email span { display: block; overflow-wrap: anywhere; }
+.eh-booking-card--confirmed .eh-booking-actions { margin-top: 1.25rem; }
+
+@media (max-width: 560px) {
+  .eh-confirmation-visit { grid-template-columns: minmax(0, 1fr); gap: .9rem; padding: 1rem; }
+  .eh-confirmation-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem 0; }
+  .eh-confirmation-facts > div + div { padding-left: .85rem; }
+  .eh-confirmation-facts > div:nth-child(3) { grid-column: 1 / -1; border-left: 0; border-top: 1px solid #e3e5dc; padding: .8rem 0 0; }
+}
+
+/* Duplicate booking: one short red alert, with no repeated hut logo or decorative text. */
+.eh-booking-card--blocked { width: min(100%, 490px); text-align: center; padding: clamp(1.65rem, 4vw, 2.5rem); border: 1px solid #efccc7; }
+.eh-booking-blocked-message { color: #9c3935; }
+.eh-booking-blocked-icon { display: block; width: 42px; height: 42px; margin: 0 auto .9rem; }
+.eh-booking-card--blocked h1 { margin: 0 0 .6rem; color: #832b29; font-size: clamp(1.65rem, 3.2vw, 2rem); }
+.eh-booking-blocked-message > p { margin: 0; color: #5f6861; font: 400 .99rem/1.5 Georgia,serif; }
+.eh-booking-blocked-message .eh-booking-blocked-time { margin-top: .65rem; color: #8e3b35; font-weight: 700; }
+.eh-booking-card--blocked > .eh-button { margin-top: 1.45rem; width: 100%; min-height: 49px; justify-content: center; }
+.eh-slot-duplicate-notice { margin: 1.1rem 0 0; border-radius: .65rem; border-color: #e3a8a0; background: #fff0ee; color: #8f302b; font: 500 .96rem/1.45 Georgia,serif; }
+
+@media (max-width: 720px) {
+  .eh-booking-content-grid { grid-template-columns: minmax(0, 1fr); }
+  .eh-booking-panel--dietary { border-left: 0; border-top: 1px solid #dedfd2; }
+  .eh-booking-card--review { max-width: 600px; }
+}
+@media (max-width: 560px) {
+  .eh-booking-scene { padding-inline: .85rem; }
+  .eh-booking-panel { padding: 1rem; }
+  .eh-booking-ticket { padding: 1rem; }
+  .eh-booking-actions { flex-direction: column; }
+  .eh-booking-actions .eh-button { flex-basis: auto; width: 100%; }
+  .eh-selection-summary { align-items: stretch; }
+  .eh-selection-summary .eh-button { width: 100%; justify-content: center; }
+}

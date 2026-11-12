@@ -26,9 +26,7 @@ export default function PartyRequirementsFields({ requirements, onChange, showEr
         <span className="eh-party-optional">Optional</span>
       </div>
       <p className="eh-party-explanation">
-        Tell us about any special dietary needs in your party.
-        Add separate entries for different guests,
-        and mention how many people are affected.
+        Add any allergies or special diets, including how many guests are affected.
       </p>
 
       {requirements.length === 0 && (

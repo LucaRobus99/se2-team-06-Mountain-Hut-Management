@@ -77,6 +77,16 @@ export async function createBooking({ slotId, partySize, requirements = [] }) {
   });
 }
 
+// An authenticated preflight check. Never replace the transactional booking guard.
+export async function checkSlotBooking(slotId) {
+  if (!positiveInteger(slotId)) throw new Error('Invalid time slot.');
+  const result = await apiRequest(`/api/bookings/slot-status?slotId=${slotId}`);
+  if (typeof result?.alreadyBooked !== 'boolean') {
+    throw new Error('Unable to check your existing reservation. Please try again.');
+  }
+  return result.alreadyBooked;
+}
+
 // MH-06 / MHM-115: only bookings owned by the authenticated hiker.
 // The backend derives the user from the session cookie.
 export async function getMyBookings() {

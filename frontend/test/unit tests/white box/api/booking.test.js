@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { getAvailableSlots, getSlotSeating, createBooking } from '../../../../src/api/booking.js';
+import { getAvailableSlots, getSlotSeating, createBooking, checkSlotBooking } from '../../../../src/api/booking.js';
 
 describe('Booking API - White-Box Unit Tests', () => {
 
@@ -65,6 +65,20 @@ describe('Booking API - White-Box Unit Tests', () => {
         expect.stringContaining('/api/availability/1/seating?'),
         expect.objectContaining({ credentials: 'include' })
       );
+    });
+  });
+
+  describe('checkSlotBooking', () => {
+    it('uses the current authenticated session and reads the booking status', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true, status: 200, json: async () => ({ alreadyBooked: true }),
+      }));
+      await expect(checkSlotBooking(12)).resolves.toBe(true);
+      expect(fetch).toHaveBeenCalledWith('/api/bookings/slot-status?slotId=12',
+        expect.objectContaining({ credentials: 'include' }));
+    });
+    it('rejects invalid slot IDs before contacting the backend', async () => {
+      await expect(checkSlotBooking(0)).rejects.toThrow('Invalid time slot.');
     });
   });
 

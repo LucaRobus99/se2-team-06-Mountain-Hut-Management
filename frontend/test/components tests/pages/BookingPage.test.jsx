@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import BookingPage from '../../../src/pages/BookingPage.jsx';
 import { useAuth } from '../../../src/auth/AuthContext.jsx';
-import { createBooking, getBooking, getSlotSeating } from '../../../src/api/booking.js';
+import { createBooking, getBooking, getSlotSeating, checkSlotBooking } from '../../../src/api/booking.js';
 import { getPendingBooking, savePendingBooking } from '../../../src/utils/pendingBooking.js';
 
 // Mock AuthContext and Booking API functions
@@ -14,6 +14,7 @@ vi.mock('../../../src/auth/AuthContext.jsx', () => ({
 
 vi.mock('../../../src/api/booking.js', () => ({
   getSlotSeating: vi.fn(),
+  checkSlotBooking: vi.fn(),
   createBooking: vi.fn(),
   getBooking: vi.fn(),
   bookingErrorMessage: vi.fn((err) => err.message || 'Error'),
@@ -42,11 +43,12 @@ describe('BookingPage Component Integration Tests', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    checkSlotBooking.mockResolvedValue(false);
     window.sessionStorage.clear();
     vi.spyOn(window, 'confirm').mockImplementation(() => true);
   });
 
-  it('should render review details correctly when bookingDraft is provided', () => {
+  it('should render review details correctly when bookingDraft is provided', async () => {
     useAuth.mockReturnValue({ user: { id: 1, role: 'hiker' }, loadingAuth: false, refreshUser: vi.fn() });
 
     render(
@@ -55,7 +57,7 @@ describe('BookingPage Component Integration Tests', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Review your booking' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Review your booking' })).toBeInTheDocument();
     expect(screen.getByText('15 November 2026')).toBeInTheDocument();
     expect(screen.getByText('12:30 – 14:00')).toBeInTheDocument();
     expect(screen.getByText('Lunch')).toBeInTheDocument();
@@ -94,14 +96,15 @@ describe('BookingPage Component Integration Tests', () => {
       </MemoryRouter>
     );
 
-    const confirmButton = screen.getByRole('button', { name: /confirm booking/i });
+    const confirmButton = await screen.findByRole('button', { name: /confirm booking/i });
     await user.click(confirmButton);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { level: 1, name: 'Booking confirmed!' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 1, name: 'Your table is booked!' })).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/You’re all set! Your table is reserved/i)).toBeInTheDocument();
+    expect(screen.getByText(/Edelweiss Hut · Reservation #281/i)).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /confirmed dietary requirements/i })).not.toBeInTheDocument();
     expect(screen.getByText(/Book another table/i)).toBeInTheDocument();
     expect(screen.getByText(/Back to home/i)).toBeInTheDocument();
     expect(createBooking).toHaveBeenCalledTimes(1);
@@ -114,7 +117,7 @@ describe('BookingPage Component Integration Tests', () => {
         <Routes><Route path="/book/confirmation/:bookingId" element={<BookingPage />} /></Routes>
       </MemoryRouter>
     );
-    expect(await screen.findByRole('heading', { name: 'Booking confirmed!' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Your table is booked!' })).toBeInTheDocument();
     expect(createBooking).toHaveBeenCalledTimes(1); // A refresh never creates another booking.
     expect(getBooking).toHaveBeenCalledTimes(2);
   });
@@ -133,16 +136,15 @@ describe('BookingPage Component Integration Tests', () => {
       </MemoryRouter>
     );
 
-    await user.click(screen.getByRole('link', { name: 'Back' }));
+    await user.click(await screen.findByRole('link', { name: 'Back' }));
     expect(screen.getByText('Availability search')).toBeInTheDocument();
     expect(getPendingBooking()).toBeNull();
   });
 
-  it('an already booked slot can return to availability to select another time', async () => {
+  it('blocks an already booked slot before loading the dietary review', async () => {
     const mockHiker = { id: 1, role: 'hiker' };
     useAuth.mockReturnValue({ user: mockHiker, loadingAuth: false, refreshUser: vi.fn().mockResolvedValue(mockHiker) });
-    getSlotSeating.mockResolvedValue(mockDraft.seating);
-    createBooking.mockRejectedValue(Object.assign(new Error('Duplicate booking'), { code: 'BOOKING_ALREADY_EXISTS', status: 409 }));
+    checkSlotBooking.mockResolvedValue(true);
     savePendingBooking(mockDraft);
     const user = userEvent.setup();
 
@@ -155,8 +157,9 @@ describe('BookingPage Component Integration Tests', () => {
       </MemoryRouter>
     );
 
-    await user.click(screen.getByRole('button', { name: 'Confirm booking' }));
-    expect(await screen.findByRole('dialog')).toHaveTextContent('You already have a reservation');
+    expect(await screen.findByRole('heading', { name: /you're already booked/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /add dietary requirement/i })).not.toBeInTheDocument();
+    expect(createBooking).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Choose another time' }));
     expect(screen.getByText('Availability search')).toBeInTheDocument();
     expect(getPendingBooking()).toBeNull();
@@ -177,7 +180,7 @@ describe('BookingPage Component Integration Tests', () => {
         </Routes>
       </MemoryRouter>
     );
-    await user.click(screen.getByRole('button', { name: 'Confirm booking' }));
+    await user.click(await screen.findByRole('button', { name: 'Confirm booking' }));
     await user.click(await screen.findByRole('button', { name: 'Choose another time' }));
     expect(screen.getByText('Availability search')).toBeInTheDocument();
     expect(createBooking).not.toHaveBeenCalled();
@@ -207,7 +210,7 @@ describe('BookingPage Component Integration Tests', () => {
         </Routes>
       </MemoryRouter>
     );
-    await user.click(screen.getByRole('button', { name: /add dietary requirement/i }));
+    await user.click(await screen.findByRole('button', { name: /add dietary requirement/i }));
     await user.click(screen.getByRole('button', { name: /add dietary requirement/i }));
     await user.type(screen.getAllByRole('textbox')[0], '1 guest with peanut allergy');
     await user.type(screen.getAllByRole('textbox')[1], '1 vegetarian guest');
@@ -221,7 +224,7 @@ describe('BookingPage Component Integration Tests', () => {
         { id: 2, description: '1 vegetarian guest', allergies: false },
       ],
     }));
-    expect(await screen.findByRole('heading', { name: 'Booking confirmed!' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Your table is booked!' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: /confirmed dietary requirements/i })).toHaveTextContent('peanut allergy');
     expect(screen.getByRole('region', { name: /confirmed dietary requirements/i })).toHaveTextContent('Allergy — special care required');
   });
@@ -235,21 +238,21 @@ describe('BookingPage Component Integration Tests', () => {
         <BookingPage />
       </MemoryRouter>
     );
-    await user.click(screen.getByRole('button', { name: /add dietary requirement/i }));
+    await user.click(await screen.findByRole('button', { name: /add dietary requirement/i }));
     await user.click(screen.getByRole('button', { name: 'Confirm booking' }));
     expect(screen.getByText(/Please describe dietary requirement 1/i)).toBeInTheDocument();
     expect(getSlotSeating).not.toHaveBeenCalled();
     expect(createBooking).not.toHaveBeenCalled();
   });
 
-  it('hides sensitive requirement fields until the hiker has signed in', () => {
+  it('hides sensitive requirement fields until the hiker has signed in', async () => {
     useAuth.mockReturnValue({ user: null, loadingAuth: false });
     render(
       <MemoryRouter initialEntries={[{ pathname: '/book', state: { bookingDraft: mockDraft } }]}>
         <BookingPage />
       </MemoryRouter>
     );
-    expect(screen.getByText(/Sign in to add dietary requirements/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Sign in to add dietary requirements/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /add dietary requirement/i })).not.toBeInTheDocument();
   });
 

@@ -22,6 +22,78 @@ describe('BookingRoutes - Integration Tests', () => {
     await db.close();
   });
 
+  describe('GET /api/bookings – own booking history', () => {
+    it('rejects unauthenticated requests', async () => {
+      const response = await request(app).get('/api/bookings');
+      expect(response.status).toBe(401);
+    });
+
+    it('returns only the hiker bookings, with saved dietary requirements', async () => {
+      await agent.post('/api/auth/login').send({ email: 'hiker@hut.test', password: 'password' });
+      const empty = await agent.get('/api/bookings');
+      expect(empty.status).toBe(200);
+      expect(empty.body).toEqual({ bookings: [] });
+
+      const create = await agent.post('/api/bookings').send({
+        slotId: 3,
+        partySize: 2,
+        requirements: [{ description: '1 vegetarian guest', allergies: false },
+          { description: '1 peanut allergy', allergies: true }],
+      });
+      expect(create.status).toBe(201);
+
+      // Another user's booking must never appear in this hiker's history.
+      await db.query(
+        `INSERT INTO bookings (slot_id, hiker_id, party_size, status, contact_name)
+         VALUES ($1, $2, $3, 'confirmed', 'Another guest')`,
+        [4, 1, 2],
+      );
+
+      const response = await agent.get('/api/bookings');
+      expect(response.status).toBe(200);
+      expect(response.body.bookings).toHaveLength(1);
+      const booking = response.body.bookings[0];
+      expect(booking.id).toBe(create.body.id);
+      expect(booking.slot).toMatchObject({ id: 3, meal: 'lunch' });
+      expect(booking.partySize).toBe(2);
+      expect(booking.requirements).toEqual([
+        { description: '1 vegetarian guest', allergies: false },
+        { description: '1 peanut allergy', allergies: true },
+      ]);
+      expect(booking.seatAssignments.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('GET /api/bookings/slot-status - preflight duplicate check', () => {
+    it('requires a session and a valid slot ID', async () => {
+      const anonymous = await request(app).get('/api/bookings/slot-status?slotId=3');
+      expect(anonymous.status).toBe(401);
+
+      await agent.post('/api/auth/login').send({ email: 'hiker@hut.test', password: 'password' });
+      const invalid = await agent.get('/api/bookings/slot-status?slotId=invalid');
+      expect(invalid.status).toBe(400);
+    });
+
+    it('detects an existing booking before review, without changing seat allocation', async () => {
+      await agent.post('/api/auth/login').send({ email: 'hiker@hut.test', password: 'password' });
+      const before = await agent.get('/api/bookings/slot-status?slotId=3');
+      expect(before.status).toBe(200);
+      expect(before.body).toEqual({ alreadyBooked: false });
+
+      const created = await agent.post('/api/bookings').send({ slotId: 3, partySize: 2 });
+      expect(created.status).toBe(201);
+
+      const after = await agent.get('/api/bookings/slot-status?slotId=3');
+      expect(after.status).toBe(200);
+      expect(after.body).toEqual({ alreadyBooked: true });
+
+      // The POST still independently protects the booking from duplicate submissions.
+      const duplicate = await agent.post('/api/bookings').send({ slotId: 3, partySize: 2 });
+      expect(duplicate.status).toBe(409);
+      expect(duplicate.body.error.code).toBe('BOOKING_ALREADY_EXISTS');
+    });
+  });
+
   describe('Authentication requirements', () => {
     
     it('should return 401 when trying to create a booking without being logged in', async () => {
