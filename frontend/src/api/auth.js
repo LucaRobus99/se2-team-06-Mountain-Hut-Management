@@ -53,6 +53,24 @@ export async function getCurrentUser() {
     }
 }
 
+// Optional account features: backend implementation must match these endpoints.
+export async function updateMyProfile({ name, phone }) {
+    const data = await request('/api/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, phone }),
+    });
+    return data.user;
+}
+
+export async function changeMyPassword({ currentPassword, newPassword }) {
+    return request('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword }),
+    });
+}
+
 export async function logout() {
     try {
         await request('/api/auth/logout', { method: 'POST' });
