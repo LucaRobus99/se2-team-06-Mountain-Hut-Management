@@ -53,12 +53,12 @@ export async function getCurrentUser() {
     }
 }
 
-// Optional account features: backend implementation must match these endpoints.
-export async function updateMyProfile({ name, phone }) {
+// Account changes are persisted in SQLite for the authenticated hiker.
+export async function updateMyProfile({ name, phone, notes, emergencyContact }) {
     const data = await request('/api/auth/me', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, phone }),
+        body: JSON.stringify({ name, phone, notes, emergencyContact }),
     });
     return data.user;
 }
@@ -69,6 +69,20 @@ export async function changeMyPassword({ currentPassword, newPassword }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentPassword, newPassword }),
     });
+}
+
+export async function uploadMyAvatar(imageData) {
+    const data = await request('/api/auth/avatar', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageData }),
+    });
+    return data.user;
+}
+
+export async function removeMyAvatar() {
+    const data = await request('/api/auth/avatar', { method: 'DELETE' });
+    return data.user;
 }
 
 export async function logout() {

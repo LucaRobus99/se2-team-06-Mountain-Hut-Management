@@ -13,6 +13,11 @@ export function sanitizeUser(user) {
     displayName: user.name,
     role: user.role,
     phone: user.phone ?? null,
+    ...(Object.prototype.hasOwnProperty.call(user, 'notes') ? { notes: user.notes ?? null } : {}),
+    ...(Object.prototype.hasOwnProperty.call(user, 'emergency_contact') ? { emergencyContact: user.emergency_contact ?? null } : {}),
+    ...(Object.prototype.hasOwnProperty.call(user, 'avatar_mime') ? {
+      avatarUrl: user.avatar_mime ? `/api/auth/avatar?v=${Number(user.avatar_version) || 0}` : null,
+    } : {}),
   };
 }
 
