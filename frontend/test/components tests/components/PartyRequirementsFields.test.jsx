@@ -39,4 +39,34 @@ describe('PartyRequirementsFields', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/enter a description/i);
     expect(screen.getByRole('textbox')).toHaveAttribute('aria-invalid', 'true');
   });
+
+  it('disables all inputs and buttons when disabled prop is true', () => {
+    const initialRequirements = [{ id: 1, description: 'Test requirement', allergies: true }];
+    render(
+      <PartyRequirementsFields 
+        requirements={initialRequirements} 
+        onChange={() => {}} 
+        disabled={true} 
+      />
+    );
+
+    expect(screen.getByRole('textbox')).toBeDisabled();
+    expect(screen.getByRole('checkbox')).toBeDisabled();
+    expect(screen.getByRole('button', { name: /remove requirement 1/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /add dietary requirement/i })).toBeDisabled();
+  });
+
+  it('does not show validation errors when showErrors is false', () => {
+    const initialRequirements = [{ id: 1, description: '', allergies: false }];
+    render(
+      <PartyRequirementsFields 
+        requirements={initialRequirements} 
+        onChange={() => {}} 
+        showErrors={false} 
+      />
+    );
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveAttribute('aria-invalid', 'false');
+  });
 });

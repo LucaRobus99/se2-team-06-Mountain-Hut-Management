@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validatePartyRequirements, serializePartyRequirements, MAX_REQUIREMENT_DESCRIPTION_LENGTH } from '../../../../../src/utils/partyRequirements.js';
+import { validatePartyRequirements, serializePartyRequirements, MAX_REQUIREMENT_DESCRIPTION_LENGTH } from '../../../../src/utils/partyRequirements.js';
 
 describe('MH-05 dietary requirements', () => {
   it('allows a booking without any requirements', () => {
@@ -27,5 +27,10 @@ describe('MH-05 dietary requirements', () => {
 
   it('caps each description at the UI field length', () => {
     expect(validatePartyRequirements([{ description: 'a'.repeat(MAX_REQUIREMENT_DESCRIPTION_LENGTH + 1), allergies: true }])).toMatch(/characters or fewer/i);
+  });
+
+  it('rejects entries that are null or undefined inside the array', () => {
+    expect(validatePartyRequirements([null])).toMatch(/requirement 1/i);
+    expect(validatePartyRequirements([undefined])).toMatch(/requirement 1/i);
   });
 });

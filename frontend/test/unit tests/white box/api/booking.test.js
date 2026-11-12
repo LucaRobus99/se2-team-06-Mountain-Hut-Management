@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { getAvailableSlots, getSlotSeating, createBooking } from '../../../../src/api/booking.js';
+import { getAvailableSlots, getSlotSeating, createBooking, getBooking, bookingErrorMessage } from '../../../../src/api/booking.js';
 
 describe('Booking API - White-Box Unit Tests', () => {
 
@@ -137,6 +137,55 @@ describe('Booking API - White-Box Unit Tests', () => {
       })).rejects.toMatchObject({ code: 'VALIDATION_ERROR', status: 400 });
     });
 
+  });
+
+  describe('getBooking', () => {
+    it('should throw an error if bookingId is invalid', async () => {
+      await expect(getBooking(0)).rejects.toThrow('Invalid booking reference.');
+      await expect(getBooking('abc')).rejects.toThrow('Invalid booking reference.');
+    });
+
+    it('should successfully fetch booking details for a valid bookingId', async () => {
+      const mockBooking = { id: 10, status: 'confirmed', partySize: 2 };
+
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockBooking
+      }));
+
+      const result = await getBooking(10);
+      expect(result).toEqual(mockBooking);
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/bookings/10',
+        expect.objectContaining({ credentials: 'include' })
+      );
+    });
+  });
+
+  describe('bookingErrorMessage', () => {
+    it('should return correct messages for known error codes', () => {
+      expect(bookingErrorMessage({ code: 'UNAUTHENTICATED' })).toContain('session has expired');
+      expect(bookingErrorMessage({ code: 'FORBIDDEN' })).toContain('Only Hiker accounts');
+      expect(bookingErrorMessage({ code: 'BOOKING_ALREADY_EXISTS' })).toContain('already have a booking');
+      expect(bookingErrorMessage({ code: 'INSUFFICIENT_CAPACITY' })).toContain('remaining seats have just been booked');
+      expect(bookingErrorMessage({ code: 'SLOT_NOT_AVAILABLE' })).toContain('no longer open for booking');
+      expect(bookingErrorMessage({ code: 'SLOT_TOO_LATE' })).toContain('Bookings close two hours');
+      expect(bookingErrorMessage({ code: 'SLOT_NOT_FOUND' })).toContain('no longer available');
+      expect(bookingErrorMessage({ code: 'NETWORK_ERROR' })).toContain('cannot reach the server');
+    });
+
+    it('should handle requirement validation errors specifically', () => {
+      const error = {
+        code: 'VALIDATION_ERROR',
+        details: [{ field: 'requirements.0.description', message: 'Invalid' }]
+      };
+      expect(bookingErrorMessage(error)).toContain('dietary requirements');
+    });
+
+    it('should fallback to default error message if code is unknown', () => {
+      expect(bookingErrorMessage({ message: 'Custom server error' })).toBe('Custom server error');
+    });
   });
 
 });
