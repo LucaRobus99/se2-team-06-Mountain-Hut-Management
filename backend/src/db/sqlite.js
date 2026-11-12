@@ -28,6 +28,7 @@ export function createSqliteDb(file) {
   migrateHikerProfile(database);
   migrateMealAssignments(database);
   migrateBookingRequirements(database);
+  migrateAccountAvatar(database);
 
   let queue = Promise.resolve();
 
@@ -134,4 +135,12 @@ function migrateBookingRequirements(database) {
     created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
   )`);
   database.exec('CREATE INDEX IF NOT EXISTS idx_booking_requirements_booking ON booking_requirements (booking_id)');
+}
+
+/** Add avatar columns without resetting or touching existing reservations and slots. */
+function migrateAccountAvatar(database) {
+  const columns = new Set(database.prepare('PRAGMA table_info(users)').all().map((col) => col.name));
+  if (!columns.has('avatar_blob')) database.exec('ALTER TABLE users ADD COLUMN avatar_blob BLOB');
+  if (!columns.has('avatar_mime')) database.exec('ALTER TABLE users ADD COLUMN avatar_mime TEXT');
+  if (!columns.has('avatar_version')) database.exec('ALTER TABLE users ADD COLUMN avatar_version INTEGER NOT NULL DEFAULT 0');
 }

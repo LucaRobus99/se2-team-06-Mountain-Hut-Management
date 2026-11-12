@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS users (
     phone           VARCHAR(30),
     notes           TEXT,
     emergency_contact VARCHAR(200),
+    avatar_blob     BLOB,
+    avatar_mime     TEXT,
+    avatar_version  INTEGER NOT NULL DEFAULT 0,
     password_hash   TEXT NOT NULL,
     created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );

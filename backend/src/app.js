@@ -9,6 +9,7 @@ import { createBookingService } from './services/bookingService.js';
 import { createEmailService } from './services/emailService.js';
 import { createAuthRouter } from './routes/authRoutes.js';
 import { createRegistrationService } from './services/registrationService.js';
+import { createAccountService } from './services/accountService.js';
 import { createAvailabilityRouter } from './routes/availabilityRoutes.js';
 import { createBookingRouter } from './routes/bookingRoutes.js';
 import { createSlotRouter } from './routes/slotRoutes.js';
@@ -20,6 +21,8 @@ import { config } from './config/config.js';
 export function createApp({ db, timeZone = config.hutTimeZone, now = () => new Date() }) {
   const app = express();
 
+  // Avatar uploads need a larger body, but other endpoints retain the default 100 KB limit.
+  app.use('/api/auth/avatar', express.json({ limit: '768kb' }));
   app.use(express.json());
 
   const userDao = createUserDao(db);
@@ -45,12 +48,13 @@ export function createApp({ db, timeZone = config.hutTimeZone, now = () => new D
   const slotService = createSlotService({ slotDao, db, timeZone, now });
   const bookingService = createBookingService({ db, bookingDao, slotDao, timeZone, now, emailService });
   const registrationService = createRegistrationService({ userDao });
+  const accountService = createAccountService({ userDao });
 
   // Health check
   app.use('/api/health', createHealthRouter(db));
 
   // Authentication
-  app.use('/api/auth', createAuthRouter({ passport: auth, requireAuth, registrationService, now }));
+  app.use('/api/auth', createAuthRouter({ passport: auth, requireAuth, registrationService, accountService, now }));
 
   // Public availability, then authenticated bookings
   app.use('/api/availability', createAvailabilityRouter(slotService));
