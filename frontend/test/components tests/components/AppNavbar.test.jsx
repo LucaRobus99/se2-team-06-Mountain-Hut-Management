@@ -51,7 +51,38 @@ describe('AppNavbar Component Integration Tests', () => {
 
     // Verify user display name appears in the dropdown toggle title
     expect(screen.getByRole('button', { name: /mario rossi/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /^my bookings$/i })).toHaveAttribute('href', '/my-bookings');
+  });
+
+  it('should render "My Bookings" in the main navigation bar exclusively for authenticated hikers', () => {
+    useAuth.mockReturnValue({
+      user: { id: 1, displayName: 'Mario Rossi', role: 'hiker' },
+      loadingAuth: false,
+      signOut: vi.fn(),
+    });
+
+    const { rerender } = render(
+      <MemoryRouter>
+        <AppNavbar />
+      </MemoryRouter>
+    );
+
+    const myBookingsLink = screen.getByRole('link', { name: /^my bookings$/i });
+    expect(myBookingsLink).toBeInTheDocument();
+    expect(myBookingsLink).toHaveAttribute('href', '/my-bookings');
+
+    useAuth.mockReturnValue({
+      user: { id: 2, displayName: 'Staff Member', role: 'employee' },
+      loadingAuth: false,
+      signOut: vi.fn(),
+    });
+
+    rerender(
+      <MemoryRouter>
+        <AppNavbar />
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByRole('link', { name: /^my bookings$/i })).not.toBeInTheDocument();
   });
 
   it('should render employee user account info correctly when logged in as an employee or warden', () => {

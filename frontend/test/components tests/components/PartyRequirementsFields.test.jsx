@@ -69,4 +69,18 @@ describe('PartyRequirementsFields', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByRole('textbox')).toHaveAttribute('aria-invalid', 'false');
   });
+
+  it('initializes nextId correctly from pre-existing requirements and continues incrementing', async () => {
+    const initialRequirements = [{ id: 10, description: 'Pre-existing entry', allergies: false }];
+    function PreloadedExample() {
+      const [requirements, setRequirements] = useState(initialRequirements);
+      return <PartyRequirementsFields requirements={requirements} onChange={setRequirements} showErrors />;
+    }
+
+    const user = userEvent.setup();
+    render(<PreloadedExample />);
+
+    await user.click(screen.getByRole('button', { name: /add dietary requirement/i }));
+    expect(screen.getAllByRole('textbox')).toHaveLength(2);
+  });
 });

@@ -43,6 +43,24 @@ describe('MainLayout Component Integration Tests', () => {
     expect(mainElement).toHaveClass('eh-home-main');
   });
 
+  it('should render full-width layout correctly on /my-bookings route', () => {
+    render(
+      <MemoryRouter initialEntries={['/my-bookings']}>
+        <Routes>
+          <Route element={<MainLayout />}>
+            <Route path="/my-bookings" element={<div data-testid="bookings-outlet">My Bookings Content</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('bookings-outlet')).toBeInTheDocument();
+    
+    // Verify that /my-bookings applies 'eh-home-main' just like other full-width routes
+    const mainElement = screen.getByTestId('bookings-outlet').parentElement;
+    expect(mainElement).toHaveClass('eh-home-main');
+  });
+
   it('should wrap outlet content in a container for non-full-width routes', () => {
     render(
       <MemoryRouter initialEntries={['/staff/dashboard']}>

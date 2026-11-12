@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { getAvailableSlots, getSlotSeating, createBooking, getBooking, bookingErrorMessage } from '../../../../src/api/booking.js';
+import { getAvailableSlots, getSlotSeating, createBooking, getBooking, getMyBookings, bookingErrorMessage } from '../../../../src/api/booking.js';
 
 describe('Booking API - White-Box Unit Tests', () => {
 
@@ -160,6 +160,35 @@ describe('Booking API - White-Box Unit Tests', () => {
         '/api/bookings/10',
         expect.objectContaining({ credentials: 'include' })
       );
+    });
+  });
+
+  describe('getMyBookings', () => {
+    it('should successfully return bookings array when server responds correctly', async () => {
+      const mockResponse = { bookings: [{ id: 1, status: 'confirmed' }] };
+
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockResponse
+      }));
+
+      const result = await getMyBookings();
+      expect(result).toEqual(mockResponse.bookings);
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/bookings',
+        expect.objectContaining({ credentials: 'include' })
+      );
+    });
+
+    it('should throw an error if the server response structure is invalid or missing bookings array', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ invalidKey: 'not an array' })
+      }));
+
+      await expect(getMyBookings()).rejects.toThrow('Unexpected bookings response from the server.');
     });
   });
 
