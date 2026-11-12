@@ -9,7 +9,7 @@ import StaffTimePicker from '../components/StaffTimePicker.jsx';
 const MEALS = [
   { value: 'breakfast', label: 'Breakfast' },
   { value: 'lunch', label: 'Lunch' },
-  { value: 'aperitivo', label: 'Aperitivo' },
+  { value: 'aperitivo', label: 'Aperitif' },
   { value: 'dinner', label: 'Dinner' },
 ];
 const emptyTable = (id) => ({ rowId: id, tableIdentifier: `T${id}`, seats: '4' });

@@ -50,7 +50,7 @@ export default function MyBookingsPage() {
           <div className="eh-wide-wrap eh-profile-hero-inner">
             <p className="eh-profile-eyebrow">YOUR RESERVATIONS</p>
             <h1>My Bookings</h1>
-            <p>View your upcoming visits, find past reservations and check any cancellations.</p>
+            <p>View your upcoming visits, find past reservations <br></br> and check any cancellations.</p>
           </div>
         </div>
       </header>

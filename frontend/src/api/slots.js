@@ -25,7 +25,7 @@ export function todayInHut(timeZone = 'Europe/Rome') {
 }
 
 export function mealLabel(meal) {
-  return ({ breakfast: 'Breakfast', lunch: 'Lunch', aperitivo: 'Aperitivo', dinner: 'Dinner' })[meal] || meal;
+  return ({ breakfast: 'Breakfast', lunch: 'Lunch', aperitivo: 'Aperitif', dinner: 'Dinner' })[meal] || meal;
 }
 
 export async function listStaffSlots(date) {

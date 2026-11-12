@@ -113,8 +113,8 @@ export default function MyAccountPage() {
                     <button type="button" className="eh-account-action" onClick={() => { setName(user?.displayName || ''); setPhone(user?.phone || ''); setEditing(true); setError('');setSuccess(''); }}>
                       <span aria-hidden="true">✎</span><span><strong>Edit personal information</strong><small>Update your name or phone number</small></span><span aria-hidden="true">→</span>
                     </button>
-                    <button type="button" className="eh-account-action" onClick={() => showSection('security')}>
-                      <span aria-hidden="true">♢</span><span><strong>Change password</strong><small>Choose a new password for your account</small></span><span aria-hidden="true">→</span>
+                    <button type="button" className="eh-account-action eh-account-action--simple" onClick={() => showSection('security')}>
+                      <span><strong>Change password</strong><small>Choose a new password for your account</small></span><span aria-hidden="true">→</span>
                     </button>
                   </div>
                 </>

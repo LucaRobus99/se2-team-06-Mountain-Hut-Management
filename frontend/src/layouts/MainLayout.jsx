@@ -7,7 +7,8 @@ const FULL_WIDTH_ROUTES = new Set(['/', '/login', '/register', '/availability', 
 
 export default function MainLayout() {
   const pathname = useLocation().pathname;
-  const fullWidth = FULL_WIDTH_ROUTES.has(pathname);
+  // Booking confirmations have a dynamic :bookingId and must keep their full-bleed photo.
+  const fullWidth = FULL_WIDTH_ROUTES.has(pathname) || pathname.startsWith('/book/confirmation/');
   return (
     <div className="app-shell">
       <AppNavbar />

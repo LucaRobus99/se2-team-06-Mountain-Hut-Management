@@ -38,5 +38,5 @@ export function readableBookingDate(date) {
 }
 
 export function readableMeal(meal) {
-  return ({ breakfast: 'Breakfast', lunch: 'Lunch', aperitivo: 'Aperitivo', dinner: 'Dinner' })[meal] || '';
+  return ({ breakfast: 'Breakfast', lunch: 'Lunch', aperitivo: 'Aperitif', dinner: 'Dinner' })[meal] || '';
 }
