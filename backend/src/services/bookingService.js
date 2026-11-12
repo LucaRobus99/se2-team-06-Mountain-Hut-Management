@@ -220,6 +220,15 @@ export function createBookingService({ db, bookingDao, slotDao, timeZone, now = 
   const notifier = emailService || mailer || email || mailService || null;
 
   return {
+    /** A read-only preflight check; createBooking repeats it transactionally. */
+    async checkSlotBooking(user, rawSlotId) {
+      if (!user?.id) throw new UnauthorizedError('Authentication required.', 'UNAUTHENTICATED');
+      const slotId = parsePositiveInt(rawSlotId);
+      if (slotId === null) throw invalidFields([invalid('slotId', EXPECTED.positiveInt)]);
+      const existing = await bookingDao.findConfirmedByHikerAndSlot(user.id, slotId);
+      return { alreadyBooked: Boolean(existing) };
+    },
+
     /**
      * A hiker books for themself (hiker_id). Staff book on someone's behalf
      * (created_by).
@@ -333,6 +342,19 @@ export function createBookingService({ db, bookingDao, slotDao, timeZone, now = 
       }
 
       return { ...toBookingResponse(result.booking, result.assignments, savedRequirements), confirmationEmail };
+    },
+
+    /** MH-06: show only the signed-in hiker's booking history. */
+    async listMyBookings(user) {
+      if (!user?.id) throw new UnauthorizedError('Authentication required.', 'UNAUTHENTICATED');
+      const records = await bookingDao.findByHikerId(user.id);
+      const getter = findGetter(bookingDao);
+      const bookings = await Promise.all(records.map(async (booking) => {
+        const assignments = await bookingDao.getSeatAssignments(booking.id);
+        const requirements = getter ? await getter(booking.id) : [];
+        return toBookingResponse(booking, assignments, requirements);
+      }));
+      return { bookings };
     },
 
     async getBooking(bookingIdRaw, user) {

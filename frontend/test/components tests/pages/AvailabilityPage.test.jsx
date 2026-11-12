@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router';
 import AvailabilityPage from '../../../src/pages/AvailabilityPage.jsx';
 import { useAuth } from '../../../src/auth/AuthContext.jsx';
-import { getAvailableSlots, getSlotSeating } from '../../../src/api/booking.js';
+import { getAvailableSlots, getSlotSeating, checkSlotBooking } from '../../../src/api/booking.js';
 
 // Mock AuthContext and API functions
 vi.mock('../../../src/auth/AuthContext.jsx', () => ({
@@ -14,12 +14,14 @@ vi.mock('../../../src/auth/AuthContext.jsx', () => ({
 vi.mock('../../../src/api/booking.js', () => ({
   getAvailableSlots: vi.fn(),
   getSlotSeating: vi.fn(),
+  checkSlotBooking: vi.fn(),
 }));
 
 describe('AvailabilityPage Component Integration Tests', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    checkSlotBooking.mockResolvedValue(false);
     vi.spyOn(window, 'confirm').mockImplementation(() => true);
   });
 
@@ -107,10 +109,27 @@ describe('AvailabilityPage Component Integration Tests', () => {
     await user.click(slotButton);
 
     await waitFor(() => {
-      expect(screen.getByText(/single table/i)).toBeInTheDocument();
+      expect(screen.getByText(/together at one table/i)).toBeInTheDocument();
     });
 
     expect(screen.getByRole('button', { name: /continue to booking/i })).toBeInTheDocument();
+  });
+
+  it('blocks a duplicate reservation on the availability page before review', async () => {
+    useAuth.mockReturnValue({ user: { id: 1, role: 'hiker' } });
+    const slots = { date: '2026-11-15', meal: 'lunch', partySize: 2,
+      slots: [{ id: 101, startTime: '12:30', availableSeats: 6 }] };
+    getAvailableSlots.mockResolvedValue(slots);
+    checkSlotBooking.mockResolvedValue(true);
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={['/availability?date=2026-11-15&meal=lunch&guests=2']}>
+      <AvailabilityPage />
+    </MemoryRouter>);
+    await user.click(await screen.findByRole('button', { name: /12:30/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('already have a confirmed reservation');
+    expect(checkSlotBooking).toHaveBeenCalledWith(101);
+    expect(getSlotSeating).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /continue to booking/i })).not.toBeInTheDocument();
   });
 
   it('should display error message if search fails', async () => {

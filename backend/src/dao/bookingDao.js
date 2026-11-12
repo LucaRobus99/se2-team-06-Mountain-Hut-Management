@@ -57,6 +57,25 @@ export function createBookingDao(db) {
       return rows[0] ?? null;
     },
 
+    /** List a hiker's bookings, including cancelled and past reservations. */
+    async findByHikerId(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const hikerId = a[0];
+      const { rows } = await exec.query(
+        `SELECT b.id, b.slot_id, b.hiker_id, b.created_by, b.contact_name, b.email, b.phone,
+                b.party_size, b.status, b.created_at,
+                s.date AS slot_date, s.start_time AS slot_start_time, s.end_time AS slot_end_time,
+                s.status AS slot_status, m.meal_type AS meal
+         FROM bookings b
+         JOIN slots s ON s.id = b.slot_id
+         LEFT JOIN meals m ON m.id = s.meal_id
+         WHERE b.hiker_id = $1
+         ORDER BY s.date DESC, s.start_time DESC, b.id DESC`,
+        [hikerId]
+      );
+      return rows;
+    },
+
     async getSeatAssignments(...args) {
       const { db: exec, args: a } = executorOf(args);
       const bookingId = a[0];
