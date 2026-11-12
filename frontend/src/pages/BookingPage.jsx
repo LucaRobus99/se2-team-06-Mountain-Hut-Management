@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router';
-import { Alert, Modal } from 'react-bootstrap';
+import { Alert } from 'react-bootstrap';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { getPendingBooking, clearPendingBooking } from '../utils/pendingBooking.js';
 import SplitSeatingModal from '../components/SplitSeatingModal.jsx';
 import PartyRequirementsFields from '../components/PartyRequirementsFields.jsx';
 import { validatePartyRequirements } from '../utils/partyRequirements.js';
 import bookingBackground from '../assets/edelweiss-booking-background.jpg';
-import EdelweissBrand from '../components/EdelweissBrand.jsx';
-import { createBooking, getBooking, getSlotSeating, bookingErrorMessage } from '../api/booking.js';
+import { createBooking, getBooking, getSlotSeating, checkSlotBooking, bookingErrorMessage } from '../api/booking.js';
 
 function friendlyDate(iso) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || '')) return iso || '';
@@ -43,6 +42,7 @@ export default function BookingPage() {
   const [splitAcknowledged, setSplitAcknowledged] = useState(Boolean(draft?.seating?.requiresConfirmation));
   const [pendingSplit, setPendingSplit] = useState(null);
   const [duplicateBooking, setDuplicateBooking] = useState(false);
+  const [prechecking, setPrechecking] = useState(Boolean(!bookingId && draft));
   const [booking, setBooking] = useState(null);
   const [receiptLoading, setReceiptLoading] = useState(Boolean(bookingId));
   const [receiptError, setReceiptError] = useState('');
@@ -62,6 +62,22 @@ export default function BookingPage() {
   const groupIsSplit = booking ? booking.split : seating?.fit === 'split';
   const confirmationEmailStatus = booking?.confirmationEmail?.status;
   const confirmationAddress = booking?.email || user?.email;
+  useEffect(() => {
+    if (bookingId || !draft?.selectedSlotId || loadingAuth) return;
+    if (user?.role !== 'hiker') { setPrechecking(false); return; }
+    let active = true;
+    setPrechecking(true);
+    checkSlotBooking(draft.selectedSlotId)
+      .then((alreadyBooked) => { if (active && alreadyBooked) setDuplicateBooking(true); })
+      .catch((err) => {
+        if (!active) return;
+        setError(bookingErrorMessage(err));
+        setStaleSelection(true); // Do not allow a booking until the server can check it.
+      })
+      .finally(() => { if (active) setPrechecking(false); });
+    return () => { active = false; };
+  }, [bookingId, draft?.selectedSlotId, loadingAuth, user?.id, user?.role]);
+
   useEffect(() => {
     if (!bookingId) return;
     let active = true;
@@ -84,7 +100,7 @@ export default function BookingPage() {
     return () => { active = false; };
   }, [bookingId, location.state?.bookingId, location.state?.emailStatus]);
   const mealLabel = shownMeal === 'aperitivo'
-    ? 'Happy hour'
+    ? 'Aperitif'
     : shownMeal ? `${shownMeal[0].toUpperCase()}${shownMeal.slice(1)}` : '';
 
   function goToLogin() {
@@ -96,19 +112,19 @@ export default function BookingPage() {
     });
   }
 
-  function returnToAvailability(message) {
+  function returnToAvailability(message, noticeType = 'info') {
     // An abandoned review must never become the next booking draft.
     clearPendingBooking();
     setPendingSplit(null);
     setDuplicateBooking(false);
     navigate(backToAvailability, {
       replace: true,
-      state: message ? { bookingNotice: message } : null,
+      state: message ? { bookingNotice: message, bookingNoticeType: noticeType } : null,
     });
   }
 
   function chooseAnotherTime() {
-    returnToAvailability('You already have a reservation for the previous time. Please choose another time slot.');
+    returnToAvailability('You already have a reservation for this time. Please choose another time slot.', 'danger');
   }
 
   function handleBookingError(err) {
@@ -203,103 +219,151 @@ export default function BookingPage() {
   if (!bookingId && (!draft || !selectedSlot || !seating)) {
     return <Navigate to={backToAvailability} replace />;
   }
+  if (!bookingId && prechecking) {
+    return <main className="eh-booking-page eh-route-loading" role="status">Checking your existing reservations…</main>;
+  }
+  if (!bookingId && duplicateBooking) {
+    return (
+      <main className="eh-booking-page">
+        <section className="eh-login-scene eh-booking-scene" style={{ backgroundImage: `url(${bookingBackground})` }}>
+          <div className="eh-login-card eh-booking-card eh-booking-card--blocked">
+            <div className="eh-booking-blocked-message" role="alert">
+              <svg className="eh-booking-blocked-icon" viewBox="0 0 40 40" aria-hidden="true" focusable="false">
+                <circle cx="20" cy="20" r="17" fill="none" stroke="currentColor" strokeWidth="2.5" />
+                <path d="M20 11v13" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                <circle cx="20" cy="29" r="1.8" fill="currentColor" />
+              </svg>
+              <h1>You're already booked</h1>
+              <p>You already have a reservation for this time slot.</p>
+              <p className="eh-booking-blocked-time">{friendlyDate(shownDate)} · {shownTime}</p>
+            </div>
+            <button type="button" className="eh-button eh-button--green" onClick={chooseAnotherTime}>Choose another time</button>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (booking) {
+    const savedRequirements = Array.isArray(booking.requirements) ? booking.requirements : [];
+    return (
+      <main className="eh-booking-page">
+        <section className="eh-login-scene eh-booking-scene" style={{ backgroundImage: `url(${bookingBackground})` }}>
+          <div className="eh-login-card eh-booking-card eh-booking-card--confirmed">
+            <header className="eh-confirmation-heading">
+              <div className="eh-booking-success-mark" role="status" aria-label="Booking successfully confirmed">
+                <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m12 24 9 9 16-18" />
+                </svg>
+              </div>
+              <p className="eh-confirmation-eyebrow">Reservation confirmed</p>
+              <h1>Your table is booked!</h1>
+              <p className="eh-confirmation-subtitle">Edelweiss Hut · Reservation #{booking.id}</p>
+            </header>
+
+            <section className="eh-confirmation-reservation" aria-label="Booking confirmation details">
+              <h2>Your reservation</h2>
+              <dl className="eh-confirmation-visit">
+                <div>
+                  <dt>Date</dt>
+                  <dd>{friendlyDate(shownDate)}</dd>
+                </div>
+                <div>
+                  <dt>Time</dt>
+                  <dd>{shownTime}{shownEnd ? ` – ${shownEnd}` : ''}</dd>
+                </div>
+              </dl>
+              <dl className="eh-confirmation-facts">
+                <div><dt>Meal</dt><dd>{mealLabel}</dd></div>
+                <div><dt>Guests</dt><dd>{shownGuests} {shownGuests === 1 ? 'person' : 'people'}</dd></div>
+                <div><dt>Seating</dt><dd>{groupIsSplit ? 'Across multiple tables' : 'Together at one table'}</dd></div>
+              </dl>
+            </section>
+
+            {savedRequirements.length > 0 && (
+              <section className="eh-confirmation-dietary" aria-label="Confirmed dietary requirements">
+                <header className="eh-confirmation-dietary-heading">
+                  <h2>Dietary requirements</h2>
+                  <span>{savedRequirements.length} {savedRequirements.length === 1 ? 'request' : 'requests'}</span>
+                </header>
+                <ul>
+                  {savedRequirements.map((item, index) => (
+                    <li key={index}>
+                      <span className="eh-confirmation-dietary-description">{item.description}</span>
+                      {item.allergies && <strong className="eh-confirmation-allergy-label">Allergy — special care required</strong>}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            <div className={`eh-booking-email-notice eh-booking-email-notice--${confirmationEmailStatus || 'unknown'} eh-confirmation-email`} role="status">
+              {confirmationEmailStatus === 'sent' ? (
+                <><strong>Confirmation email sent</strong><span>{confirmationAddress ? `Sent to ${confirmationAddress}.` : 'Check your inbox.'}</span></>
+              ) : confirmationEmailStatus === 'failed' ? (
+                <><strong>Email could not be sent</strong><span>Your reservation is confirmed. Keep your booking reference.</span></>
+              ) : (
+                <><strong>Reservation saved</strong><span>Keep your booking reference in case the email is unavailable.</span></>
+              )}
+            </div>
+
+            <div className="eh-booking-actions">
+              <Link to="/book" className="eh-button eh-button--green">Book another table</Link>
+              <Link to="/" className="eh-button eh-button--outline">Back to home</Link>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="eh-booking-page">
       <section className="eh-login-scene eh-booking-scene" style={{ backgroundImage: `url(${bookingBackground})` }}>
-        <div className={`eh-login-card eh-booking-card ${booking ? 'eh-booking-card--confirmed' : ''}`}>
-          <div className="eh-login-brand"><EdelweissBrand /></div>
-          {booking && (
-            <div className="eh-booking-success-mark" role="status" aria-label="Booking successfully confirmed">
-              <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m12 24 9 9 16-18" />
-              </svg>
-            </div>
-          )}
-          <p className={`eh-booking-kicker ${booking ? 'eh-booking-kicker--confirmed' : ''}`}>
-            {booking ? 'Reservation successful' : 'Review your selection'}
-          </p>
-          <h1>{booking ? 'Booking confirmed!' : 'Review your booking'}</h1>
-          <p className="eh-booking-intro">{booking
-            ? 'You’re all set! Your table is reserved. We look forward to welcoming you.'
-            : 'Please check the details below before confirming your reservation.'}</p>
+        <div className="eh-login-card eh-booking-card eh-booking-card--review">
+          <header className="eh-booking-review-heading">
+            <h1>Review your booking</h1>
+            <p>Check the details before confirming your reservation.</p>
+          </header>
 
-          <p className="eh-booking-details-heading">{booking ? 'Your confirmed details' : 'Your selected details'}</p>
-          <dl className="eh-booking-recap">
-            <div><dt>Date</dt><dd>{friendlyDate(shownDate)}</dd></div>
-            <div><dt>Time</dt><dd>{shownTime}{shownEnd ? ` – ${shownEnd}` : ''}</dd></div>
-            <div><dt>Meal</dt><dd>{mealLabel}</dd></div>
-            <div><dt>Guests</dt><dd>{shownGuests} {shownGuests === 1 ? 'person' : 'people'}</dd></div>
-            <div className="eh-booking-seating-detail"><dt>Seating</dt><dd>{groupIsSplit ? 'Across multiple tables' : 'Together at one table'}</dd></div>
-          </dl>
-
-          {booking && Array.isArray(booking.requirements) && booking.requirements.length > 0 && (
-            <section className="eh-party-confirmed" aria-label="Confirmed dietary requirements">
-              <h2>Dietary requirements</h2>
-              <ul>
-                {booking.requirements.map((item, index) => (
-                  <li key={index}>
-                    <span>{item.description}</span>
-                    {item.allergies && <strong className="eh-party-allergy-marker">Allergy — special care required</strong>}
-                  </li>
-                ))}
-              </ul>
+          <div className="eh-booking-content-grid">
+            <section className="eh-booking-panel eh-booking-panel--summary" aria-labelledby="eh-booking-summary-title">
+              <h2 className="eh-booking-details-heading" id="eh-booking-summary-title">Your reservation</h2>
+              <p className="eh-booking-review-date">{friendlyDate(shownDate)}</p>
+              <p className="eh-booking-review-time">{shownTime}{shownEnd ? ` – ${shownEnd}` : ''}</p>
+              <div className="eh-booking-review-facts">
+                <span>{mealLabel}</span>
+                <span aria-hidden="true">·</span>
+                <span>{shownGuests} {shownGuests === 1 ? 'person' : 'people'}</span>
+              </div>
+              <p className="eh-booking-review-seating">{groupIsSplit ? 'Across multiple tables' : 'Together at one table'}</p>
             </section>
-          )}
 
-          {!booking && user?.role === 'hiker' && !loadingAuth && (
-            <PartyRequirementsFields
-              requirements={partyRequirements}
-              onChange={(next) => { setPartyRequirements(next); setError(''); }}
-              showErrors={showRequirementErrors}
-              disabled={busy}
-            />
-          )}
-          {!booking && !loadingAuth && !user && (
-            <p className="eh-party-login-note">Sign in to add dietary requirements before placing your booking.</p>
-          )}
-
-          {booking && (
-            <div className={`eh-booking-email-notice eh-booking-email-notice--${confirmationEmailStatus || 'unknown'}`} role="status">
-              <strong>
-                {confirmationEmailStatus === 'sent' ? 'Confirmation email sent' :
-                  confirmationEmailStatus === 'failed' ? 'Email could not be sent' :
-                  confirmationEmailStatus === 'skipped' ? 'Email confirmation unavailable' :
-                  'Booking saved'}
-              </strong>
-              <p>
-                {confirmationEmailStatus === 'sent' ? (
-                  <>We sent your booking details to {confirmationAddress ? <b>{confirmationAddress}</b> : 'your registered email address'}. Please check your inbox (and spam folder).</>
-                ) : confirmationEmailStatus === 'failed' ? (
-                  'Your reservation is confirmed, but the email could not be sent. Please save the booking reference shown below.'
-                ) : (
-                  'Your reservation is confirmed. We cannot confirm that an email was sent, so please keep the booking reference shown below.'
-                )}
-              </p>
-              <p className="eh-booking-email-reference">Booking reference: <b>#{booking.id}</b></p>
+            <div className="eh-booking-panel eh-booking-panel--dietary">
+              {user?.role === 'hiker' && !loadingAuth ? (
+                <PartyRequirementsFields
+                  requirements={partyRequirements}
+                  onChange={(next) => { setPartyRequirements(next); setError(''); }}
+                  showErrors={showRequirementErrors}
+                  disabled={busy}
+                />
+              ) : (
+                <p className="eh-party-login-note">Sign in to add dietary requirements before placing your booking.</p>
+              )}
             </div>
-          )}
+          </div>
 
           {error && <Alert variant="danger" role="alert" className="eh-booking-error">{error}</Alert>}
 
           <div className="eh-booking-actions">
-            {booking ? (
-              <>
-                <Link to="/book" className="eh-button eh-button--green">Book another table</Link>
-                <Link to="/" className="eh-button eh-button--outline">Back to home</Link>
-              </>
-            ) : (
-              <>
-                <Link to={backToAvailability} replace onClick={clearPendingBooking} className="eh-button eh-button--outline">
-                  {staleSelection ? 'Check availability again' : 'Back'}
-                </Link>
-                {!staleSelection && (
-                  <button type="button" className="eh-button eh-button--green"
-                    onClick={confirmBooking} disabled={busy || loadingAuth}>
-                    {busy ? 'Confirming...' : 'Confirm booking'}
-                  </button>
-                )}
-              </>
+            <Link to={backToAvailability} replace onClick={clearPendingBooking} className="eh-button eh-button--outline">
+              {staleSelection ? 'Check availability again' : 'Back'}
+            </Link>
+            {!staleSelection && (
+              <button type="button" className="eh-button eh-button--green"
+                onClick={confirmBooking} disabled={busy || loadingAuth}>
+                {busy ? 'Confirming...' : 'Confirm booking'}
+              </button>
             )}
           </div>
         </div>
@@ -310,11 +374,6 @@ export default function BookingPage() {
         onCancel={() => returnToAvailability('Choose a different time slot if you prefer not to split your party.')}
         onContinue={acceptSplit}
       />
-      <Modal show={duplicateBooking} onHide={() => setDuplicateBooking(false)} centered aria-labelledby="duplicate-booking-title" dialogClassName="eh-split-modal">
-        <Modal.Header closeButton><Modal.Title id="duplicate-booking-title">You already have a reservation</Modal.Title></Modal.Header>
-        <Modal.Body><p>You already have a confirmed booking for this time slot. Please select a different time to make another reservation.</p></Modal.Body>
-        <Modal.Footer><button type="button" className="eh-button eh-button--green" onClick={chooseAnotherTime}>Choose another time</button></Modal.Footer>
-      </Modal>
     </main>
   );
 }

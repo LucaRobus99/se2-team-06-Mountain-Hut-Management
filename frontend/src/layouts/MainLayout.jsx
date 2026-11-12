@@ -3,11 +3,12 @@ import { Link, Outlet, useLocation } from 'react-router';
 import AppNavbar from '../components/AppNavbar.jsx';
 import '../styles/edelweiss-pages.css';
 
-const FULL_WIDTH_ROUTES = new Set(['/', '/login', '/register', '/availability', '/menu', '/about', '/find-us', '/book']);
+const FULL_WIDTH_ROUTES = new Set(['/', '/login', '/register', '/availability', '/menu', '/about', '/find-us', '/book', '/my-bookings', '/my-account']);
 
 export default function MainLayout() {
   const pathname = useLocation().pathname;
-  const fullWidth = FULL_WIDTH_ROUTES.has(pathname);
+  // Booking confirmations have a dynamic :bookingId and must keep their full-bleed photo.
+  const fullWidth = FULL_WIDTH_ROUTES.has(pathname) || pathname.startsWith('/book/confirmation/');
   return (
     <div className="app-shell">
       <AppNavbar />

@@ -51,6 +51,7 @@ describe('AppNavbar Component Integration Tests', () => {
 
     // Verify user display name appears in the dropdown toggle title
     expect(screen.getByRole('button', { name: /mario rossi/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^my bookings$/i })).toHaveAttribute('href', '/my-bookings');
   });
 
   it('should render employee user account info correctly when logged in as an employee or warden', () => {

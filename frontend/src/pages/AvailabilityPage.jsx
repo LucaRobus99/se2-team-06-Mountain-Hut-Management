@@ -3,7 +3,7 @@ import { Alert } from 'react-bootstrap';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { savePendingBooking, clearPendingBooking } from '../utils/pendingBooking.js';
-import { getAvailableSlots, getSlotSeating } from '../api/booking.js';
+import { getAvailableSlots, getSlotSeating, checkSlotBooking } from '../api/booking.js';
 import { AlpineDatePicker, AlpineMealSelect, MEAL_OPTIONS } from '../components/AlpineBookingFields.jsx';
 import AvailabilitySlotCard from '../components/AvailabilitySlotCard.jsx';
 import SplitSeatingModal from '../components/SplitSeatingModal.jsx';
@@ -35,12 +35,15 @@ export default function AvailabilityPage() {
   const [pendingSplit, setPendingSplit] = useState(null);
   const [error, setError] = useState('');
   const [bookingNotice, setBookingNotice] = useState(location.state?.bookingNotice || '');
+  const [bookingNoticeType, setBookingNoticeType] = useState(location.state?.bookingNoticeType || 'info');
+  const [slotNotice, setSlotNotice] = useState('');
   const [loading, setLoading] = useState(false);
   const [checkingSeating, setCheckingSeating] = useState(false);
   const searchRequest = useRef(0);
+  const selectionRequest = useRef(0);
   const searchReady = useMemo(() => Boolean(date && meal && /^\d+$/.test(partySize) && Number(partySize) > 0), [date, meal, partySize]);
 
-  function resetSelection() { setSelectedSlotId(null); setSeating(null); setPendingSplit(null); }
+  function resetSelection() { selectionRequest.current += 1; setSelectedSlotId(null); setSeating(null); setPendingSplit(null); }
   function onFieldChange(setter, value) {
     setter(value);
     resetSelection();
@@ -49,6 +52,7 @@ export default function AvailabilityPage() {
     setResult(null); // Never show stale availability for a new party/date/meal.
     setError('');
     setBookingNotice('');
+    setSlotNotice('');
   }
 
   async function performSearch(values) {
@@ -56,6 +60,7 @@ export default function AvailabilityPage() {
     setLoading(true);
     setResult(null);
     setError('');
+    setSlotNotice('');
     resetSelection();
     try {
       const data = await getAvailableSlots({ date: values.date, meal: values.meal, partySize: Number(values.partySize) });
@@ -99,7 +104,8 @@ export default function AvailabilityPage() {
 
   useEffect(() => {
     setBookingNotice(location.state?.bookingNotice || '');
-  }, [location.key, location.state?.bookingNotice]);
+    setBookingNoticeType(location.state?.bookingNoticeType || 'info');
+  }, [location.key, location.state?.bookingNotice, location.state?.bookingNoticeType]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -119,9 +125,21 @@ export default function AvailabilityPage() {
     setCheckingSeating(true);
     setError('');
     setBookingNotice('');
+    setSlotNotice('');
     resetSelection();
+    const request = selectionRequest.current;
     try {
+      // Warn on this page, before navigating to Review Booking or entering allergies.
+      if (user?.role === 'hiker') {
+        const alreadyBooked = await checkSlotBooking(slot.id);
+        if (request !== selectionRequest.current) return;
+        if (alreadyBooked) {
+          setSlotNotice('You already have a confirmed reservation for this time slot. Please choose a different time.');
+          return;
+        }
+      }
       const data = await getSlotSeating({ slotId: slot.id, partySize: Number(partySize) });
+      if (request !== selectionRequest.current) return;
       if (data.requiresConfirmation) {
         // Reuse the same on-page dialog shown in Book a table, never a browser alert.
         setPendingSplit({ slotId: slot.id, seating: data });
@@ -129,8 +147,12 @@ export default function AvailabilityPage() {
         setSelectedSlotId(slot.id);
         setSeating(data);
       }
-    } catch (err) { setError(err.message || 'Unable to check seating.'); }
-    finally { setCheckingSeating(false); }
+    } catch (err) {
+      if (request === selectionRequest.current) {
+        setSlotNotice('');
+        setError(err.message || 'Unable to check seating.');
+      }
+    } finally { setCheckingSeating(false); }
   }
 
   function acceptSplit() {
@@ -178,7 +200,8 @@ export default function AvailabilityPage() {
           </button>
         </form>
 
-        {bookingNotice && <Alert variant="info" role="status" className="eh-availability-error">{bookingNotice}</Alert>}
+        {bookingNotice && <Alert variant={bookingNoticeType} role={bookingNoticeType === 'danger' ? 'alert' : 'status'}
+          className={`eh-availability-error${bookingNoticeType === 'danger' ? ' eh-slot-duplicate-notice' : ''}`}>{bookingNotice}</Alert>}
         {error && <Alert variant="danger" role="alert" className="eh-availability-error">{error}</Alert>}
         {loading && <p className="eh-search-message" role="status">Looking for available times...</p>}
 
@@ -198,18 +221,22 @@ export default function AvailabilityPage() {
                 ))}
               </div>
             )}
-            {checkingSeating && <p className="eh-search-message" role="status">Checking your table...</p>}
+            {checkingSeating && <p className="eh-search-message" role="status">Checking your reservation and seating...</p>}
+            {slotNotice && <Alert variant="danger" role="alert" className="eh-slot-duplicate-notice">{slotNotice}</Alert>}
             {selectedSlot && seating && (
               <div className="eh-selection-summary">
-                <div>
+                <div className="eh-selection-copy">
                   <p className="eh-page-eyebrow">Your selection</p>
-                  <h3>{selectedSlot.startTime} · {seating.fit === 'single_table' ? 'Single table' : 'Multiple tables'}</h3>
-                  <p>For {partySize} {Number(partySize) === 1 ? 'guest' : 'guests'} · {formatDate(date)}</p>
+                  <div className="eh-selection-main">
+                    <h3>{selectedSlot.startTime}</h3>
+                    <span className="eh-selection-seating">{seating.fit === 'single_table' ? 'Together at one table' : 'Seated across multiple tables'}</span>
+                  </div>
+                  <p className="eh-selection-meta">{formatDate(date)} <span aria-hidden="true">·</span> {partySize} {Number(partySize) === 1 ? 'guest' : 'guests'}</p>
                 </div>
                 {user?.role && user.role !== 'hiker' ? (
                   <p className="eh-selection-warning">Only Hikers can make online bookings.</p>
                 ) : (
-                  <button className="eh-button eh-button--green" type="button" onClick={handleContinue}>Continue to booking <span aria-hidden="true">↗</span></button>
+                  <button className="eh-button eh-button--green" type="button" onClick={handleContinue} disabled={checkingSeating}>Continue to booking <span aria-hidden="true">↗</span></button>
                 )}
               </div>
             )}

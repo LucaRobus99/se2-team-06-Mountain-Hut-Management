@@ -12,7 +12,7 @@ describe('Backend smoke tests', () => {
         "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
       );
       expect(tables.map((t) => t.name)).toEqual([
-        'booking_seats', 'bookings', 'dining_tables', 'meals', 'menus', 'slot_tables', 'slots', 'users',
+        'booking_requirements', 'booking_seats', 'bookings', 'dining_tables', 'meals', 'menus', 'slot_tables', 'slots', 'users',
       ]);
 
       const { rows: staff } = await db.query(

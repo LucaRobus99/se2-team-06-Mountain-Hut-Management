@@ -8,6 +8,7 @@
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env src/server.js",
     "dev": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env --watch src/server.js",
+    "db:seed:slots": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env scripts/populate-slots.mjs",
     "db:reset": "node -e \"const f = require('path').resolve(__dirname, 'database/database.sqlite'); require('fs').rmSync(f, {force:true}); console.log('SQLite database deleted:', f); console.log('It will be recreated on next server start.');\"",
     "test": "vitest run",
     "test:watch": "vitest"

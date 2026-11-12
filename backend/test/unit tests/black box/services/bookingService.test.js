@@ -219,6 +219,7 @@ describe('bookingService - Black-Box Tests', () => {
         contactName: 'Mario Rossi',
         email: 'mario.rossi@example.com',
         contactNumber: '+393331234567',
+        requirements: [],
         split: false,
         seatAssignments: [
           { tableId: 1, tableLabel: 'T1', seats: 2 }

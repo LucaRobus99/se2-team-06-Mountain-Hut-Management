@@ -6,6 +6,8 @@ import StaffReservationsPage from './pages/StaffReservationsPage.jsx';
 import HomePage from './pages/HomePage.jsx';
 import AvailabilityPage from './pages/AvailabilityPage.jsx';
 import BookingPage from './pages/BookingPage.jsx';
+import MyBookingsPage from './pages/MyBookingsPage.jsx';
+import MyAccountPage from './pages/MyAccountPage.jsx';
 import SlotManagementPage from './pages/SlotManagementPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
@@ -13,6 +15,7 @@ import MenuPage from './pages/MenuPage.jsx';
 import AboutPage from './pages/AboutPage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
+import ScrollToTop from './components/ScrollToTop.jsx';
 import { useAuth } from './auth/AuthContext.jsx';
 import { getPendingBooking } from './utils/pendingBooking.js';
 
@@ -36,7 +39,9 @@ function BookingEntry() {
 
 export default function App() {
   return (
-    <Routes>
+    <>
+      <ScrollToTop />
+      <Routes>
       <Route element={<VisitorLayout />}>
         <Route index element={<HomePage />} />
         <Route path="menu" element={<MenuPage />} />
@@ -44,6 +49,8 @@ export default function App() {
         <Route element={<ProtectedRoute hikerOnly />}>
           <Route path="book" element={<BookingEntry />} />
           <Route path="book/confirmation/:bookingId" element={<BookingPage />} />
+          <Route path="my-bookings" element={<MyBookingsPage />} />
+          <Route path="my-account" element={<MyAccountPage />} />
         </Route>
         <Route path="find-us" element={<AboutPage />} />
         <Route path="about" element={<Navigate to="/find-us" replace />} />
@@ -59,6 +66,7 @@ export default function App() {
         </Route>
       </Route>
       <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+      </Routes>
+    </>
   );
 }

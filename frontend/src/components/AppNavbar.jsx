@@ -52,6 +52,7 @@ export default function AppNavbar() {
                             <Nav.Link as={NavLink} to="/menu">Menu</Nav.Link>
                             {!user && <Nav.Link as={NavLink} to="/availability">Availability</Nav.Link>}
                             <Nav.Link as={NavLink} to="/find-us">Find us</Nav.Link>
+                            {!loadingAuth && user?.role === 'hiker' && <Nav.Link as={NavLink} to="/my-bookings">My Bookings</Nav.Link>}
                         </Nav>
 
                         <div className="eh-nav-actions">
@@ -67,8 +68,7 @@ export default function AppNavbar() {
                                         <span className="eh-account-dropdown-caption">HIKER ACCOUNT</span>
                                     </NavDropdown.Header>
                                     <NavDropdown.Divider />
-                                    <NavDropdown.Item as={Link} to={bookingDestination}><span className="eh-account-item-icon">✦</span> Book a table</NavDropdown.Item>
-                                    <NavDropdown.Item disabled title="Booking history will be available in a later story"><span className="eh-account-item-icon">▤</span> My bookings <small>Coming soon</small></NavDropdown.Item>
+                                    <NavDropdown.Item as={Link} to="/my-account"><span className="eh-account-item-icon">♙</span> My Account</NavDropdown.Item>
                                     <NavDropdown.Divider />
                                     <NavDropdown.Item disabled={loggingOut} className="eh-account-logout" onClick={handleLogout}>
                                         <span className="eh-account-item-icon">↪</span> {loggingOut ? 'Logging out…' : 'Log out'}
