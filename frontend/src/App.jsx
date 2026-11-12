@@ -7,6 +7,7 @@ import HomePage from './pages/HomePage.jsx';
 import AvailabilityPage from './pages/AvailabilityPage.jsx';
 import BookingPage from './pages/BookingPage.jsx';
 import MyBookingsPage from './pages/MyBookingsPage.jsx';
+import MyAccountPage from './pages/MyAccountPage.jsx';
 import SlotManagementPage from './pages/SlotManagementPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
@@ -46,6 +47,7 @@ export default function App() {
           <Route path="book" element={<BookingEntry />} />
           <Route path="book/confirmation/:bookingId" element={<BookingPage />} />
           <Route path="my-bookings" element={<MyBookingsPage />} />
+          <Route path="my-account" element={<MyAccountPage />} />
         </Route>
         <Route path="find-us" element={<AboutPage />} />
         <Route path="about" element={<Navigate to="/find-us" replace />} />
