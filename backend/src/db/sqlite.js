@@ -27,6 +27,7 @@ export function createSqliteDb(file) {
   assertCurrentSchema(database);
   migrateHikerProfile(database);
   migrateMealAssignments(database);
+  migrateBookingRequirements(database);
 
   let queue = Promise.resolve();
 
@@ -121,4 +122,16 @@ function migrateMealAssignments(database) {
   for (const name of legacyTriggers) {
     database.exec(`DROP TRIGGER IF EXISTS ${name}`);
   }
+}
+
+/** Add booking_requirements table to databases created before MH-05. */
+function migrateBookingRequirements(database) {
+  database.exec(`CREATE TABLE IF NOT EXISTS booking_requirements (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    booking_id      INTEGER NOT NULL REFERENCES bookings (id) ON DELETE CASCADE,
+    description     TEXT NOT NULL,
+    allergies       INTEGER NOT NULL DEFAULT 0 CHECK (allergies IN (0, 1)),
+    created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  )`);
+  database.exec('CREATE INDEX IF NOT EXISTS idx_booking_requirements_booking ON booking_requirements (booking_id)');
 }

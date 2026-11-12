@@ -104,6 +104,16 @@ CREATE TABLE IF NOT EXISTS booking_seats (
     PRIMARY KEY (booking_id, table_id)
 );
 
+CREATE TABLE IF NOT EXISTS booking_requirements (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    booking_id      INTEGER NOT NULL REFERENCES bookings (id) ON DELETE CASCADE,
+    description     TEXT NOT NULL,
+    allergies       INTEGER NOT NULL DEFAULT 0 CHECK (allergies IN (0, 1)),
+    created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_booking_requirements_booking ON booking_requirements (booking_id);
+
 CREATE INDEX IF NOT EXISTS idx_slots_date ON slots (date);
 CREATE INDEX IF NOT EXISTS idx_slots_meal ON slots (meal_id);
 CREATE INDEX IF NOT EXISTS idx_menus_meal ON menus (meal_id);
