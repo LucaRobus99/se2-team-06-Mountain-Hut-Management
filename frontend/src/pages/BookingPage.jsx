@@ -84,7 +84,7 @@ export default function BookingPage() {
     return () => { active = false; };
   }, [bookingId, location.state?.bookingId, location.state?.emailStatus]);
   const mealLabel = shownMeal === 'aperitivo'
-    ? 'Happy hour'
+    ? 'Aperitif'
     : shownMeal ? `${shownMeal[0].toUpperCase()}${shownMeal.slice(1)}` : '';
 
   function goToLogin() {

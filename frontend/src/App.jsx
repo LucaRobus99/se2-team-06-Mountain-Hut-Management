@@ -15,6 +15,7 @@ import MenuPage from './pages/MenuPage.jsx';
 import AboutPage from './pages/AboutPage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
+import ScrollToTop from './components/ScrollToTop.jsx';
 import { useAuth } from './auth/AuthContext.jsx';
 import { getPendingBooking } from './utils/pendingBooking.js';
 
@@ -38,7 +39,9 @@ function BookingEntry() {
 
 export default function App() {
   return (
-    <Routes>
+    <>
+      <ScrollToTop />
+      <Routes>
       <Route element={<VisitorLayout />}>
         <Route index element={<HomePage />} />
         <Route path="menu" element={<MenuPage />} />
@@ -63,6 +66,7 @@ export default function App() {
         </Route>
       </Route>
       <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+      </Routes>
+    </>
   );
 }

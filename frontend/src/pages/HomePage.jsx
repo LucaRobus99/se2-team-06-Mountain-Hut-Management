@@ -9,7 +9,7 @@ import findUsImage from '../assets/edelweiss-dolomites.png';
 const meals = [
   ['breakfast', 'Breakfast'],
   ['lunch', 'Lunch'],
-  ['aperitivo', 'Happy hour'],
+  ['aperitivo', 'Aperitif'],
   ['dinner', 'Dinner']
 ];
 
