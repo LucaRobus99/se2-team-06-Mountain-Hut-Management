@@ -17,11 +17,11 @@ A web application for managing meals, table availability and reservations at a s
 - **MH-03 — Receive confirmation:** booking confirmation is displayed immediately; a confirmation email is attempted when Mailgun is configured. Email delivery failures do not cancel confirmed bookings.
 - **MH-04 — Check availability:** public search by date, meal and number of guests; eligible time slots show their availability.
 - **MH-05 — Provide party requirements:** hikers can enter separate dietary/allergy requirements, including the number of affected guests, when confirming a booking. The confirmation page shows the saved information.
-- **My Bookings (team extension):** authenticated hikers can review their upcoming, past and cancelled reservations and open booking details. Viewing a booking does not currently provide editing or cancellation actions.
+- **MH-06 — Change a booking (hiker UI):** hikers can review upcoming, past and cancelled bookings. Opening a reservation shows its details; eligible upcoming reservations can be edited (date, meal/time slot, party size and dietary needs). Available slots are refreshed from the server; changes are rechecked by the backend when saved.
 - **My Account (team extension):** hikers can update their name, phone, optional notes and emergency contact, change their password by supplying the current password, and upload/change/remove a profile photo. Changes persist in SQLite. The email address is shown read-only.
 - **Authentication:** hiker registration and login/logout; access to staff and hiker endpoints is protected by the backend. A hiker cannot create a second confirmed booking for the same slot.
 
-The staff **Reservations** page remains a placeholder. Other Mountain Hut stories, including full booking change/cancellation workflows, are not claimed as implemented here.
+The staff **Reservations** page remains a placeholder. Hiker booking cancellation (MH-08) and other unfinished stories are not claimed as implemented. MH-06 still requires full end-to-end validation and additional backend PATCH coverage before being considered Done.
 
 ## Start locally
 

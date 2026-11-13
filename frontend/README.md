@@ -50,7 +50,9 @@ On successful submission, the confirmation page shows the booking reference, tim
 
 ## My Bookings
 
-`src/pages/MyBookingsPage.jsx` loads the authenticated hiker's data using `GET /api/bookings`, groups the reservations into **upcoming**, **past** and **cancelled**, and provides a details link where applicable. Booking changes and cancellation are not implemented on this page yet.
+`src/pages/MyBookingsPage.jsx` loads the authenticated hiker's reservations using `GET /api/bookings` and groups them into **upcoming**, **past** and **cancelled**. No reservation is selected initially. The arrow on each card toggles a detail panel without showing table identifiers. On smaller screens the detail/edit panel replaces the list and a Back button restores it. Full details include a link back to My Bookings.
+
+For eligible upcoming reservations, **Change booking** opens `EditBookingForm.jsx` (MHM-116). Date, meal and guest count trigger the same availability lookup used by the booking page; available times appear as photographic slot cards. The original slot remains selectable because public availability counts its seats as occupied, and the backend rechecks/reallocates seats transactionally on `PATCH /api/bookings/:bookingId`. Multiple dietary/allergy requirements can be edited. The 48-hour cutoff is displayed in the UI and enforced by the backend. Past/cancelled bookings are history only; hiker cancellation (MH-08) is not implemented.
 
 ## My Account
 
@@ -87,4 +89,4 @@ Run Cypress E2E tests against an actively running backend/frontend when validati
 
 ## Known scope limits
 
-The staff Reservations page, hiker booking edit/cancel flows and production email delivery setup are outside the currently completed UI. Mailgun keys must remain in the backend `.env` and must never be included in frontend code.
+The staff Reservations page, hiker booking cancellation (MH-08) and production email delivery setup are outside the currently completed UI. Full MH-06 end-to-end validation and additional backend PATCH tests are still needed. Mailgun keys must remain in the backend `.env` and must never be included in frontend code.

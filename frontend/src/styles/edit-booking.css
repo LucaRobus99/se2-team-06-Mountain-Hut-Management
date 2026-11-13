@@ -1,0 +1,157 @@
+/* MHM-116 — Manage bookings; visual language of the existing Edelweiss Hut pages. */
+.eh-my-bookings .eh-my-bookings-body { max-width: 1240px; }
+.eh-my-bookings--editing .eh-profile-hero { min-height: 245px; }
+.eh-my-bookings--editing .eh-profile-hero-inner { padding-block: 2.3rem; }
+.eh-manage-grid { display:grid; grid-template-columns: minmax(275px,34%) minmax(0,1fr); gap:1.1rem; align-items:start; }
+.eh-manage-list { display:grid; gap:.9rem; min-width:0; }
+.eh-manage-booking { width:100%; background:#fffdfa; border:1px solid #deded2; box-shadow:0 7px 20px #26352809; padding:1.15rem; border-radius:1rem; display:flex; align-items:center; gap:1rem; text-align:left; color:#2b4935; cursor:pointer; transition: border .14s,box-shadow .14s; }
+.eh-manage-booking:hover { border-color:#86aa8b; }
+.eh-manage-booking.is-selected { border-color:#c8d8c8; border-left:5px solid #2d5b40; box-shadow:0 9px 22px #26352812; background:#fffefa; }
+.eh-manage-day { display:flex; flex-direction:column; justify-content:center; align-items:center; min-width:60px; height:72px; border-radius:.75rem; background:#e8eee5; }
+.eh-manage-day strong { font:700 1.9rem/1.1 Georgia,serif; }
+.eh-manage-day small { text-transform:uppercase; font:700 .65rem/1.35 system-ui,sans-serif; letter-spacing:.06em; }
+.eh-manage-card-text { flex:1; min-width:0; display:grid; gap:.3rem; }
+.eh-manage-card-text strong { color:#294733; font:700 1.27rem/1.2 Georgia,serif; }
+.eh-manage-card-text small { color:#667568; font:400 .85rem/1.3 system-ui,sans-serif; }
+.eh-manage-card-text em { color:#316847; font:700 .78rem/1.3 system-ui,sans-serif; font-style:normal; }
+.eh-manage-card-arrow { color:#355d42; font-size:2rem; line-height:1; }
+.eh-manage-right { min-width:0; }
+.eh-edit-panel { background:#fffefa; border:1px solid #deded2; border-radius:1.05rem; padding:clamp(1.25rem,2.2vw,1.75rem); box-shadow:0 8px 25px #2635280b; }
+.eh-edit-eyebrow { margin:0 0 .45rem; color:#80583d; letter-spacing:.14em; text-transform:uppercase; font:700 .69rem system-ui,sans-serif; }
+.eh-edit-title-row { display:flex; gap:1rem; align-items:center; justify-content:space-between; margin-bottom:.6rem; }
+.eh-edit-title-row h3 { font:700 clamp(1.55rem,2.3vw,2rem)/1.15 Georgia,serif; color:#23432f; margin:0; }
+.eh-edit-status,.eh-edit-upcoming-pill { display:inline-flex; align-items:center; border:1px solid #c9d8c5; background:#eaf0e8; color:#315b3d; padding:.4rem .82rem; font:700 .79rem system-ui,sans-serif; border-radius:2rem; white-space:nowrap; }
+.eh-edit-subtitle { font:italic .93rem/1.5 Georgia,serif; color:#6a736b; margin:0 0 1.15rem; }
+.eh-edit-current { display:flex; flex-wrap:wrap; gap:.35rem .9rem; align-items:center; padding:.8rem .9rem; border-radius:.65rem; background:#f1f3ec; margin-bottom:1.2rem; font:.85rem/1.5 system-ui,sans-serif; color:#425448; }
+.eh-edit-current strong { color:#294b33; }
+.eh-edit-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.9rem 1rem; }
+.eh-edit-field { min-width:0; }
+.eh-edit-field > label { display:block; margin-bottom:.4rem; font:700 .72rem system-ui,sans-serif; letter-spacing:.12em; text-transform:uppercase; color:#80573a; }
+.eh-edit-field > input,.eh-edit-field > select { width:100%; height:48px; border:1px solid #c6d2c5; border-radius:.65rem; padding:.7rem .85rem; background:#fffefa; color:#314b38; font:400 .94rem system-ui,sans-serif; }
+.eh-edit-field .ea-control { min-height:48px; background:#fffefa; border-color:#c6d2c5; }
+.eh-edit-field :is(input,select,button):focus-visible { outline:2px solid #4c7c56; outline-offset:2px; }
+.eh-edit-availability { margin:1rem 0 1.2rem; background:#eaf3e8; color:#2f6640; border:1px solid #d5e5d0; padding:.73rem .9rem; border-radius:.68rem; font:.87rem/1.5 system-ui,sans-serif; }
+.eh-edit-small-warning { color:#80573a; font-size:.82rem; margin:-.65rem 0 1rem; }
+.eh-edit-requirements-title { border-top:1px solid #e8e5da; padding-top:1rem; display:flex; gap:.65rem; align-items:baseline; margin-bottom:.8rem; }
+.eh-edit-requirements-title h4 { margin:0; font:700 1.1rem Georgia,serif; color:#294b33; }
+.eh-edit-requirements-title span { color:#6c7b6a; font:.78rem system-ui,sans-serif; }
+.eh-edit-no-requirements { margin:0 0 .7rem; color:#6d786e; font:.85rem system-ui,sans-serif; }
+.eh-edit-requirement { display:flex; gap:.6rem; align-items:end; background:#fafaf6; border:1px solid #e4e5db; border-radius:.66rem; padding:.65rem .75rem; margin-bottom:.58rem; }
+.eh-edit-requirement > label:first-child { min-width:0; flex:1; color:#637367; font:600 .72rem system-ui,sans-serif; }
+.eh-edit-requirement input[type=text],.eh-edit-requirement input:not([type]) { width:100%; display:block; margin-top:.25rem; background:#fffefa; border:1px solid #ccd5cc; border-radius:.4rem; padding:.48rem .6rem; color:#294532; font:400 .87rem system-ui,sans-serif; }
+.eh-edit-allergy { display:flex; gap:.3rem; align-items:center; padding-bottom:.5rem; color:#79513d; white-space:nowrap; font:600 .76rem system-ui,sans-serif; }
+.eh-edit-remove { border:0; border-radius:.45rem; background:#f4ebe4; color:#925b48; font-size:1.35rem; line-height:1; height:34px; width:34px; }
+.eh-edit-add { border:1px solid #c4d6c4; background:#f3f7ee; color:#315d3d; border-radius:.5rem; font:700 .85rem system-ui,sans-serif; padding:.6rem .85rem; }
+.eh-edit-policy { font:400 .8rem/1.6 system-ui,sans-serif; color:#697667; margin:1rem 0; }
+.eh-edit-error { padding:.75rem; border-radius:.55rem; border:1px solid #e7bdb4; background:#fff1ed; color:#8f3f31; font:.85rem system-ui,sans-serif; }
+.eh-edit-actions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:.8rem; border-top:1px solid #e8e5da; margin-top:1.15rem; padding-top:1.15rem; }
+.eh-edit-cancel { display:inline-flex; justify-content:center; align-items:center; padding:.75rem 1rem; color:#315a3f; background:#fffefa; border:1px solid #315a3f; border-radius:.65rem; text-decoration:none; font:700 .87rem system-ui,sans-serif; }
+.eh-edit-cancel:hover { background:#eff5eb; color:#315a3f; }
+.eh-edit-actions .eh-button:disabled { opacity:.5; cursor:not-allowed; }
+.eh-manage-details { min-height:390px; }
+.eh-manage-detail-list { margin:1rem 0; }
+.eh-manage-detail-list > div { display:grid; grid-template-columns:minmax(120px,35%) minmax(0,1fr); gap:.5rem; padding:.76rem .2rem; border-bottom:1px solid #e7e8df; font:.93rem/1.5 system-ui,sans-serif; }
+.eh-manage-detail-list dt { color:#2c5239; font-weight:700; }
+.eh-manage-detail-list dd { margin:0; color:#47584c; overflow-wrap:anywhere; }
+.eh-manage-cutoff { color:#49684e; background:#ecf2e9; border:1px solid #d3e2d1; border-radius:.7rem; margin:0; padding:.8rem; font:.8rem/1.45 system-ui,sans-serif; }
+.eh-manage-notice { margin:0 0 1.2rem; padding:.8rem 1rem; background:#e9f3e8; border:1px solid #bfcfb9; color:#325941; border-radius:.65rem; font:.91rem system-ui,sans-serif; }
+@media(max-width:930px) { .eh-manage-grid { grid-template-columns:minmax(230px,37%) minmax(0,1fr); } .eh-edit-panel { padding:1.05rem; } }
+@media(max-width:760px) { .eh-manage-grid { grid-template-columns:minmax(0,1fr); } .eh-manage-list { grid-template-columns:repeat(2,minmax(0,1fr)); } .eh-manage-booking { padding:.75rem; } }
+@media(max-width:540px) { .eh-edit-fields,.eh-manage-list { grid-template-columns:minmax(0,1fr); } .eh-manage-detail-list > div { grid-template-columns:100px minmax(0,1fr); } .eh-edit-requirement { flex-wrap:wrap; } .eh-edit-requirement > label:first-child { flex-basis:100%; } .eh-manage-card-text strong { font-size:1.1rem; } }
+
+/* MHM-116 UX follow-up: closed by default; only the arrow opens the detail pane. */
+.eh-manage-grid.is-list-only { grid-template-columns: minmax(0,1fr); }
+.eh-manage-grid.is-list-only .eh-manage-list { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.eh-manage-grid.has-selection { grid-template-columns: minmax(255px,34%) minmax(0,1fr); }
+.eh-manage-card-arrow { display:inline-flex; justify-content:center; align-items:center; width:32px; height:32px; border-radius:50%; transition:transform .18s ease,background .18s ease; }
+.eh-manage-card-arrow.is-open { transform:rotate(90deg); background:#e8f0e7; }
+.eh-manage-booking:focus-visible { outline:3px solid #548262; outline-offset:3px; }
+.eh-manage-mobile-back { display:none; }
+
+/* A calmer reservation summary: compact cards instead of a table-like line list. */
+.eh-manage-details { min-height:0; }
+.eh-manage-highlight { display:grid; gap:.4rem; background:#edf3ea; color:#31563d; border-radius:.85rem; padding:1.15rem 1.25rem; margin-top:1.1rem; }
+.eh-manage-summary-label { color:#80583d; font:700 .71rem/1.3 system-ui,sans-serif; text-transform:uppercase; letter-spacing:.13em; }
+.eh-manage-highlight strong { color:#22402e; font:700 clamp(1.35rem,2vw,1.7rem)/1.18 Georgia,serif; }
+.eh-manage-highlight > span:last-child { color:#526451; font:500 .96rem/1.4 system-ui,sans-serif; }
+.eh-manage-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.8rem; margin-block:.85rem 1.15rem; }
+.eh-manage-facts > div { display:grid; gap:.35rem; padding:1rem; border:1px solid #e4e6dc; border-radius:.7rem; background:#fafaf6; }
+.eh-manage-facts span { color:#806248; font:700 .72rem/1.3 system-ui,sans-serif; letter-spacing:.08em; text-transform:uppercase; }
+.eh-manage-facts strong { color:#294b34; font:600 .98rem/1.45 system-ui,sans-serif; }
+.eh-manage-dietary { padding:1rem 0 .2rem; border-top:1px solid #e8e6db; }
+.eh-manage-dietary h4 { color:#294b33; margin:0 0 .8rem; font:700 1.16rem Georgia,serif; }
+.eh-manage-none { margin:0; color:#707a70; font:.91rem system-ui,sans-serif; }
+.eh-manage-diet-list { margin:0; padding:0; display:grid; gap:.58rem; list-style:none; }
+.eh-manage-diet-list li { display:flex; align-items:flex-start; gap:.8rem; padding:.8rem 1rem; background:#f9faf6; border:1px solid #e6e7dd; border-radius:.65rem; color:#345441; }
+.eh-manage-diet-list li.has-allergy { background:#fff8f3; border-color:#f0dacc; }
+.eh-manage-diet-icon { flex:none; display:grid; place-items:center; width:28px; height:28px; border-radius:.45rem; background:#e3efde; color:#356444; font-weight:800; }
+.eh-manage-diet-list li.has-allergy .eh-manage-diet-icon { background:#f2e3d7; color:#945a36; }
+.eh-manage-diet-list li > span:last-child { display:grid; gap:.2rem; min-width:0; overflow-wrap:anywhere; }
+.eh-manage-diet-list strong { font:600 .88rem/1.4 system-ui,sans-serif; }
+.eh-manage-diet-list small { color:#965c3f; font:.78rem system-ui,sans-serif; }
+
+/* Editing uses exactly the search controls and photographic slot cards of Availability. */
+.eh-edit-search-fields { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.eh-edit-times { margin-top:1.4rem; padding-top:1rem; border-top:1px solid #e9e8dd; }
+.eh-edit-times-head { display:flex; align-items:baseline; justify-content:space-between; gap:1rem; margin-bottom:.55rem; }
+.eh-edit-times-head h4 { color:#294b33; margin:0; font:700 1.22rem Georgia,serif; }
+.eh-edit-times-head > span { color:#527259; font:600 .78rem system-ui,sans-serif; }
+.eh-edit-times .eh-edit-availability { margin:.6rem 0 .9rem; }
+.eh-edit-availability.is-warning { background:#fff6ed; border-color:#efd1bb; color:#885034; }
+.eh-edit-slot-cards { grid-template-columns:repeat(auto-fit,minmax(min(100%,185px),1fr)); gap:.75rem; }
+.eh-edit-slot-cards .eh-slot-tile { min-width:0; }
+.eh-edit-slot-cards .eh-slot-tile:only-child { max-width:300px; }
+.eh-edit-slot-cards .eh-slot-tile img { height:95px; }
+.eh-edit-slot-cards .eh-slot-tile-body { min-height:95px; padding:.7rem .8rem; }
+.eh-edit-slot-cards .eh-slot-tile-info strong { font-size:1.5rem; }
+.eh-edit-slot-cards .eh-slot-availability { font:600 .81rem/1.35 system-ui,sans-serif; }
+.eh-edit-slot-cards .eh-slot-tile-kicker { font-size:.61rem; }
+.eh-edit-time-selection { color:#526a55; font:.82rem system-ui,sans-serif; margin:.65rem 0 0; }
+.eh-edit-time-selection strong { color:#285439; }
+
+@media(max-width:1150px) {
+  .eh-manage-grid.has-selection { grid-template-columns:minmax(240px,35%) minmax(0,1fr); }
+  .eh-edit-search-fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .eh-edit-search-fields > :nth-child(3) { grid-column:1/-1; max-width:260px; }
+}
+@media(max-width:920px) {
+  /* One screen at a time on mobile/tablet: never pile list above the form. */
+  .eh-manage-grid.has-selection,.eh-manage-grid.is-list-only { grid-template-columns:minmax(0,1fr); }
+  .eh-manage-grid.has-selection .eh-manage-list { display:none; }
+  .eh-manage-mobile-back { display:inline-flex; align-items:center; gap:.5rem; color:#28553b; border:1px solid #cedbce; background:#f3f8f0; border-radius:.6rem; padding:.65rem .9rem; font:700 .88rem system-ui,sans-serif; margin:0 0 .8rem; }
+  .eh-manage-right { width:100%; }
+}
+@media(max-width:600px) {
+  .eh-my-bookings .eh-my-bookings-body { padding-block:1.3rem 3rem; }
+  .eh-manage-grid.is-list-only .eh-manage-list { grid-template-columns:minmax(0,1fr); }
+  .eh-manage-booking { min-height:94px; padding:.85rem; }
+  .eh-manage-day { min-width:54px; height:66px; }
+  .eh-manage-grid.has-selection .eh-edit-panel { padding:1rem; }
+  .eh-manage-facts { gap:.5rem; }
+  .eh-manage-facts > div { padding:.75rem; }
+  .eh-edit-search-fields { grid-template-columns:minmax(0,1fr); }
+  .eh-edit-search-fields > :nth-child(3) { grid-column:auto; max-width:none; }
+  .eh-edit-slot-cards { grid-template-columns:repeat(2,minmax(0,1fr)); gap:.55rem; }
+  .eh-edit-slot-cards .eh-slot-tile img { height:76px; }
+  .eh-edit-slot-cards .eh-slot-tile-body { padding:.6rem .55rem; min-height:82px; }
+  .eh-edit-slot-cards .eh-slot-tile-info strong { font-size:1.22rem; }
+  .eh-edit-slot-cards .eh-slot-availability { font-size:.73rem; }
+  .eh-edit-slot-cards .eh-slot-arrow { display:none; }
+  .eh-edit-slot-cards .eh-slot-tile:only-child { max-width:100%; }
+  .eh-edit-requirement { flex-wrap:wrap; }
+  .eh-edit-requirement > label:first-child { flex-basis:100%; }
+  .eh-edit-actions { position:sticky; bottom:0; z-index:4; background:#fffefa; padding:.85rem .2rem; box-shadow:0 -6px 14px #2635280b; gap:.5rem; }
+  .eh-edit-actions .eh-button,.eh-edit-actions .eh-edit-cancel { flex:1; min-height:45px; text-align:center; font-size:.84rem; }
+}
+@media(max-width:370px) {
+  .eh-manage-facts { grid-template-columns:minmax(0,1fr); }
+  .eh-edit-slot-cards { grid-template-columns:minmax(0,1fr); }
+  .eh-edit-slot-cards .eh-slot-tile img { height:95px; }
+}
+
+/* Only the chevron button toggles the reservation panel. */
+.eh-manage-booking { cursor:default; }
+.eh-manage-arrow-button { display:grid; place-items:center; flex:none; width:42px; height:42px; padding:0; border:1px solid #d6e0d3; border-radius:50%; color:#355d42; background:#f3f7ef; cursor:pointer; }
+.eh-manage-arrow-button:hover { background:#e4efe3; border-color:#96b298; }
+.eh-manage-arrow-button:focus-visible { outline:3px solid #548262; outline-offset:3px; }
+.eh-manage-booking.is-selected .eh-manage-arrow-button { border-color:#a7c1aa; }
