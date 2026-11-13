@@ -45,7 +45,8 @@ describe('MyAccountPage Component Integration Tests', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole('heading', { name: /my account/i })).toBeInTheDocument();
+    // Specify heading level 1 to uniquely target the main page title
+    expect(screen.getByRole('heading', { level: 1, name: /my account/i })).toBeInTheDocument();
     expect(screen.getByText('Mario Rossi')).toBeInTheDocument();
     expect(screen.getByText('mario.rossi@example.com')).toBeInTheDocument();
     expect(screen.getByText('+393331234567')).toBeInTheDocument();
@@ -104,7 +105,7 @@ describe('MyAccountPage Component Integration Tests', () => {
     expect(screen.getByText('Your personal information was updated.')).toBeInTheDocument();
   });
 
-  it('validates profile inputs and shows error when name is empty', async () => {
+  it('validates profile inputs and shows error when name is empty or blank', async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter>
@@ -116,6 +117,8 @@ describe('MyAccountPage Component Integration Tests', () => {
 
     const nameInput = screen.getByLabelText(/^name/i);
     await user.clear(nameInput);
+    // Type spaces so HTML5 required check passes, but trimmed name becomes empty (triggering React validation)
+    await user.type(nameInput, '   ');
 
     await user.click(screen.getByRole('button', { name: /save changes/i }));
 
