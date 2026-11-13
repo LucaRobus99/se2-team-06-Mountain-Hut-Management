@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { login, getCurrentUser, logout, registerHiker } from '../../../../src/api/auth.js';
+import { login, getCurrentUser, logout, registerHiker, updateMyProfile, changeMyPassword } from '../../../../src/api/auth.js';
 
 describe('Auth API - White-Box Unit Tests', () => {
   
@@ -180,6 +180,60 @@ describe('Auth API - White-Box Unit Tests', () => {
         .rejects.toThrow('This email already has an account. Please log in instead.');
     });
 
+  });
+
+  describe('updateMyProfile', () => {
+    it('should successfully update profile and return updated user data', async () => {
+      const mockUpdatedUser = { id: 1, name: 'Mario Updated', phone: '+393339999999' };
+
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ user: mockUpdatedUser })
+      }));
+
+      const profileData = { name: 'Mario Updated', phone: '+393339999999' };
+      const result = await updateMyProfile(profileData);
+
+      expect(result).toEqual(mockUpdatedUser);
+      expect(fetch).toHaveBeenCalledWith('/api/auth/me', expect.objectContaining({
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profileData)
+      }));
+    });
+  });
+
+  describe('changeMyPassword', () => {
+    it('should successfully change password', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        status: 204,
+        json: async () => null
+      }));
+
+      const passData = { currentPassword: 'OldPass', newPassword: 'NewPass123!' };
+      await expect(changeMyPassword(passData)).resolves.toBeNull();
+
+      expect(fetch).toHaveBeenCalledWith('/api/auth/change-password', expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(passData)
+      }));
+    });
+  });
+
+  describe('request helper fallbacks', () => {
+    it('should use default error message if error body lacks a message', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: {} })
+      }));
+
+      await expect(login({ email: 'test@hut.test', password: 'pwd' }))
+        .rejects.toThrow('The request could not be completed.');
+    });
   });
 
 });

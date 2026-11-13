@@ -102,6 +102,36 @@ describe('AppNavbar Component Integration Tests', () => {
     expect(screen.getByRole('button', { name: /staff member/i })).toBeInTheDocument();
   });
 
+  it('correctly computes avatar initials for single-word and missing display names', () => {
+    useAuth.mockReturnValue({
+      user: { id: 1, displayName: 'Mario', role: 'hiker' },
+      loadingAuth: false,
+      signOut: vi.fn(),
+    });
+
+    const { rerender } = render(
+      <MemoryRouter>
+        <AppNavbar />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('M')).toBeInTheDocument();
+
+    useAuth.mockReturnValue({
+      user: { id: 1, displayName: '', role: 'hiker' },
+      loadingAuth: false,
+      signOut: vi.fn(),
+    });
+
+    rerender(
+      <MemoryRouter>
+        <AppNavbar />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('HI')).toBeInTheDocument();
+  });
+
   it('should call signOut and handle successful logout flow', async () => {
     const mockSignOut = vi.fn().mockResolvedValue(true);
     useAuth.mockReturnValue({
