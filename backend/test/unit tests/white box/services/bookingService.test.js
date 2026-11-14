@@ -35,6 +35,10 @@ describe('bookingService - White-Box Tests', () => {
       insertSeats: vi.fn(),
       findById: vi.fn(),
       getSeatAssignments: vi.fn(),
+      insertRequirements: vi.fn(),
+      replaceRequirements: vi.fn(),
+      getRequirements: vi.fn().mockResolvedValue([]),
+      getRequirementsByBookingIds: vi.fn().mockResolvedValue(new Map()),
     };
 
     slotDao = {

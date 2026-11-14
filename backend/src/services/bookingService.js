@@ -17,72 +17,9 @@ import {
   tooLong,
   unknown,
 } from '../utils/validation.js';
+import { parseRequirements } from './requirements.js';
 
 const CONTACT_FIELDS = ['contactName', 'email', 'contactNumber'];
-
-const INSERT_REQUIREMENT_METHODS = [
-  'insertRequirements',
-  'insertPartyRequirements',
-  'insertBookingRequirements',
-  'createRequirements',
-  'createPartyRequirements',
-  'createBookingRequirements',
-  'addRequirements',
-  'addPartyRequirements',
-  'saveRequirements',
-  'savePartyRequirements',
-  'storeRequirements',
-];
-
-const GET_REQUIREMENT_METHODS = [
-  'getRequirements',
-  'getPartyRequirements',
-  'getBookingRequirements',
-  'findRequirements',
-  'findRequirementsByBookingId',
-  'findPartyRequirements',
-  'findBookingRequirements',
-  'listRequirements',
-  'loadRequirements',
-  'getRequirementsByBookingId',
-  'fetchRequirements',
-];
-
-function findMethod(dao, names, predicate) {
-  for (const name of names) {
-    if (typeof dao?.[name] === 'function') {
-      return dao[name].bind(dao);
-    }
-  }
-
-  if (dao) {
-    for (const key of Object.keys(dao)) {
-      if (typeof dao[key] !== 'function') continue;
-      if (!/requirement/i.test(key)) continue;
-      if (predicate && !predicate(key)) continue;
-
-      return dao[key].bind(dao);
-    }
-  }
-
-  return null;
-}
-
-function findInserter(dao) {
-  return findMethod(
-    dao,
-    INSERT_REQUIREMENT_METHODS,
-    (key) => /insert|create|add|save|store/i.test(key)
-  );
-}
-
-function findGetter(dao) {
-  return findMethod(
-    dao,
-    GET_REQUIREMENT_METHODS,
-    (key) => /get|find|list|load|fetch/i.test(key)
-  );
-}
 
 /** MH-07: booking endpoints that only staff may use. */
 function assertStaffUser(user) {
@@ -93,19 +30,6 @@ function assertStaffUser(user) {
   if (!isStaff(user)) {
     throw new ForbiddenError(STAFF_ONLY_MESSAGE, 'FORBIDDEN');
   }
-}
-
-function normalizeRequirements(rows) {
-  if (!Array.isArray(rows)) return [];
-
-  return rows.map((r) => ({
-    description: r?.description ?? r?.text ?? '',
-    allergies:
-      r?.allergies === true ||
-      r?.allergies === 1 ||
-      r?.allergies === 'true' ||
-      r?.allergies === '1',
-  }));
 }
 
 /**
@@ -197,50 +121,7 @@ function validateBookingBody(body, user) {
     phone: user.phone ?? null,
   };
 
-  let requirements = [];
-
-  if (!isMissing(body.requirements)) {
-    if (!Array.isArray(body.requirements)) {
-      details.push(invalid('requirements', EXPECTED.array));
-    } else {
-      const normalized = [];
-
-      for (const entry of body.requirements) {
-        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-          details.push(invalid('requirements', EXPECTED.object));
-          continue;
-        }
-
-        const rawDesc = entry.description;
-        let descValid = true;
-
-        if (typeof rawDesc !== 'string' || rawDesc.trim() === '') {
-          details.push(invalid('requirements', EXPECTED.text));
-          descValid = false;
-        } else if (rawDesc.trim().length > 500) {
-          details.push(tooLong('requirements', 500));
-          descValid = false;
-        }
-
-        const allergyValid = typeof entry.allergies === 'boolean';
-
-        if (!allergyValid) {
-          details.push(invalid('requirements', 'a boolean'));
-        }
-
-        if (descValid && allergyValid) {
-          normalized.push({
-            description: rawDesc.trim(),
-            allergies: entry.allergies,
-          });
-        }
-      }
-
-      if (details.every((d) => !String(d.field || '').startsWith('requirements'))) {
-        requirements = normalized;
-      }
-    }
-  }
+  const requirements = parseRequirements(body.requirements, details) ?? [];
 
   if (staff) {
     contact = {
@@ -289,9 +170,9 @@ function validateUpdateBody(body) {
 
   const hasSlotId = !isMissing(body.slotId);
   const hasPartySize = !isMissing(body.partySize);
-  const hasRequirements =
-    Object.prototype.hasOwnProperty.call(body, 'requirements') &&
-    !isMissing(body.requirements);
+  // `requirements: []` is a change (clears them); an absent field is not.
+  const requirements = parseRequirements(body.requirements, details);
+  const hasRequirements = requirements !== null;
 
   let slotId = null;
 
@@ -313,53 +194,6 @@ function validateUpdateBody(body) {
     }
   }
 
-  let requirements = [];
-
-  if (hasRequirements) {
-    if (!Array.isArray(body.requirements)) {
-      details.push(invalid('requirements', EXPECTED.array));
-    } else {
-      const normalized = [];
-      let structureError = false;
-
-      for (const entry of body.requirements) {
-        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-          details.push(invalid('requirements', EXPECTED.object));
-          structureError = true;
-          continue;
-        }
-
-        const description = entry.description;
-        let descriptionValid = true;
-
-        if (typeof description !== 'string' || description.trim() === '') {
-          details.push(invalid('requirements', EXPECTED.text));
-          descriptionValid = false;
-        } else if (description.trim().length > 500) {
-          details.push(tooLong('requirements', 500));
-          descriptionValid = false;
-        }
-
-        const allergyValid = typeof entry.allergies === 'boolean';
-
-        if (!allergyValid) {
-          details.push(invalid('requirements', 'a boolean'));
-        }
-
-        if (descriptionValid && allergyValid) {
-          normalized.push({
-            description: description.trim(),
-            allergies: entry.allergies,
-          });
-        }
-      }
-
-      if (!structureError) {
-        requirements = normalized;
-      }
-    }
-  }
-
   if (!hasSlotId && !hasPartySize && !hasRequirements) {
     details.push({
       field: 'body',
@@ -372,12 +206,11 @@ function validateUpdateBody(body) {
     throw invalidFields(details);
   }
 
-  return { slotId, partySize, requirements, hasRequirements };
+  return { slotId, partySize, requirements: requirements ?? [], hasRequirements };
 }
 
 function toBookingResponse(booking, assignments, requirements = []) {
   const split = assignments.length > 1;
-  const normalizedRequirements = normalizeRequirements(requirements);
 
   const response = {
     id: booking.id,
@@ -395,7 +228,7 @@ function toBookingResponse(booking, assignments, requirements = []) {
     contactName: booking.contact_name,
     email: booking.email,
     contactNumber: booking.phone,
-    requirements: normalizedRequirements,
+    requirements,
     split,
     seatAssignments: assignments.map((a) => ({
       tableId: a.tableId,
@@ -571,11 +404,7 @@ export function createBookingService({
 
           await bookingDao.insertSeats(tx, bookingId, seating.assignments);
 
-          const inserter = findInserter(bookingDao);
-
-          if (data.requirements.length && inserter) {
-            await inserter(tx, bookingId, data.requirements);
-          }
+          await bookingDao.insertRequirements(tx, bookingId, data.requirements);
 
           const booking = await bookingDao.findById(tx, bookingId);
 
@@ -595,18 +424,7 @@ export function createBookingService({
         );
       }
 
-      const getter = findGetter(bookingDao);
-      let savedRequirements = normalizeRequirements(data.requirements);
-
-      if (getter) {
-        try {
-          savedRequirements = normalizeRequirements(
-            await getter(result.booking.id)
-          );
-        } catch {
-          // Keep the validated request data as fallback.
-        }
-      }
+      const savedRequirements = await bookingDao.getRequirements(result.booking.id);
 
       // Never send a staff member's own email as the guest's confirmation.
       const recipient =
@@ -802,11 +620,7 @@ export function createBookingService({
 
           await bookingDao.insertSeats(tx, bookingId, seating.assignments);
 
-          const inserter = findInserter(bookingDao);
-
-          if (data.requirements.length && inserter) {
-            await inserter(tx, bookingId, data.requirements);
-          }
+          await bookingDao.insertRequirements(tx, bookingId, data.requirements);
 
           const booking = await bookingDao.findById(tx, bookingId);
 
@@ -828,18 +642,7 @@ export function createBookingService({
         );
       }
 
-      const getter = findGetter(bookingDao);
-      let savedRequirements = normalizeRequirements(data.requirements);
-
-      if (getter) {
-        try {
-          savedRequirements = normalizeRequirements(
-            await getter(result.booking.id)
-          );
-        } catch {
-          // Keep the validated request data as fallback.
-        }
-      }
+      const savedRequirements = await bookingDao.getRequirements(result.booking.id);
 
       const recipient = result.booking.email ?? null;
 
@@ -882,24 +685,15 @@ export function createBookingService({
       }
 
       const rows = await bookingDao.listByHiker(user.id);
-      const getter = findGetter(bookingDao);
+      const requirementsById = await bookingDao.getRequirementsByBookingIds(
+        rows.map((row) => row.id)
+      );
       const bookings = [];
 
       for (const row of rows) {
         const assignments = await bookingDao.getSeatAssignments(row.id);
-
-        let requirements = [];
-
-        if (getter) {
-          try {
-            requirements = normalizeRequirements(await getter(row.id));
-          } catch {
-            requirements = [];
-          }
-        }
-
         bookings.push(
-          toBookingResponse(row, assignments, requirements)
+          toBookingResponse(row, assignments, requirementsById.get(row.id) ?? [])
         );
       }
 
@@ -927,16 +721,7 @@ export function createBookingService({
       }
 
       const assignments = await bookingDao.getSeatAssignments(booking.id);
-      const getter = findGetter(bookingDao);
-      let requirements = [];
-
-      if (getter) {
-        try {
-          requirements = normalizeRequirements(await getter(booking.id));
-        } catch {
-          requirements = [];
-        }
-      }
+      const requirements = await bookingDao.getRequirements(booking.id);
 
       return toBookingResponse(booking, assignments, requirements);
     },
@@ -1059,31 +844,7 @@ export function createBookingService({
           }
 
           if (data.hasRequirements) {
-            const inserter = findInserter(bookingDao);
-
-            if (typeof bookingDao.deleteRequirements !== 'function') {
-              throw new AppError(
-                500,
-                'Internal Server Error',
-                'Booking requirements cannot be updated.',
-                'INTERNAL_ERROR'
-              );
-            }
-
-            await bookingDao.deleteRequirements(tx, booking.id);
-
-            if (data.requirements.length) {
-              if (!inserter) {
-                throw new AppError(
-                  500,
-                  'Internal Server Error',
-                  'Booking requirements cannot be saved.',
-                  'INTERNAL_ERROR'
-                );
-              }
-
-              await inserter(tx, booking.id, data.requirements);
-            }
+            await bookingDao.replaceRequirements(tx, booking.id, data.requirements);
           }
 
           const updated = await bookingDao.findById(tx, booking.id);
@@ -1108,18 +869,7 @@ export function createBookingService({
         );
       }
 
-      const getter = findGetter(bookingDao);
-      let savedRequirements = [];
-
-      if (getter) {
-        try {
-          savedRequirements = normalizeRequirements(
-            await getter(result.booking.id)
-          );
-        } catch {
-          savedRequirements = [];
-        }
-      }
+      const savedRequirements = await bookingDao.getRequirements(result.booking.id);
 
       // Use the guest email stored on the booking, falling back to the hiker.
       const recipient = result.booking.email ?? user.email ?? null;

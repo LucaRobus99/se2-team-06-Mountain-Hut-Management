@@ -1,0 +1,15 @@
+{
+  "name": "Luca",
+  "date": "22 November 2026",
+  "start_time": "11:00",
+  "end_time": "11:30",
+  "meal": "Breakfast",
+  "guests": "4 people",
+  "split": false,
+  "booking_id": "1042",
+  "party_requirements": [
+    { "description": "1 vegan, peanut allergy", "allergies": true },
+    { "description": "1 shellfish allergy", "allergies": true },
+    { "description": "2 vegetarians", "allergies": false }
+  ]
+}

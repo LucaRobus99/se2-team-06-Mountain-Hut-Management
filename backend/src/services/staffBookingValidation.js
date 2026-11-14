@@ -9,6 +9,7 @@ import {
   tooLong,
   unknown,
 } from '../utils/validation.js';
+import { parseRequirements } from './requirements.js';
 
 /**
  * MH-07: staff can book in three distinguishable ways.
@@ -76,54 +77,6 @@ function isValidPhone(value) {
   return /^[+\d\s().-]+$/.test(value) && value.replace(/\D/g, '').length >= 6;
 }
 
-/**
- * MH-05 requirements, reused by the staff payload: a free-text description and
- * an independent, explicitly provided allergy flag.
- */
-export function normalizeRequirementsInput(value, details) {
-  if (isMissing(value)) return [];
-
-  if (!Array.isArray(value)) {
-    details.push(invalid('requirements', EXPECTED.array));
-    return [];
-  }
-
-  const normalized = [];
-  let structureError = false;
-
-  for (const entry of value) {
-    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-      details.push(invalid('requirements', EXPECTED.object));
-      structureError = true;
-      continue;
-    }
-
-    const description = entry.description;
-    let descriptionValid = true;
-
-    if (typeof description !== 'string' || description.trim() === '') {
-      details.push(invalid('requirements', EXPECTED.text));
-      descriptionValid = false;
-    } else if (description.trim().length > 500) {
-      details.push(tooLong('requirements', 500));
-      descriptionValid = false;
-    }
-
-    const allergyValid = typeof entry.allergies === 'boolean';
-
-    if (!allergyValid) {
-      details.push(invalid('requirements', 'a boolean'));
-    }
-
-    if (descriptionValid && allergyValid) {
-      normalized.push({ description: description.trim(), allergies: entry.allergies });
-    }
-  }
-
-  return structureError ? [] : normalized;
-}
-
-
 export function validateStaffBookingBody(body) {
   const details = [];
 
@@ -166,7 +119,8 @@ export function validateStaffBookingBody(body) {
     details.push(invalid('partySize', EXPECTED.positiveInt));
   }
 
-  const requirements = normalizeRequirementsInput(body.requirements, details);
+  // MH-05: same rules as the hiker booking and the MH-06 change.
+  const requirements = parseRequirements(body.requirements, details) ?? [];
 
   let hikerId = null;
   let contact = null;
