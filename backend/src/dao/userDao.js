@@ -96,16 +96,28 @@ export function createUserDao(db) {
 
       // Escape LIKE wildcards so a literal _ or % does not match everything.
       const like = `%${text.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
+
+      // Phone numbers may be stored with spaces, dashes, parentheses, dots,
+      // a leading + or slashes. Compare the digits as well, so searching
+      // "3331234567" also finds "+39 333 123 4567".
+      const digits = text.replace(/\D/g, '');
+      const digitsLike = digits.length >= 3 ? `%${digits}%` : null;
+
       const { rows } = await db.query(
         `SELECT id, name, email, phone
          FROM users
          WHERE role = 'hiker'
            AND (lower(name) LIKE $1 ESCAPE '\\'
              OR lower(email) LIKE $1 ESCAPE '\\'
-             OR lower(coalesce(phone, '')) LIKE $1 ESCAPE '\\')
+             OR lower(coalesce(phone, '')) LIKE $1 ESCAPE '\\'
+             OR ($2 IS NOT NULL AND
+                 replace(replace(replace(replace(replace(replace(replace(
+                   coalesce(phone, ''),
+                   ' ', ''), '-', ''), '(', ''), ')', ''), '.', ''), '+', ''), '/', '')
+                 LIKE $2 ESCAPE '\\'))
          ORDER BY lower(name), id
-         LIMIT $2`,
-        [like, limit]
+         LIMIT $3`,
+        [like, digitsLike, limit]
       );
       return rows;
     },

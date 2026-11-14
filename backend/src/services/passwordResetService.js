@@ -46,9 +46,18 @@ export function createPasswordResetService({
       }
 
       const token = crypto.randomBytes(32).toString('base64url');
-      const expiresAt = new Date(now().getTime() + tokenTtlMs).toISOString();
+      const currentTime = now();
+      const nowIso = currentTime.toISOString();
+      const expiresAt = new Date(currentTime.getTime() + tokenTtlMs).toISOString();
+      const tokenHash = hashToken(token);
 
-      await passwordResetDao.replaceForUser(user.id, hashToken(token), expiresAt);
+      // DELETE + INSERT must be atomic: two concurrent requests for the same
+      // account must not leave two valid links behind. Expired rows are
+      // cleaned up at the same time.
+      await db.transaction(async (tx) => {
+        await passwordResetDao.deleteExpired(tx, nowIso);
+        await passwordResetDao.replaceForUser(tx, user.id, tokenHash, expiresAt);
+      });
 
       let delivery = { status: 'skipped' };
 

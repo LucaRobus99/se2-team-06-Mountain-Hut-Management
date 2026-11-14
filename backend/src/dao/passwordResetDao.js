@@ -12,6 +12,12 @@ export function createPasswordResetDao(db) {
   const executorOf = createExecutorOf(db);
 
   return {
+    /** Remove tokens whose 24-hour window has passed (housekeeping). */
+    async deleteExpired(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      await exec.query('DELETE FROM password_reset_tokens WHERE expires_at <= $1', [a[0]]);
+    },
+
     /** Invalidate every previous token for the user, then store the new hash. */
     async replaceForUser(...args) {
       const { db: exec, args: a } = executorOf(args);

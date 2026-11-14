@@ -35,7 +35,7 @@ On first startup the service creates `database/database.sqlite` and initializes 
 | POST | `/api/auth/logout` | Authenticated | Log out |
 | GET | `/api/availability` | Public | Available meal slots for date, meal and party size |
 | GET | `/api/availability/:slotId/seating` | Public | Seating proposal for a slot |
-| POST | `/api/bookings` | Authenticated | Create a booking (self-service hiker or staff acting for a guest) |
+| POST | `/api/bookings` | Authenticated | Create a booking (self-service hiker; the legacy staff path requires `contactName`) |
 | GET | `/api/bookings` | Hiker | List only the signed-in hiker's bookings (MH-06) |
 | GET | `/api/bookings/slot-status?slotId=…` | Hiker | Check whether the hiker already booked the selected slot |
 | GET | `/api/bookings/:bookingId` | Owner or staff | Booking details |
@@ -145,8 +145,8 @@ A successful change returns the updated booking in the same shape as a list item
   "name": "New Hiker", "email": "new.hiker@example.com", "phone": "+393339998877" }
 ```
 
-- **existingHiker** — the booking records both `hiker_id` (owner, so it appears in that hiker's `GET /api/bookings`) and `created_by` (staff member). Contact details are copied from the profile.
-- **guest** — no user row is created, so a temporary guest cannot authenticate. `contactName` is required; `contactNumber` and `email` are optional.
+- **existingHiker** — the booking records both `hiker_id` (owner, so it appears in that hiker's `GET /api/bookings`) and `created_by` (staff member). Contact details are copied from the profile. The staff search matches name, email and phone, including phone numbers typed without their stored separators (`3331234567` also finds `+39 333 123 4567`).
+- **guest** — no user row is created, so a temporary guest cannot authenticate. `contactName` is required; `contactNumber` and `email` are optional. The legacy staff path `POST /api/bookings` enforces the same name requirement.
 - **newHiker** — a complete hiker account and the booking are created in **one transaction**. The initial password is generated server-side with `node:crypto` (`password_change_required = 1`), only its scrypt hash is stored, and the plaintext value is returned **once** in the `201` response (`initialPassword`, `Cache-Control: no-store`). It is never emailed, logged or exposed by any other endpoint (#46, option A: the attending staff member communicates it). If the booking fails (e.g. `INSUFFICIENT_CAPACITY`), the account is rolled back too.
 
 `#35`: staff may book **until the slot starts**; afterwards the request fails with `422 SLOT_ALREADY_STARTED`. Hikers keep the two-hour cut-off (`422 SLOT_TOO_LATE`). `GET /api/staff/availability` returns the same slots as the public availability plus those starting within two hours.
