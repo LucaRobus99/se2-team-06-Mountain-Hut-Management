@@ -1,8 +1,9 @@
 
 import { AppError, ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from '../errors/AppError.js';
 import { assertSlotOpen, seatOrFail } from './bookingRules.js';
+import { createBookingCore, runInTransaction, toBookingResponse } from './bookingCore.js';
+import { createBookingNotifier } from './bookingNotifier.js';
 import { isStaff, STAFF_ONLY_MESSAGE } from '../auth/roles.js';
-import { isTooLateToModify } from '../utils/hutTime.js';
 import { generateTemporaryPassword, hashPassword } from './password.js';
 import { validateStaffBookingBody } from './staffBookingValidation.js';
 import {
@@ -209,97 +210,6 @@ function validateUpdateBody(body) {
   return { slotId, partySize, requirements: requirements ?? [], hasRequirements };
 }
 
-function toBookingResponse(booking, assignments, requirements = []) {
-  const split = assignments.length > 1;
-
-  const response = {
-    id: booking.id,
-    status: booking.status,
-    hikerId: booking.hiker_id,
-    createdBy: booking.created_by,
-    slot: {
-      id: booking.slot_id,
-      date: booking.slot_date,
-      startTime: booking.slot_start_time,
-      endTime: booking.slot_end_time,
-      meal: booking.meal,
-    },
-    partySize: booking.party_size,
-    contactName: booking.contact_name,
-    email: booking.email,
-    contactNumber: booking.phone,
-    requirements,
-    split,
-    seatAssignments: assignments.map((a) => ({
-      tableId: a.tableId,
-      tableLabel: a.tableLabel,
-      seats: a.seats,
-    })),
-    createdAt: booking.created_at,
-  };
-
-  if (split) {
-    response.notice = {
-      code: 'GROUP_SPLIT',
-      message: 'The group will be seated across multiple tables.',
-    };
-  }
-
-  return response;
-}
-
-/**
- * Shared email logic for booking creation and update.
- * Email delivery failures must never break the booking request.
- */
-async function sendConfirmationEmail(
-  notifier,
-  booking,
-  assignments,
-  requirements,
-  recipient,
-  fallbackName = null
-) {
-  if (!notifier) return { status: 'skipped' };
-
-  const sender =
-    typeof notifier === 'function'
-      ? notifier
-      : notifier.sendBookingConfirmation ||
-        notifier.sendConfirmation ||
-        notifier.send ||
-        notifier.sendEmail ||
-        null;
-
-  if (typeof sender !== 'function') {
-    return { status: 'skipped' };
-  }
-
-  const fields = {
-    name: booking.contact_name ?? fallbackName ?? null,
-    date: booking.slot_date,
-    start_time: booking.slot_start_time,
-    end_time: booking.slot_end_time,
-    meal: booking.meal,
-    guests: booking.party_size,
-    split: assignments.length > 1,
-    booking_id: booking.id,
-    party_requirements: requirements,
-    requirements,
-  };
-
-  try {
-    const delivery = await sender.call(notifier, recipient, fields);
-
-    return {
-      status: delivery?.skipped ? 'skipped' : 'sent',
-    };
-  } catch (err) {
-    console.error('Failed to send booking confirmation email:', err);
-    return { status: 'failed' };
-  }
-}
-
 /**
  * MH-07 (#46, option A): the generated initial password is communicated by the
  * staff member who created the account. It is returned once in the creation
@@ -313,11 +223,9 @@ export function createBookingService({
   timeZone,
   now = () => new Date(),
   emailService = null,
-  mailer = null,
-  email = null,
-  mailService = null,
 }) {
-  const notifier = emailService || mailer || email || mailService || null;
+  const core = createBookingCore({ bookingDao, slotDao, timeZone, now });
+  const notifier = createBookingNotifier(emailService);
 
   return {
     /**
@@ -335,17 +243,15 @@ export function createBookingService({
         throw invalidFields([invalid('slotId', EXPECTED.positiveInt)]);
       }
 
-      const existing = await bookingDao.findConfirmedByHikerAndSlot(
-        user.id,
-        slotId
-      );
+      const existing = await bookingDao.findConfirmedByHikerAndSlot(user.id, slotId);
 
       return { alreadyBooked: Boolean(existing) };
     },
 
     /**
-     * A hiker books for themself (hiker_id).
-     * Staff book on someone's behalf (created_by).
+     * MH-01 / MH-05: a hiker books for themself (hiker_id).
+     * Staff can still book on someone's behalf (created_by) through this
+     * legacy path; MH-07 bookings go through createStaffBooking.
      */
     async createBooking(user, body) {
       if (!user || !user.id) {
@@ -355,98 +261,35 @@ export function createBookingService({
       const staff = isStaff(user);
       const data = validateBookingBody(body, user);
 
-      let result;
+      const view = await runInTransaction(db, async (tx) => {
+        // MH-07 (#35): staff may book until the slot starts, hikers need 2h.
+        const slot = await core.loadOpenSlot(tx, data.slotId, staff ? { leadMs: 0 } : {});
 
-      try {
-        result = await db.transaction(async (tx) => {
-          const slot = await slotDao.findById(tx, data.slotId);
+        // Issue #25: hikers can have only one confirmed booking per slot.
+        // Staff may book for multiple parties.
+        if (!staff) {
+          await core.assertNoDuplicate(tx, user.id, slot.id);
+        }
 
-          if (!slot) {
-            throw new NotFoundError('Slot not found.', 'SLOT_NOT_FOUND');
-          }
-
-          // MH-07 (#35): staff may book until the slot starts, hikers need 2h.
-          assertSlotOpen(slot, {
-            timeZone,
-            now: now(),
-            ...(staff ? { leadMs: 0 } : {}),
-          });
-
-          // Issue #25: hikers can have only one confirmed booking per slot.
-          // Staff may book for multiple parties.
-          if (!staff) {
-            const existing = await bookingDao.findConfirmedByHikerAndSlot(
-              tx,
-              user.id,
-              slot.id
-            );
-
-            if (existing) {
-              throw new ConflictError(
-                'You already have a confirmed booking for this slot.',
-                'BOOKING_ALREADY_EXISTS'
-              );
-            }
-          }
-
-          const tables = await slotDao.getTablesWithFreeForSlot(tx, slot.id);
-          const seating = seatOrFail(data.partySize, tables);
-
-          const bookingId = await bookingDao.create(tx, {
-            slotId: slot.id,
-            hikerId: staff ? null : user.id,
-            createdBy: staff ? user.id : null,
-            partySize: data.partySize,
-            contactName: data.contactName,
-            email: data.email,
-            phone: data.phone,
-          });
-
-          await bookingDao.insertSeats(tx, bookingId, seating.assignments);
-
-          await bookingDao.insertRequirements(tx, bookingId, data.requirements);
-
-          const booking = await bookingDao.findById(tx, bookingId);
-
-          return {
-            booking,
-            assignments: seating.assignments,
-          };
+        const { bookingId, assignments } = await core.placeBooking(tx, {
+          slot,
+          hikerId: staff ? null : user.id,
+          createdBy: staff ? user.id : null,
+          partySize: data.partySize,
+          contact: { contactName: data.contactName, email: data.email, phone: data.phone },
+          requirements: data.requirements,
         });
-      } catch (err) {
-        if (err instanceof AppError) throw err;
 
-        throw new AppError(
-          500,
-          'Internal Server Error',
-          'An unexpected error occurred.',
-          'INTERNAL_ERROR'
-        );
-      }
-
-      const savedRequirements = await bookingDao.getRequirements(result.booking.id);
+        return (await core.loadBookingView(tx, bookingId, { assignments })).view;
+      });
 
       // Never send a staff member's own email as the guest's confirmation.
-      const recipient =
-        result.booking.email ?? (staff ? null : user.email ?? null);
+      const recipient = view.email ?? (staff ? null : user.email ?? null);
+      const confirmationEmail = await notifier.notify('created', view, recipient, {
+        fallbackName: user.displayName ?? null,
+      });
 
-      const confirmationEmail = await sendConfirmationEmail(
-        notifier,
-        result.booking,
-        result.assignments,
-        savedRequirements,
-        recipient,
-        user.displayName ?? null
-      );
-
-      return {
-        ...toBookingResponse(
-          result.booking,
-          result.assignments,
-          savedRequirements
-        ),
-        confirmationEmail,
-      };
+      return { ...view, confirmationEmail };
     },
 
     /**
@@ -642,25 +485,16 @@ export function createBookingService({
         );
       }
 
-      const savedRequirements = await bookingDao.getRequirements(result.booking.id);
+      const { view } = await core.loadBookingView(db, result.booking.id, {
+        assignments: result.assignments,
+      });
 
-      const recipient = result.booking.email ?? null;
-
-      const confirmationEmail = await sendConfirmationEmail(
-        notifier,
-        result.booking,
-        result.assignments,
-        savedRequirements,
-        recipient,
-        result.booking.contact_name ?? user.displayName ?? null
-      );
+      const confirmationEmail = await notifier.notify('created', view, view.email ?? null, {
+        fallbackName: user.displayName ?? null,
+      });
 
       const response = {
-        ...toBookingResponse(
-          result.booking,
-          result.assignments,
-          savedRequirements
-        ),
+        ...view,
         mode: data.mode,
         confirmationEmail,
       };
@@ -692,37 +526,19 @@ export function createBookingService({
 
       for (const row of rows) {
         const assignments = await bookingDao.getSeatAssignments(row.id);
-        bookings.push(
-          toBookingResponse(row, assignments, requirementsById.get(row.id) ?? [])
-        );
+        bookings.push(toBookingResponse(row, assignments, requirementsById.get(row.id) ?? []));
       }
 
       return { bookings };
     },
 
+    /** Staff read every booking; a hiker reads only their own bookings. */
     async getBooking(bookingIdRaw, user) {
-      const bookingId = parsePositiveInt(bookingIdRaw);
-
-      if (bookingId === null) {
-        throw new NotFoundError('Booking not found.', 'BOOKING_NOT_FOUND');
-      }
-
-      const booking = await bookingDao.findById(bookingId);
-
-      if (!booking) {
-        throw new NotFoundError('Booking not found.', 'BOOKING_NOT_FOUND');
-      }
-
-      // Staff read every booking; a hiker reads only their own bookings.
-      const allowed = isStaff(user) || booking.hiker_id === user.id;
-
-      if (!allowed) {
-        throw new NotFoundError('Booking not found.', 'BOOKING_NOT_FOUND');
-      }
-
+      const booking = await core.loadOwnedBooking(db, parsePositiveInt(bookingIdRaw), user, {
+        allowStaff: true,
+      });
       const assignments = await bookingDao.getSeatAssignments(booking.id);
       const requirements = await bookingDao.getRequirements(booking.id);
-
       return toBookingResponse(booking, assignments, requirements);
     },
 
@@ -730,8 +546,9 @@ export function createBookingService({
      * MH-06: update slot, party size and requirements of a booking owned by
      * the current hiker.
      *
-     * The 48-hour rule is checked on both the original and target slot.
-     * Seat reallocation and requirement changes are performed transactionally.
+     * The 48-hour rule is checked on both the original and target slot (#43).
+     * Seat reallocation and requirement changes are performed transactionally:
+     * if anything fails the booking stays as it was (#38).
      */
     async updateBooking(user, bookingIdRaw, body) {
       if (!user || !user.id) {
@@ -745,152 +562,49 @@ export function createBookingService({
       }
 
       const data = validateUpdateBody(body);
-      let result;
 
-      try {
-        result = await db.transaction(async (tx) => {
-          const booking = await bookingDao.findById(tx, bookingId);
+      const view = await runInTransaction(db, async (tx) => {
+        const booking = await core.loadOwnedBooking(tx, bookingId, user);
+        core.assertConfirmed(booking);
 
-          // Hide other users' booking IDs.
-          if (!booking || booking.hiker_id !== user.id) {
-            throw new NotFoundError('Booking not found.', 'BOOKING_NOT_FOUND');
+        const originalSlot = await core.loadSlot(tx, booking.slot_id);
+        core.assertChangeAllowed(originalSlot);
+
+        const targetSlotId = data.slotId ?? booking.slot_id;
+        const slotChanged = targetSlotId !== booking.slot_id;
+        let targetSlot = originalSlot;
+
+        if (slotChanged) {
+          targetSlot = await core.loadSlot(tx, targetSlotId);
+
+          if (targetSlot.status !== 'available') {
+            throw new ConflictError('Slot is not available.', 'SLOT_NOT_AVAILABLE');
           }
 
-          if (booking.status !== 'confirmed') {
-            throw new ConflictError(
-              'Only confirmed bookings can be changed.',
-              'BOOKING_NOT_CONFIRMED'
-            );
-          }
+          core.assertChangeAllowed(targetSlot);
+          await core.assertNoDuplicate(tx, user.id, targetSlot.id, { exceptBookingId: booking.id });
+        }
 
-          const originalSlot = await slotDao.findById(tx, booking.slot_id);
+        const targetPartySize = data.partySize ?? booking.party_size;
 
-          if (!originalSlot) {
-            throw new NotFoundError('Slot not found.', 'SLOT_NOT_FOUND');
-          }
+        if (slotChanged || targetPartySize !== booking.party_size) {
+          await core.reseat(tx, booking, { slot: targetSlot, partySize: targetPartySize });
+        }
 
-          if (isTooLateToModify(originalSlot, { timeZone, now: now() })) {
-            throw new ConflictError(
-              'Bookings can only be changed up to 48 hours before the slot starts.',
-              'TOO_LATE_TO_MODIFY'
-            );
-          }
+        if (data.hasRequirements) {
+          await bookingDao.replaceRequirements(tx, booking.id, data.requirements);
+        }
 
-          const targetSlotId = data.slotId ?? booking.slot_id;
-          const slotChanged = targetSlotId !== booking.slot_id;
-          let targetSlot = originalSlot;
-
-          if (slotChanged) {
-            targetSlot = await slotDao.findById(tx, targetSlotId);
-
-            if (!targetSlot) {
-              throw new NotFoundError('Slot not found.', 'SLOT_NOT_FOUND');
-            }
-
-            if (targetSlot.status !== 'available') {
-              throw new ConflictError(
-                'Slot is not available.',
-                'SLOT_NOT_AVAILABLE'
-              );
-            }
-
-            if (isTooLateToModify(targetSlot, { timeZone, now: now() })) {
-              throw new ConflictError(
-                'Bookings can only be changed up to 48 hours before the slot starts.',
-                'TOO_LATE_TO_MODIFY'
-              );
-            }
-
-            // Issue #25: a hiker can have only one confirmed booking per slot.
-            const duplicate = await bookingDao.findConfirmedByHikerAndSlot(
-              tx,
-              user.id,
-              targetSlot.id
-            );
-
-            if (duplicate && duplicate.id !== booking.id) {
-              throw new ConflictError(
-                'You already have a confirmed booking for this slot.',
-                'BOOKING_ALREADY_EXISTS'
-              );
-            }
-          }
-
-          const targetPartySize = data.partySize ?? booking.party_size;
-          const reallocate =
-            slotChanged || targetPartySize !== booking.party_size;
-
-          if (reallocate) {
-            // Release the old seats before calculating the new allocation.
-            await bookingDao.deleteSeats(tx, booking.id);
-
-            const tables = await slotDao.getTablesWithFreeForSlot(
-              tx,
-              targetSlot.id
-            );
-
-            const seating = seatOrFail(targetPartySize, tables);
-
-            await bookingDao.update(tx, booking.id, {
-              slotId: targetSlot.id,
-              partySize: targetPartySize,
-            });
-
-            await bookingDao.insertSeats(
-              tx,
-              booking.id,
-              seating.assignments
-            );
-          }
-
-          if (data.hasRequirements) {
-            await bookingDao.replaceRequirements(tx, booking.id, data.requirements);
-          }
-
-          const updated = await bookingDao.findById(tx, booking.id);
-          const assignments = await bookingDao.getSeatAssignments(
-            tx,
-            booking.id
-          );
-
-          return {
-            booking: updated,
-            assignments,
-          };
-        });
-      } catch (err) {
-        if (err instanceof AppError) throw err;
-
-        throw new AppError(
-          500,
-          'Internal Server Error',
-          'An unexpected error occurred.',
-          'INTERNAL_ERROR'
-        );
-      }
-
-      const savedRequirements = await bookingDao.getRequirements(result.booking.id);
+        return (await core.loadBookingView(tx, booking.id)).view;
+      });
 
       // Use the guest email stored on the booking, falling back to the hiker.
-      const recipient = result.booking.email ?? user.email ?? null;
+      const recipient = view.email ?? user.email ?? null;
+      const confirmationEmail = await notifier.notify('updated', view, recipient, {
+        fallbackName: user.displayName ?? null,
+      });
 
-      const confirmationEmail = await sendConfirmationEmail(
-        notifier,
-        result.booking,
-        result.assignments,
-        savedRequirements,
-        recipient,
-        user.displayName ?? null
-      );
-
-      return {
-        ...toBookingResponse(
-          result.booking,
-          result.assignments,
-          savedRequirements
-        ),
-        confirmationEmail,
-      };
+      return { ...view, confirmationEmail };
     },
   };
 }

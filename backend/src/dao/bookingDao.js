@@ -69,6 +69,12 @@ export function createBookingDao(db) {
       );
     },
 
+    /** MH-08 (later MH-15/MH-17): change the status, e.g. to 'cancelled'. */
+    async updateStatus(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      await exec.query(`UPDATE bookings SET status = $2 WHERE id = $1`, [a[0], a[1]]);
+    },
+
     /** MH-06: release the seats a booking currently holds before re-allocating. */
     async deleteSeats(...args) {
       const { db: exec, args: a } = executorOf(args);

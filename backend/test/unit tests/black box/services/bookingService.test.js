@@ -286,7 +286,7 @@ describe('bookingService - Black-Box Tests', () => {
 
     it('should succeed even if email notification service throws an error', async () => {
       const failingNotifier = {
-        send: vi.fn().mockRejectedValue(new Error('SMTP Down')),
+        sendBookingEmail: vi.fn().mockRejectedValue(new Error('SMTP Down')),
       };
 
       const serviceWithEmail = createBookingService({

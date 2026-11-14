@@ -305,8 +305,8 @@ describe('bookingService - White-Box Tests', () => {
 
   describe('Email Notifier Variations Branches', () => {
     
-    it('should support notifier passed as a direct function', async () => {
-      const directNotifierFn = vi.fn().mockResolvedValue(true);
+    it('should send the confirmation through emailService.sendBookingEmail with kind "created"', async () => {
+      const directNotifierFn = vi.fn().mockResolvedValue({ id: 'msg-1' });
 
       const serviceWithFnNotifier = createBookingService({
         db,
@@ -314,7 +314,7 @@ describe('bookingService - White-Box Tests', () => {
         slotDao,
         timeZone,
         now: () => fixedNow,
-        emailService: directNotifierFn,
+        emailService: { sendBookingEmail: directNotifierFn },
       });
 
       slotDao.findById.mockResolvedValue({ 
@@ -330,8 +330,13 @@ describe('bookingService - White-Box Tests', () => {
       });
       bookingDao.getSeatAssignments.mockResolvedValue([{ tableId: 1, tableLabel: 'T1', seats: 2 }]);
 
-      await serviceWithFnNotifier.createBooking(mockHiker, { slotId: 101, partySize: 2 });
-      expect(directNotifierFn).toHaveBeenCalled();
+      const result = await serviceWithFnNotifier.createBooking(mockHiker, { slotId: 101, partySize: 2 });
+      expect(directNotifierFn).toHaveBeenCalledWith('created', 'm@example.com', expect.objectContaining({
+        booking_id: 100,
+        guests: 2,
+        party_requirements: [],
+      }));
+      expect(result.confirmationEmail).toEqual({ status: 'sent' });
     });
 
   });
