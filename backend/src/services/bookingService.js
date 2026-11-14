@@ -1,8 +1,10 @@
 
-import { AppError, ConflictError, NotFoundError, UnauthorizedError } from '../errors/AppError.js';
+import { AppError, ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from '../errors/AppError.js';
 import { assertSlotOpen, seatOrFail } from './bookingRules.js';
-import { isStaff } from '../auth/roles.js';
+import { isStaff, STAFF_ONLY_MESSAGE } from '../auth/roles.js';
 import { isTooLateToModify } from '../utils/hutTime.js';
+import { generateTemporaryPassword, hashPassword } from './password.js';
+import { validateStaffBookingBody } from './staffBookingValidation.js';
 import {
   EXPECTED,
   invalid,
@@ -80,6 +82,17 @@ function findGetter(dao) {
     GET_REQUIREMENT_METHODS,
     (key) => /get|find|list|load|fetch/i.test(key)
   );
+}
+
+/** MH-07: booking endpoints that only staff may use. */
+function assertStaffUser(user) {
+  if (!user || !user.id) {
+    throw new UnauthorizedError('Authentication required.', 'UNAUTHENTICATED');
+  }
+
+  if (!isStaff(user)) {
+    throw new ForbiddenError(STAFF_ONLY_MESSAGE, 'FORBIDDEN');
+  }
 }
 
 function normalizeRequirements(rows) {
@@ -450,10 +463,16 @@ async function sendConfirmationEmail(
   }
 }
 
+/**
+ * MH-07 (#46, option A): the generated initial password is communicated by the
+ * staff member who created the account. It is returned once in the creation
+ * response and is never emailed, logged or exposed anywhere else.
+ */
 export function createBookingService({
   db,
   bookingDao,
   slotDao,
+  userDao = null,
   timeZone,
   now = () => new Date(),
   emailService = null,
@@ -509,7 +528,12 @@ export function createBookingService({
             throw new NotFoundError('Slot not found.', 'SLOT_NOT_FOUND');
           }
 
-          assertSlotOpen(slot, { timeZone, now: now() });
+          // MH-07 (#35): staff may book until the slot starts, hikers need 2h.
+          assertSlotOpen(slot, {
+            timeZone,
+            now: now(),
+            ...(staff ? { leadMs: 0 } : {}),
+          });
 
           // Issue #25: hikers can have only one confirmed booking per slot.
           // Staff may book for multiple parties.
@@ -602,6 +626,241 @@ export function createBookingService({
         confirmationEmail,
       };
     },
+
+    /**
+     * MH-07: staff-only hiker search (name, email or phone). Returns only the
+     * minimal fields needed to choose the right person.
+     */
+    async searchHikers(user, rawQuery) {
+      assertStaffUser(user);
+
+      const query = typeof rawQuery === 'string' ? rawQuery.trim() : '';
+
+      if (query.length < 2) {
+        throw invalidFields([invalid('query', 'at least 2 characters')]);
+      }
+
+      if (query.length > 100) {
+        throw invalidFields([tooLong('query', 100)]);
+      }
+
+      if (!userDao || typeof userDao.searchHikers !== 'function') {
+        throw new AppError(
+          500,
+          'Internal Server Error',
+          'Hiker search is not available.',
+          'INTERNAL_ERROR'
+        );
+      }
+
+      const rows = await userDao.searchHikers(query, 20);
+
+      return {
+        hikers: rows.map((row) => ({
+          id: row.id,
+          name: row.name,
+          email: row.email,
+          phone: row.phone ?? null,
+        })),
+      };
+    },
+
+    /**
+     * MH-07 (#35/#36): staff create a booking on behalf of someone else.
+     *
+     * The three modes share the MH-01 seat allocation:
+     * - existingHiker: the owner is an existing hiker account;
+     * - guest:         no account at all, name required, phone/email optional;
+     * - newHiker:      a complete account is created in the same transaction
+     *                  with a server-generated password that must be changed at
+     *                  first login.
+     *
+     * If the booking fails (e.g. not enough seats), the account creation is
+     * rolled back too. The initial password is returned only here, once.
+     */
+    async createStaffBooking(user, body) {
+      assertStaffUser(user);
+
+      if (!userDao) {
+        throw new AppError(
+          500,
+          'Internal Server Error',
+          'Staff bookings are not available.',
+          'INTERNAL_ERROR'
+        );
+      }
+
+      const data = validateStaffBookingBody(body);
+
+      let result;
+
+      try {
+        result = await db.transaction(async (tx) => {
+          const slot = await slotDao.findById(tx, data.slotId);
+
+          if (!slot) {
+            throw new NotFoundError('Slot not found.', 'SLOT_NOT_FOUND');
+          }
+
+          // #35: staff may book until the slot starts, never afterwards.
+          assertSlotOpen(slot, { timeZone, now: now(), leadMs: 0 });
+
+          let hikerId = null;
+          let contact = data.contact;
+          let account = null;
+          let initialPassword = null;
+
+          if (data.mode === 'existingHiker') {
+            const hiker = await userDao.findById(tx, data.hikerId);
+
+            if (!hiker || hiker.role !== 'hiker') {
+              throw new NotFoundError('Hiker not found.', 'HIKER_NOT_FOUND');
+            }
+
+            hikerId = hiker.id;
+            contact = { contactName: hiker.name, email: hiker.email, phone: hiker.phone };
+          } else if (data.mode === 'newHiker') {
+            const existing = await userDao.findByEmail(tx, data.account.email);
+
+            if (existing) {
+              throw new ConflictError(
+                'An account with this email already exists.',
+                'EMAIL_ALREADY_REGISTERED'
+              );
+            }
+
+            // #36: the password is always generated by the server.
+            initialPassword = generateTemporaryPassword();
+
+            let created;
+
+            try {
+              created = await userDao.createHiker(tx, {
+                ...data.account,
+                passwordHash: hashPassword(initialPassword),
+                passwordChangeRequired: 1,
+              });
+            } catch (err) {
+              if (/UNIQUE constraint failed.*(users\.email|idx_users_email_ci|index.*email)/i.test(err.message)) {
+                throw new ConflictError(
+                  'An account with this email already exists.',
+                  'EMAIL_ALREADY_REGISTERED'
+                );
+              }
+              throw err;
+            }
+
+            hikerId = created.id;
+            account = {
+              id: created.id,
+              name: created.name,
+              email: created.email,
+              passwordChangeRequired: true,
+            };
+            contact = { contactName: created.name, email: created.email, phone: created.phone };
+          }
+
+          // Issue #25 also applies to staff-created bookings for a hiker.
+          if (hikerId) {
+            const duplicate = await bookingDao.findConfirmedByHikerAndSlot(
+              tx,
+              hikerId,
+              slot.id
+            );
+
+            if (duplicate) {
+              throw new ConflictError(
+                'This hiker already has a confirmed booking for this slot.',
+                'BOOKING_ALREADY_EXISTS'
+              );
+            }
+          }
+
+          const tables = await slotDao.getTablesWithFreeForSlot(tx, slot.id);
+          const seating = seatOrFail(data.partySize, tables);
+
+          const bookingId = await bookingDao.create(tx, {
+            slotId: slot.id,
+            hikerId,
+            createdBy: user.id,
+            partySize: data.partySize,
+            contactName: contact?.contactName ?? null,
+            email: contact?.email ?? null,
+            phone: contact?.phone ?? null,
+          });
+
+          await bookingDao.insertSeats(tx, bookingId, seating.assignments);
+
+          const inserter = findInserter(bookingDao);
+
+          if (data.requirements.length && inserter) {
+            await inserter(tx, bookingId, data.requirements);
+          }
+
+          const booking = await bookingDao.findById(tx, bookingId);
+
+          return {
+            booking,
+            assignments: seating.assignments,
+            account,
+            initialPassword,
+          };
+        });
+      } catch (err) {
+        if (err instanceof AppError) throw err;
+
+        throw new AppError(
+          500,
+          'Internal Server Error',
+          'An unexpected error occurred.',
+          'INTERNAL_ERROR'
+        );
+      }
+
+      const getter = findGetter(bookingDao);
+      let savedRequirements = normalizeRequirements(data.requirements);
+
+      if (getter) {
+        try {
+          savedRequirements = normalizeRequirements(
+            await getter(result.booking.id)
+          );
+        } catch {
+          // Keep the validated request data as fallback.
+        }
+      }
+
+      const recipient = result.booking.email ?? null;
+
+      const confirmationEmail = await sendConfirmationEmail(
+        notifier,
+        result.booking,
+        result.assignments,
+        savedRequirements,
+        recipient,
+        result.booking.contact_name ?? user.displayName ?? null
+      );
+
+      const response = {
+        ...toBookingResponse(
+          result.booking,
+          result.assignments,
+          savedRequirements
+        ),
+        mode: data.mode,
+        confirmationEmail,
+      };
+
+      if (result.account) {
+        response.account = result.account;
+        // #46 (option A): communicated once, only to the staff member who
+        // created the account. Never emailed and never returned again.
+        response.initialPassword = result.initialPassword;
+      }
+
+      return response;
+    },
+
 
     /**
      * MH-06: bookings owned by the current hiker, newest slot first.

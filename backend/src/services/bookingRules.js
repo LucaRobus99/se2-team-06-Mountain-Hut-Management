@@ -7,12 +7,25 @@ import { isSlotTooLate } from '../utils/hutTime.js';
  * the same way for the same slot.
  */
 
-/** The slot takes bookings: it is switched on and starts at least two hours from now. */
-export function assertSlotOpen(slot, { timeZone, now }) {
+/**
+ * The slot takes bookings: it is switched on and has not started yet.
+ *
+ * Hikers must book at least two hours ahead (default `BOOKING_LEAD_MS`).
+ * MH-07 (#35): staff may book until the slot starts, so the staff paths pass
+ * `leadMs: 0`; once the slot has started the request is rejected with
+ * SLOT_ALREADY_STARTED.
+ */
+export function assertSlotOpen(slot, { timeZone, now, leadMs } = {}) {
   if (slot.status !== 'available') {
     throw new ConflictError('Slot is not available.', 'SLOT_NOT_AVAILABLE');
   }
-  if (isSlotTooLate(slot, { timeZone, now })) {
+
+  const lateOptions = leadMs === undefined ? { timeZone, now } : { timeZone, now, leadMs };
+
+  if (isSlotTooLate(slot, lateOptions)) {
+    if (leadMs === 0) {
+      throw new UnprocessableEntityError('This slot has already started.', 'SLOT_ALREADY_STARTED');
+    }
     throw new UnprocessableEntityError('Bookings close two hours before the slot starts.', 'SLOT_TOO_LATE');
   }
 }

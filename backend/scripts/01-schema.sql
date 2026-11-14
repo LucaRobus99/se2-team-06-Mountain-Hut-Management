@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS users (
     avatar_blob     BLOB,
     avatar_mime     TEXT,
     avatar_version  INTEGER NOT NULL DEFAULT 0,
+    -- MH-07: staff-created hiker accounts must choose a new password at login.
+    password_change_required INTEGER NOT NULL DEFAULT 0 CHECK (password_change_required IN (0, 1)),
     password_hash   TEXT NOT NULL,
     created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
@@ -77,12 +79,16 @@ CREATE TABLE IF NOT EXISTS slot_tables (
     PRIMARY KEY (slot_id, table_id)
 );
 
--- MH-01: confirmed immediately (no approval). Exactly one owner:
--- - a hiker's own booking sets hiker_id; its contact details are copied from the
---   hiker's profile;
--- - a booking made by staff for a guest sets created_by (MH-07); the guest's
---   contact details come from the request, at least one of name, email or phone
---   (`contactNumber` in the API).
+-- MH-01: confirmed immediately (no approval).
+-- MH-07: a booking always has an owner. Either:
+-- - the hiker books for themself: hiker_id is set, created_by stays NULL and the
+--   contact details are copied from the hiker's profile;
+-- - staff books on someone's behalf (hiker, new account or temporary guest):
+--   created_by is set. For a registered hiker or a staff-created account
+--   hiker_id is set too, so the booking appears in that hiker's own history;
+--   a temporary guest has no account (hiker_id NULL) and only the contact
+--   details stored on the booking (`contactNumber` in the API). Guests cannot
+--   authenticate because no user row exists for them.
 CREATE TABLE IF NOT EXISTS bookings (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     slot_id         INTEGER NOT NULL REFERENCES slots (id),
@@ -94,7 +100,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     party_size      INTEGER NOT NULL CHECK (party_size > 0),
     status          TEXT NOT NULL DEFAULT 'confirmed' CHECK (status IN ('confirmed', 'cancelled')),
     created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    CHECK ((hiker_id IS NULL) <> (created_by IS NULL)),
+    CHECK (hiker_id IS NOT NULL OR created_by IS NOT NULL),
     CHECK (contact_name IS NOT NULL OR email IS NOT NULL OR phone IS NOT NULL)
 );
 
@@ -116,6 +122,19 @@ CREATE TABLE IF NOT EXISTS booking_requirements (
 );
 
 CREATE INDEX IF NOT EXISTS idx_booking_requirements_booking ON booking_requirements (booking_id);
+
+-- MH-07 / #44: single-use password reset tokens. Only the SHA-256 hash of the
+-- token is stored, never the token itself; links expire after 24 hours.
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    token_hash  TEXT NOT NULL UNIQUE,
+    expires_at  TEXT NOT NULL,
+    used_at     TEXT,
+    created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens (user_id);
 
 CREATE INDEX IF NOT EXISTS idx_slots_date ON slots (date);
 CREATE INDEX IF NOT EXISTS idx_slots_meal ON slots (meal_id);

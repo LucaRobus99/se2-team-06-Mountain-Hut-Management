@@ -6,7 +6,14 @@ import { clearSessionCookie } from '../auth/session.js';
 import { sanitizeUser } from '../auth/passport.js';
 import { NotFoundError } from '../errors/AppError.js';
 
-export function createAuthRouter({ passport, requireAuth, registrationService, accountService, now = () => new Date() }) {
+export function createAuthRouter({
+  passport,
+  requireAuth,
+  registrationService,
+  accountService,
+  passwordResetService = null,
+  now = () => new Date(),
+}) {
   const router = Router();
 
   /** POST /api/auth/login – public */
@@ -41,6 +48,35 @@ export function createAuthRouter({ passport, requireAuth, registrationService, a
   /** GET /api/auth/me – any authenticated role */
   router.get('/me', requireAuth(), (req, res) => {
     res.json({ user: req.user });
+  });
+
+  /**
+   * MH-07 / #44: request a password reset link. Public, and always answered
+   * with 204 so the endpoint cannot be used to discover registered emails.
+   */
+  router.post('/forgot-password', async (req, res, next) => {
+    try {
+      if (!passwordResetService) {
+        throw new NotFoundError('Password recovery is not available.', 'NOT_IMPLEMENTED');
+      }
+      await passwordResetService.request(req.body?.email);
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /** MH-07 / #44: set a new password using a single-use, 24-hour reset token. */
+  router.post('/reset-password', async (req, res, next) => {
+    try {
+      if (!passwordResetService) {
+        throw new NotFoundError('Password recovery is not available.', 'NOT_IMPLEMENTED');
+      }
+      await passwordResetService.reset(req.body?.token, req.body?.newPassword);
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
   });
 
   /** PATCH /api/auth/me – edit only the current hiker's own contact profile. */
