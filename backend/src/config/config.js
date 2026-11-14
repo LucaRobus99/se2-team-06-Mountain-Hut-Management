@@ -25,7 +25,12 @@ export const config = {
   mailgunDomain: process.env.MAILGUN_DOMAIN || null,
   mailgunFrom: process.env.MAILGUN_FROM || null,
   mailgunTemplate: process.env.MAILGUN_TEMPLATE ?? 'booking confirmation',
+  /** MH-07 (#44): Mailgun template for the password reset link. */
+  mailgunResetTemplate: process.env.MAILGUN_RESET_TEMPLATE ?? 'password reset',
   mailgunUrl: process.env.MAILGUN_URL ?? null,
+
+  /** Public frontend URL used to build password reset links (#44). */
+  appBaseUrl: process.env.APP_BASE_URL ?? 'http://localhost:5173',
 
   isProduction,
 };

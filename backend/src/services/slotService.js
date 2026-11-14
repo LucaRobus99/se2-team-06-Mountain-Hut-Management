@@ -420,14 +420,21 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
       return { date, meal, slots: result };
     },
 
-    async listAvailableSlots(query) {
+    /**
+     * MH-07: staff availability (`{ staff: true }`) includes slots that start
+     * within the hikers' two-hour cut-off, but never slots that already started.
+     */
+    async listAvailableSlots(query, { staff = false } = {}) {
       const { date, meal, partySize } = validateSlotsQuery(query);
       const currentTime = now();
+      const lateOptions = staff
+        ? { timeZone, now: currentTime, leadMs: 0 }
+        : { timeZone, now: currentTime };
       const slots = (await slotDao.listByDate(date)).filter(
         (slot) =>
           slot.status === 'available' &&
           slot.meal === meal &&
-          !isSlotTooLate(slot, { timeZone, now: currentTime })
+          !isSlotTooLate(slot, lateOptions)
       );
       const tablesBySlot = await tablesGroupedBySlot(slots);
       const result = [];
@@ -450,11 +457,16 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
       return { date, meal, partySize, slots: result };
     },
 
-    async getSeating(slotIdRaw, query) {
+    async getSeating(slotIdRaw, query, { staff = false } = {}) {
       const { partySize } = validateSeatingQuery(query);
       const slot = await loadSlot(slotIdRaw);
 
-      assertSlotOpen(slot, { timeZone, now: now() });
+      // MH-07 (#35): staff may seat a party until the slot starts.
+      assertSlotOpen(slot, {
+        timeZone,
+        now: now(),
+        ...(staff ? { leadMs: 0 } : {}),
+      });
 
       const tables = await slotDao.getTablesWithFreeForSlot(slot.id);
       const seating = seatOrFail(partySize, tables);

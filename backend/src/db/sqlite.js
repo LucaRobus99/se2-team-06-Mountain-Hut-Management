@@ -28,7 +28,10 @@ export function createSqliteDb(file) {
   migrateHikerProfile(database);
   migrateMealAssignments(database);
   migrateBookingRequirements(database);
+  migrateBookingOwnership(database);
   migrateAccountAvatar(database);
+  migratePasswordChangeRequired(database);
+  migratePasswordResetTokens(database);
 
   let queue = Promise.resolve();
 
@@ -143,4 +146,90 @@ function migrateAccountAvatar(database) {
   if (!columns.has('avatar_blob')) database.exec('ALTER TABLE users ADD COLUMN avatar_blob BLOB');
   if (!columns.has('avatar_mime')) database.exec('ALTER TABLE users ADD COLUMN avatar_mime TEXT');
   if (!columns.has('avatar_version')) database.exec('ALTER TABLE users ADD COLUMN avatar_version INTEGER NOT NULL DEFAULT 0');
+}
+
+/**
+ * MH-07: allow a booking to record both the owner (hiker_id) and the staff
+ * member who created it (created_by). Registered hikers and staff-created
+ * accounts keep their own booking history; temporary guests have no account.
+ *
+ * SQLite cannot alter a CHECK constraint, so the table is rebuilt once.
+ * Foreign keys are disabled for the rebuild (otherwise dropping `bookings`
+ * would cascade-delete `booking_seats` and `booking_requirements`), and every
+ * row plus the two booking indexes is recreated inside one transaction.
+ */
+function migrateBookingOwnership(database) {
+  const table = database
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'bookings'")
+    .get();
+
+  // Already migrated (or schema not created yet): nothing to do.
+  if (!table?.sql || !table.sql.includes('<>')) return;
+
+  database.exec('PRAGMA foreign_keys = OFF');
+  try {
+    database.exec('BEGIN IMMEDIATE');
+    try {
+      database.exec(`CREATE TABLE bookings_mh07 (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        slot_id         INTEGER NOT NULL REFERENCES slots (id),
+        hiker_id        INTEGER REFERENCES users (id),
+        created_by      INTEGER REFERENCES users (id),
+        contact_name    VARCHAR(100),
+        email           VARCHAR(255),
+        phone           VARCHAR(30),
+        party_size      INTEGER NOT NULL CHECK (party_size > 0),
+        status          TEXT NOT NULL DEFAULT 'confirmed' CHECK (status IN ('confirmed', 'cancelled')),
+        created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        CHECK (hiker_id IS NOT NULL OR created_by IS NOT NULL),
+        CHECK (contact_name IS NOT NULL OR email IS NOT NULL OR phone IS NOT NULL)
+      )`);
+
+      database.exec(`INSERT INTO bookings_mh07
+        (id, slot_id, hiker_id, created_by, contact_name, email, phone, party_size, status, created_at)
+        SELECT id, slot_id, hiker_id, created_by, contact_name, email, phone, party_size, status, created_at
+        FROM bookings`);
+
+      database.exec('DROP TABLE bookings');
+      database.exec('ALTER TABLE bookings_mh07 RENAME TO bookings');
+
+      database.exec('CREATE INDEX IF NOT EXISTS idx_bookings_slot ON bookings (slot_id)');
+      database.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_one_confirmed_per_hiker_slot
+        ON bookings (hiker_id, slot_id)
+        WHERE status = 'confirmed' AND hiker_id IS NOT NULL`);
+
+      database.exec('COMMIT');
+    } catch (err) {
+      database.exec('ROLLBACK');
+      throw err;
+    }
+  } finally {
+    database.exec('PRAGMA foreign_keys = ON');
+  }
+
+  console.log('SQLite: rebuilt bookings to allow staff-created bookings for hikers (MH-07).');
+}
+
+/** MH-07: staff-created hiker accounts must change their password at first login. */
+function migratePasswordChangeRequired(database) {
+  const columns = new Set(database.prepare('PRAGMA table_info(users)').all().map((col) => col.name));
+  if (!columns.has('password_change_required')) {
+    database.exec(
+      'ALTER TABLE users ADD COLUMN password_change_required INTEGER NOT NULL DEFAULT 0 ' +
+      'CHECK (password_change_required IN (0, 1))'
+    );
+  }
+}
+
+/** MH-07 / #44: single-use, hashed password reset tokens with a 24-hour expiry. */
+function migratePasswordResetTokens(database) {
+  database.exec(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    token_hash  TEXT NOT NULL UNIQUE,
+    expires_at  TEXT NOT NULL,
+    used_at     TEXT,
+    created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  )`);
+  database.exec('CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens (user_id)');
 }
