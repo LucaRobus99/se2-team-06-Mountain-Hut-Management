@@ -78,10 +78,41 @@ describe('BookingDao - Integration Tests', () => {
 
   });
 
+  describe('findByHikerId', () => {
+    it('should return all bookings for a specific hiker sorted by slot date and start time descending', async () => {
+      await bookingDao.create({
+        slotId: 1,
+        hikerId: 3,
+        contactName: 'Hanna Hiker',
+        email: 'hiker@hut.test',
+        partySize: 2,
+      });
+
+      await bookingDao.create({
+        slotId: 2,
+        hikerId: 3,
+        contactName: 'Hanna Hiker',
+        email: 'hiker@hut.test',
+        partySize: 1,
+      });
+
+      const bookings = await bookingDao.findByHikerId(3);
+      expect(bookings).toBeInstanceOf(Array);
+      expect(bookings.length).toBeGreaterThanOrEqual(2);
+      expect(bookings[0]).toHaveProperty('slot_date');
+      expect(bookings[0]).toHaveProperty('slot_start_time');
+      expect(bookings[0]).toHaveProperty('meal');
+    });
+
+    it('should return an empty array if the hiker has no bookings', async () => {
+      const bookings = await bookingDao.findByHikerId(9999);
+      expect(bookings).toEqual([]);
+    });
+  });
+
   describe('insertSeats and getSeatAssignments', () => {
     
     it('should insert seat assignments for a booking and retrieve them correctly ordered', async () => {
-      // First, create a booking to link seats to
       const bookingId = await bookingDao.create({
         slotId: 2,
         hikerId: 3,
@@ -97,7 +128,6 @@ describe('BookingDao - Integration Tests', () => {
 
       await bookingDao.insertSeats(bookingId, assignments);
 
-      // Retrieve seat assignments and verify
       const retrievedSeats = await bookingDao.getSeatAssignments(bookingId);
       expect(retrievedSeats).toBeInstanceOf(Array);
       expect(retrievedSeats.length).toBe(2);
@@ -113,7 +143,6 @@ describe('BookingDao - Integration Tests', () => {
   describe('findConfirmedByHikerAndSlot', () => {
     
     it('should find a confirmed booking for a specific hiker and slot', async () => {
-      // Create a confirmed booking
       const bookingId = await bookingDao.create({
         slotId: 4,
         hikerId: 3,
@@ -137,7 +166,6 @@ describe('BookingDao - Integration Tests', () => {
 
   describe('insertRequirements and getRequirements', () => {
     it('should successfully save and retrieve party requirements and allergy flags for a booking', async () => {
-      // 1. Create a booking
       const bookingId = await bookingDao.create({
         slotId: 3,
         hikerId: 3,
@@ -146,7 +174,6 @@ describe('BookingDao - Integration Tests', () => {
         partySize: 2,
       });
 
-      // 2. Insert requirements with mixed boolean/number allergy flags
       const requirementsToInsert = [
         { description: '1 guest with severe peanut allergy', allergies: true },
         { description: '1 vegetarian guest', allergies: false },
@@ -154,7 +181,6 @@ describe('BookingDao - Integration Tests', () => {
 
       await bookingDao.insertRequirements(bookingId, requirementsToInsert);
 
-      // 3. Retrieve and verify requirements from the database
       const retrievedRequirements = await bookingDao.getRequirements(bookingId);
       expect(retrievedRequirements).toBeInstanceOf(Array);
       expect(retrievedRequirements.length).toBe(2);
@@ -162,7 +188,7 @@ describe('BookingDao - Integration Tests', () => {
       expect(retrievedRequirements[0]).toMatchObject({
         bookingId: bookingId,
         description: '1 guest with severe peanut allergy',
-        allergies: 1, // Stored as integer in SQLite
+        allergies: 1,
       });
 
       expect(retrievedRequirements[1]).toMatchObject({

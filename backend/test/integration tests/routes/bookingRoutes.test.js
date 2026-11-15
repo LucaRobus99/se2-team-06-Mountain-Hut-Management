@@ -152,6 +152,32 @@ describe('BookingRoutes - Integration Tests', () => {
       expect(getResponse.body).toHaveProperty('partySize', 2);
     });
 
+    it('should allow staff to retrieve any hiker booking', async () => {
+      // Step 1: Login as a hiker and create a booking
+      await agent
+        .post('/api/auth/login')
+        .send({ email: 'hiker@hut.test', password: 'password' });
+
+      const createResponse = await agent
+        .post('/api/bookings')
+        .send({ slotId: 3, partySize: 2 });
+      
+      const bookingId = createResponse.body.id;
+
+      // Step 2: Switch session to a staff member (warden/employee from seed)
+      const staffAgent = request.agent(app);
+      await staffAgent
+        .post('/api/auth/login')
+        .send({ email: 'warden@hut.test', password: 'password' });
+
+      // Step 3: Staff fetches the hiker's booking directly by ID
+      const getResponse = await staffAgent
+        .get(`/api/bookings/${bookingId}`);
+
+      expect(getResponse.status).toBe(200);
+      expect(getResponse.body).toHaveProperty('id', bookingId);
+    });
+
   });
 
   describe('Edge cases and error handling', () => {
@@ -167,7 +193,6 @@ describe('BookingRoutes - Integration Tests', () => {
         .post('/api/bookings')
         .send({ slotId: 9999, partySize: -5 });
 
-      // Expecting a client error status (400, 404, or 422 depending on business validation)
       expect([400, 404, 422, 409]).toContain(response.status);
       expect(response.body).toHaveProperty('error');
     });
