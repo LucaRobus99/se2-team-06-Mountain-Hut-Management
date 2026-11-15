@@ -75,6 +75,21 @@ export function createBookingDao(db) {
       await exec.query(`UPDATE bookings SET status = $2 WHERE id = $1`, [a[0], a[1]]);
     },
 
+    /**
+     * MH-08: cancel only if the booking is still confirmed. Returns true when
+     * this call performed the transition, false when it was already cancelled.
+     * The condition is evaluated by SQLite, so two concurrent cancellations
+     * cannot both free the seats.
+     */
+    async cancelIfConfirmed(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const { rowCount } = await exec.query(
+        `UPDATE bookings SET status = 'cancelled' WHERE id = $1 AND status = 'confirmed'`,
+        [a[0]]
+      );
+      return rowCount === 1;
+    },
+
     /** MH-06: release the seats a booking currently holds before re-allocating. */
     async deleteSeats(...args) {
       const { db: exec, args: a } = executorOf(args);

@@ -52,6 +52,7 @@ export function createApp({ db, timeZone = config.hutTimeZone, now = () => new D
     from: config.mailgunFrom,
     template: config.mailgunTemplate,
     updatedTemplate: config.mailgunUpdatedTemplate,
+    cancelledTemplate: config.mailgunCancelledTemplate,
     resetTemplate: config.mailgunResetTemplate,
     url: config.mailgunUrl,
   });

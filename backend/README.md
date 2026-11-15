@@ -40,6 +40,7 @@ On first startup the service creates `database/database.sqlite` and initializes 
 | GET | `/api/bookings/slot-status?slotId=…` | Hiker | Check whether the hiker already booked the selected slot |
 | GET | `/api/bookings/:bookingId` | Owner or staff | Booking details |
 | PATCH | `/api/bookings/:bookingId` | Owner (Hiker) | Change slot, party size or requirements (MH-06) |
+| DELETE | `/api/bookings/:bookingId` | Owner (Hiker) | Cancel a booking; idempotent and with no time limit (MH-08) |
 | GET | `/api/staff/hikers?query=…` | Employee/Warden | Search hikers by name, email or phone (MH-07) |
 | GET | `/api/staff/availability` | Employee/Warden | Availability including slots that start within two hours |
 | GET | `/api/staff/availability/:slotId/seating` | Employee/Warden | Seating preview for staff bookings |
@@ -48,7 +49,7 @@ On first startup the service creates `database/database.sqlite` and initializes 
 | GET | `/api/slots/:slotId` | Employee/Warden | Slot details |
 | POST | `/api/slots` | Employee/Warden | Create a slot and configure its table capacity |
 
-The application serves one hut. Slot creation uses explicit `startTime` and `endTime` values, not `durationMinutes`; routes containing `/api/huts/:hutId/slots` are not part of the current API. The literal route `/api/bookings/slot-status` is registered before `/api/bookings/:bookingId` so it is not parsed as an ID. Booking cancellation (MH-08) is not implemented yet; MH-07 currently provides the backend API only (the staff page is a frontend task).
+The application serves one hut. Slot creation uses explicit `startTime` and `endTime` values, not `durationMinutes`; routes containing `/api/huts/:hutId/slots` are not part of the current API. The literal route `/api/bookings/slot-status` is registered before `/api/bookings/:bookingId` so it is not parsed as an ID. MH-07 currently provides the backend API only (the staff page is a frontend task).
 
 ## Accounts, password changes and avatars
 
@@ -65,13 +66,13 @@ All profile, password and photo endpoints enforce authentication; changing a hik
 
 The backend enforces table capacity and seating transactionally, even when the UI has already shown an availability preview. A hiker cannot create a second confirmed booking in the same slot. Party requirements (MH-05) include separate dietary/allergy entries and affected guest counts; they are stored with the reservation and returned in booking details.
 
-When Mailgun is configured, creating or updating a booking attempts a confirmation email. Successful **POST** and **PATCH** responses include `confirmationEmail.status`:
+When Mailgun is configured, creating, updating or cancelling a booking attempts an email. Successful **POST** and **PATCH** responses include `confirmationEmail.status`; **DELETE** returns the same information as `cancellationEmail.status`:
 
 - `sent` — Mailgun accepted the request;
 - `failed` — the submission failed;
-- `skipped` — no email configuration/recipient was available.
+- `skipped` — no email configuration/recipient was available (also used when a repeated cancellation does not send a second email).
 
-A successfully persisted booking stays confirmed/updated regardless of email status; failed email submissions do not roll back an already committed transaction. `GET /api/bookings` and `GET /api/bookings/:bookingId` do not include this notification result because it is not persisted. Configure `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_FROM` (optional), `MAILGUN_TEMPLATE` and optional `MAILGUN_URL` in `.env`. A Mailgun sandbox may require authorizing recipient addresses. The email template lives in Mailgun, not in this repository.
+A successfully persisted booking stays confirmed/updated/cancelled regardless of email status; failed email submissions do not roll back an already committed transaction. `GET /api/bookings` and `GET /api/bookings/:bookingId` do not include this notification result because it is not persisted. Configure `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_FROM` (optional), `MAILGUN_TEMPLATE`, `MAILGUN_UPDATED_TEMPLATE`, `MAILGUN_CANCELLED_TEMPLATE`, `MAILGUN_RESET_TEMPLATE` and optional `MAILGUN_URL` in `.env`. A Mailgun sandbox may require authorizing recipient addresses. Ready-to-upload templates live in `email-templates/` (`booking-confirmation.html`, `booking-modification.html`, `booking-cancelled.html`).
 
 ## Booking history and changes (MH-06)
 
@@ -129,6 +130,31 @@ The rules below are enforced inside a single serialized transaction:
 | 409 | `BOOKING_NOT_CONFIRMED` | The booking is no longer confirmed |
 
 A successful change returns the updated booking in the same shape as a list item, plus `confirmationEmail`. There is no `Location` header because the resource address does not change.
+
+## Cancelling a booking (MH-08)
+
+`DELETE /api/bookings/:bookingId` cancels a booking owned by the authenticated Hiker. There is **no time limit**: cancellation is allowed even after the slot has started.
+
+1. **Ownership** — an unknown ID and another hiker's booking both return `404 BOOKING_NOT_FOUND`, so booking IDs cannot be enumerated. Staff accounts receive `403 FORBIDDEN`.
+2. **Seat release** — the booking status becomes `cancelled`. Availability queries count only confirmed bookings, so the seats are immediately available again; `booking_seats` rows are kept for history.
+3. **Idempotency** — the transition is one conditional `UPDATE ... WHERE status = 'confirmed'`. Repeated requests return `200` with `alreadyCancelled: true`, do not change availability again and do not resend the email.
+4. **Cancellation email** — attempted after the commit; its outcome is `cancellationEmail.status` (`sent`, `failed` or `skipped`). A delivery failure never undoes the cancellation.
+
+```json
+{
+  "id": 12,
+  "status": "cancelled",
+  "alreadyCancelled": false,
+  "cancellationEmail": { "status": "skipped" },
+  "...": "same fields as GET /api/bookings/:bookingId"
+}
+```
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| 401 | `UNAUTHENTICATED` | Missing or expired session |
+| 403 | `FORBIDDEN` | Authenticated, but not a Hiker |
+| 404 | `BOOKING_NOT_FOUND` | Unknown booking, or owned by another user |
 
 ## Staff reservations and password recovery (MH-07)
 

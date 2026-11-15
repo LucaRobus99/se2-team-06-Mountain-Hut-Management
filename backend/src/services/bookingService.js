@@ -498,5 +498,46 @@ export function createBookingService({
 
       return { ...view, confirmationEmail };
     },
+
+    /**
+     * MH-08: a hiker cancels their own booking at any time (no 48-hour rule).
+     * Repeating the request is safe: the status transition happens once, so the
+     * seats are released exactly once and no second email is sent. Seat rows are
+     * kept for history and availability queries only count confirmed bookings.
+     */
+    async cancelBooking(user, bookingIdRaw) {
+      if (!user || !user.id) {
+        throw new UnauthorizedError('Authentication required.', 'UNAUTHENTICATED');
+      }
+
+      const bookingId = parsePositiveInt(bookingIdRaw);
+
+      if (bookingId === null) {
+        throw new NotFoundError('Booking not found.', 'BOOKING_NOT_FOUND');
+      }
+
+      const { view, cancelled } = await runInTransaction(db, async (tx) => {
+        // Another hiker's booking or an unknown id: 404, never 403, so booking
+        // ids cannot be enumerated. Cancelled bookings still belong to the hiker.
+        const booking = await core.loadOwnedBooking(tx, bookingId, user);
+
+        if (booking.status !== 'confirmed') {
+          return { view: (await core.loadBookingView(tx, booking.id)).view, cancelled: false };
+        }
+
+        const changed = await core.cancel(tx, booking);
+        return { view: (await core.loadBookingView(tx, booking.id)).view, cancelled: changed };
+      });
+
+      // Same recipient rule as MH-06: the email stored on the booking first.
+      const recipient = view.email ?? user.email ?? null;
+      const cancellationEmail = cancelled
+        ? await notifier.notify('cancelled', view, recipient, {
+            fallbackName: user.displayName ?? null,
+          })
+        : { status: 'skipped' };
+
+      return { ...view, alreadyCancelled: !cancelled, cancellationEmail };
+    },
   };
 }
