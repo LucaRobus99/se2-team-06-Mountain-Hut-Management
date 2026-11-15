@@ -305,11 +305,59 @@ describe('BookingPage Component Integration Tests', () => {
       </MemoryRouter>
     );
 
-    await user.click(screen.getByRole('button', { name: /confirm booking/i }));
+    // Wait for initial prechecking to finish and confirm button to appear
+    const confirmButton = await screen.findByRole('button', { name: /confirm booking/i });
+    await user.click(confirmButton);
 
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /check availability again/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /confirm booking/i })).not.toBeInTheDocument();
   });
 
+  it('redirects to login if user session expires during confirmation refresh', async () => {
+    const mockHiker = { id: 1, role: 'hiker' };
+    const mockRefreshUser = vi.fn().mockResolvedValue(null); // Session lost
+    useAuth.mockReturnValue({ user: mockHiker, loadingAuth: false, refreshUser: mockRefreshUser });
+    getSlotSeating.mockResolvedValue(mockDraft.seating);
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/book', state: { bookingDraft: mockDraft } }]}>
+        <Routes>
+          <Route path="/book" element={<BookingPage />} />
+          <Route path="/login" element={<div data-testid="login-page">Login Page</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    // Wait for initial prechecking to finish and confirm button to appear
+    const confirmButton = await screen.findByRole('button', { name: /confirm booking/i });
+    await user.click(confirmButton);
+    
+    expect(await screen.findByTestId('login-page')).toBeInTheDocument();
+  });
+
+  it('redirects to login if createBooking returns UNAUTHENTICATED error', async () => {
+    const mockHiker = { id: 1, role: 'hiker' };
+    useAuth.mockReturnValue({ user: mockHiker, loadingAuth: false, refreshUser: vi.fn().mockResolvedValue(mockHiker) });
+    getSlotSeating.mockResolvedValue(mockDraft.seating);
+    createBooking.mockRejectedValueOnce(Object.assign(new Error('Session expired'), { code: 'UNAUTHENTICATED', status: 401 }));
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/book', state: { bookingDraft: mockDraft } }]}>
+        <Routes>
+          <Route path="/book" element={<BookingPage />} />
+          <Route path="/login" element={<div data-testid="login-page">Login Page</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    // Wait for initial prechecking to finish and confirm button to appear
+    const confirmButton = await screen.findByRole('button', { name: /confirm booking/i });
+    await user.click(confirmButton);
+
+    // Wait for the async re-authentication / unauthenticated handler to redirect to login
+    expect(await screen.findByTestId('login-page')).toBeInTheDocument();
+  });
 });

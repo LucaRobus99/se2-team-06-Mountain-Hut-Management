@@ -83,4 +83,19 @@ describe('PartyRequirementsFields', () => {
     await user.click(screen.getByRole('button', { name: /add dietary requirement/i }));
     expect(screen.getAllByRole('textbox')).toHaveLength(2);
   });
+
+  it('does not add is-invalid class or error role when the description is filled even if showErrors is true', () => {
+    const initialRequirements = [{ id: 1, description: 'Valid text', allergies: false }];
+    render(
+      <PartyRequirementsFields 
+        requirements={initialRequirements} 
+        onChange={() => {}} 
+        showErrors={true} 
+      />
+    );
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox')).not.toHaveClass('is-invalid');
+    expect(screen.getByRole('textbox')).toHaveAttribute('aria-invalid', 'false');
+  });
 });
