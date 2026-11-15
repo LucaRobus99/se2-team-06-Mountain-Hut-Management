@@ -3,6 +3,7 @@ import { Alert, Nav, Navbar, NavDropdown } from 'react-bootstrap';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../auth/AuthContext.jsx';
 import EdelweissBrand from './EdelweissBrand.jsx';
+import AccountIcon from './AccountIcon.jsx';
 
 export default function AppNavbar() {
     const { user, loadingAuth, signOut } = useAuth();
@@ -60,18 +61,17 @@ export default function AppNavbar() {
                                 <NavDropdown
                                     id="edelweiss-account"
                                     className="eh-account-menu"
-                                    title={<span className="eh-account-trigger"><span className="eh-account-avatar">{initials}</span><span className="eh-account-trigger-name">{user.displayName || 'My account'}</span></span>}
+                                    title={<span className="eh-account-trigger"><span className="eh-account-avatar">{user?.avatarUrl ? <img src={user.avatarUrl} alt="" /> : initials}</span><span className="eh-account-trigger-name">{user.displayName || 'My account'}</span></span>}
                                     align="end"
                                 >
                                     <NavDropdown.Header>
                                         <span className="eh-account-dropdown-title">{user.displayName || 'Hiker'}</span>
-                                        <span className="eh-account-dropdown-caption">HIKER ACCOUNT</span>
-                                    </NavDropdown.Header>
+                                                                            </NavDropdown.Header>
                                     <NavDropdown.Divider />
-                                    <NavDropdown.Item as={Link} to="/my-account"><span className="eh-account-item-icon">♙</span> My Account</NavDropdown.Item>
+                                    <NavDropdown.Item as={Link} to="/my-account"><span className="eh-account-item-icon"><AccountIcon name="user" size={17} /></span> My Account</NavDropdown.Item>
                                     <NavDropdown.Divider />
                                     <NavDropdown.Item disabled={loggingOut} className="eh-account-logout" onClick={handleLogout}>
-                                        <span className="eh-account-item-icon">↪</span> {loggingOut ? 'Logging out…' : 'Log out'}
+                                        <span className="eh-account-item-icon"><AccountIcon name="logout" size={17} /></span> {loggingOut ? 'Logging out…' : 'Log out'}
                                     </NavDropdown.Item>
                                 </NavDropdown>
                             ) : (

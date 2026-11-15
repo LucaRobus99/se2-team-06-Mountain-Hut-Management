@@ -5,7 +5,7 @@ import { createAvailabilityRouter } from '../../../../src/routes/availabilityRou
 import { createBookingRouter } from '../../../../src/routes/bookingRoutes.js';
 import { createSlotRouter } from '../../../../src/routes/slotRoutes.js';
 import { errorHandler } from '../../../../src/middleware/errorHandler.js';
-import { ROLES, STAFF_ROLES, STAFF_ONLY_MESSAGE } from '../../../../src/auth/roles.js';
+import { HIKER_BOOKING_MESSAGE, ROLES, STAFF_ROLES, STAFF_ONLY_MESSAGE } from '../../../../src/auth/roles.js';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../../../src/errors/AppError.js';
 
 const user = { id: 1, role: 'employee' };
@@ -85,8 +85,9 @@ describe('bookingRoutes - Black-Box Tests', () => {
     app = appWith('/api/bookings', createBookingRouter(bookingService, requireAuth));
   });
 
-  it('should protect creation for every role and reading for any signed-in user', () => {
-    expect(requireAuth).toHaveBeenCalledWith(ROLES);
+  it('should restrict creation to hikers (staff use /api/staff/bookings) and reading to any signed-in user', () => {
+    expect(requireAuth).toHaveBeenCalledWith(['hiker'], HIKER_BOOKING_MESSAGE);
+    expect(requireAuth).not.toHaveBeenCalledWith(ROLES);
     expect(requireAuth).toHaveBeenCalledWith();
   });
 

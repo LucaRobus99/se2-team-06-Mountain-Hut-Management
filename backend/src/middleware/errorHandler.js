@@ -30,6 +30,12 @@ export function errorHandler(err, _req, res, _next) {
     return res.status(err.status).json(body);
   }
 
+  if (err && err.type === 'entity.too.large') {
+    return res.status(413).json({
+      error: { code: 'IMAGE_TOO_LARGE', message: 'The uploaded photo is too large.' },
+    });
+  }
+
   if (err && err.type === 'entity.parse.failed') {
     return res.status(400).json({
       error: { code: 'VALIDATION_ERROR', message: 'Request body is not valid JSON.', details: [] },

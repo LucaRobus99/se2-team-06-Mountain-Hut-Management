@@ -51,6 +51,7 @@ describe('AppNavbar Component Integration Tests', () => {
 
     // Verify user display name appears in the dropdown toggle title
     expect(screen.getByRole('button', { name: /mario rossi/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^my bookings$/i })).toHaveAttribute('href', '/my-bookings');
   });
 
   it('should render "My Bookings" in the main navigation bar exclusively for authenticated hikers', () => {

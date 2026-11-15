@@ -7,6 +7,9 @@
  */
 
 export const BOOKING_LEAD_MS = 2 * 60 * 60 * 1000;
+/** MH-06: a booking can be changed only until 48 hours before the slot starts. */
+export const MODIFICATION_LEAD_MS = 48 * 60 * 60 * 1000;
+
 
 // Creating an Intl formatter is relatively expensive; reuse one per time zone.
 const formatterCache = new Map();
@@ -90,4 +93,13 @@ export function isInPast(date, time, { timeZone, now = new Date() }) {
 export function isSlotTooLate(slot, { timeZone, now = new Date(), leadMs = BOOKING_LEAD_MS }) {
   const start = zonedTimeToUtc(slot.date, slot.start_time, timeZone);
   return start.getTime() - now.getTime() < leadMs;
+}
+
+/**
+ * MH-06: a booking may be changed only while at least 48 hours remain before
+ * the slot starts. Applies to the original slot and, when the hiker picks a new
+ * slot, to that slot as well. Same boundary as isSlotTooLate.
+ */
+export function isTooLateToModify(slot, { timeZone, now = new Date(), leadMs = MODIFICATION_LEAD_MS }) {
+  return isSlotTooLate(slot, { timeZone, now, leadMs });
 }

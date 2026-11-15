@@ -9,7 +9,8 @@ import {
 } from '../../../../src/errors/AppError.js';
 
 // Mock isStaff to ensure staff roles are correctly recognized in tests
-vi.mock('../../../../src/auth/roles.js', () => ({
+vi.mock('../../../../src/auth/roles.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   isStaff: vi.fn((user) => user?.role === 'staff' || user?.id === 1),
 }));
 
@@ -50,6 +51,10 @@ describe('bookingService - Black-Box Tests', () => {
       insertSeats: vi.fn(),
       findById: vi.fn(),
       getSeatAssignments: vi.fn(),
+      insertRequirements: vi.fn(),
+      replaceRequirements: vi.fn(),
+      getRequirements: vi.fn().mockResolvedValue([]),
+      getRequirementsByBookingIds: vi.fn().mockResolvedValue(new Map()),
     };
 
     slotDao = {
@@ -145,21 +150,15 @@ describe('bookingService - Black-Box Tests', () => {
       ).rejects.toThrow(ValidationError);
     });
 
-    it('should throw a ValidationError if staff provides no contact details', async () => {
-      slotDao.findById.mockResolvedValue({ 
-        id: 101, 
-        status: 'available', 
-        start_time: '14:00', 
-        date: '2026-08-14' 
-      });
-
+    it('should refuse staff with FORBIDDEN: staff book through createStaffBooking (MH-07)', async () => {
       await expect(
-        bookingService.createBooking(mockStaff, { 
-          slotId: 101, 
-          partySize: 2 
-          // Missing contactName, email, and contactNumber
+        bookingService.createBooking(mockStaff, {
+          slotId: 101,
+          partySize: 2,
+          contactName: 'Walk-in guest',
         })
-      ).rejects.toThrow(ValidationError);
+      ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+      expect(db.transaction).not.toHaveBeenCalled();
     });
 
     it('should successfully create a booking when all conditions and seating fit are met', async () => {
@@ -282,7 +281,7 @@ describe('bookingService - Black-Box Tests', () => {
 
     it('should succeed even if email notification service throws an error', async () => {
       const failingNotifier = {
-        send: vi.fn().mockRejectedValue(new Error('SMTP Down')),
+        sendBookingEmail: vi.fn().mockRejectedValue(new Error('SMTP Down')),
       };
 
       const serviceWithEmail = createBookingService({

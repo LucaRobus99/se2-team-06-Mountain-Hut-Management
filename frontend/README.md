@@ -1,10 +1,16 @@
 # Edelweiss Hut — Frontend
 
-**Stack:** React 19, Vite, React Router 7, Bootstrap/React-Bootstrap.
+**Stack:** React 19, Vite 7, React Router 7 and Bootstrap/React-Bootstrap. The frontend connects to the real Express/SQLite backend using authenticated sessions; no mocked booking or account data is used in the application.
 
-The frontend is functional for the Sprint 1 stories (MH-01 to MH-04). This is **not** the former MHM-16 placeholder skeleton: login, registration, public availability, booking confirmation and staff slot management are implemented.
+## Run locally
 
-## Run
+From the repository root, run the backend and frontend in separate terminals:
+
+```bash
+cd backend
+npm install
+npm start
+```
 
 ```bash
 cd frontend
@@ -12,30 +18,73 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173`. In another terminal, run `cd backend && npm run dev` from the repository root. Vite proxies `/api` to `http://localhost:8080`.
+Open `http://localhost:5173`. Vite proxies `/api` requests to `http://localhost:8080` (backend default). Use `npm start` for the backend during manual testing to avoid watch-mode restarts losing the login session.
 
-## Routes and pages
+## Routes
 
 | Route | Page | Access |
 | --- | --- | --- |
-| `/` | General hut homepage | Public |
-| `/find-us` | Location / how to get there | Public |
-| `/menu` | Menu page | Public |
-| `/availability` | Check availability (redirects logged-in Hikers to `/book`) | Public |
-| `/register` | Register a Hiker | Public |
-| `/login` | Log in | Public |
-| `/book` | Search available slots; review and confirm a booking after selection | Hiker |
+| `/` | Home page | Public |
+| `/find-us` | Location, directions and surrounding area | Public |
+| `/menu` | Menu information | Public |
+| `/availability` | Date/meal/party-size search and available slots | Public |
+| `/register` | Hiker registration | Public |
+| `/login` | Login | Public |
+| `/book` | Selection or booking review/confirmation flow | Hiker when booking |
+| `/book/confirmation/:bookingId` | Saved booking confirmation/details | Hiker |
+| `/my-bookings` | Upcoming, past and cancelled bookings | Hiker |
+| `/my-account` | Profile/photo management and password security | Hiker |
 | `/staff` | Staff dashboard | Employee/Warden |
-| `/staff/slots` | Create/list slots and table capacity | Employee/Warden |
-| `/staff/reservations` | Not yet implemented | Employee/Warden |
+| `/staff/slots` | Create/list meal slots and configure tables/seats | Employee/Warden |
+| `/staff/reservations` | Placeholder (not yet implemented) | Employee/Warden |
 
-The booking review UI is `src/pages/BookingPage.jsx`. After `POST /api/bookings`, it shows the booking reference and **only claims that the email was sent if the backend returned `confirmationEmail.status === 'sent'`**. On `failed`/`skipped`, the booking still succeeds and the user is asked to keep the reference. The visual styles live in `src/styles/edelweiss-pages.css`.
+`/about` redirects to `/find-us`.
 
-`src/api/booking.js`, `src/api/slots.js` and `src/api/auth.js` hold the API clients. `src/auth/AuthContext.jsx` owns session state; protected routes guard the UI, and the backend independently enforces permissions.
+## Booking flow (MH-01, MH-03, MH-04, MH-05)
 
-## Current scope limits
+Visitors search by **date, meal and guest count** on the availability page. Selecting a slot starts the booking flow. If the visitor is not signed in, the app asks them to log in/register before booking.
 
-- The public availability search uses `date + meal + partySize` and then lists eligible time slots; a separate exact-time search is not exposed.
-- Hiker-supplied dietary/party requirements (MH-05) are not yet implemented, so no such details appear in outgoing emails.
-- Do not expose Mailgun keys in frontend code; configuration belongs exclusively to the backend.
-- Existing Cypress and other automated tests are intentionally **not updated by this patch**; their current status must be checked separately before the Definition of Done.
+The review page shows the selected time, party size and seating proposal. Hikers can add multiple **dietary requirements/allergies** with the affected number of guests. Before opening the review, the application checks whether this user already has a confirmed booking in the selected slot; the backend also rejects duplicates when the booking is actually submitted.
+
+On successful submission, the confirmation page shows the booking reference, time, seating, any stored dietary requirements and the email outcome. It states that an email was sent **only if** the backend reports `confirmationEmail.status === 'sent'`. Email failure never makes a confirmed booking disappear.
+
+## My Bookings
+
+`src/pages/MyBookingsPage.jsx` loads the authenticated hiker's data using `GET /api/bookings`, groups the reservations into **upcoming**, **past** and **cancelled**, and provides a details link where applicable. Booking changes and cancellation are not implemented on this page yet.
+
+## My Account
+
+`src/pages/MyAccountPage.jsx` provides a personal area with:
+
+- Profile photo: click the avatar itself to **upload/change/remove** a photo; JPG, PNG and WebP files are supported. `src/utils/avatar.js` crops/resizes large images in the browser before upload.
+- Personal information: update **name, phone, optional notes and emergency contact** and see the saved details after refreshing the page. Email is read-only.
+- Password & Security: provide the current password and a new one, then confirm it.
+
+Profile edits, password changes and photo operations call the real backend endpoints in `src/api/auth.js`. `AuthContext.jsx` refreshes the signed-in user after updates so the navbar reflects new names/photos. The photo is persisted in SQLite, not only in browser memory.
+
+The profile design uses the same forest-green, sage and cream palette as the rest of the site, with small inline SVG icons and a photo menu accessible by clicking the avatar.
+
+## Frontend organization
+
+- `src/pages/` — public, booking, personal and staff pages.
+- `src/components/` — reusable navigation, booking controls and interface icons.
+- `src/api/` — HTTP clients for auth, booking and staff slots.
+- `src/auth/AuthContext.jsx` — session state shared between pages.
+- `src/styles/` — global palette and page-level styling.
+- `src/utils/avatar.js` — browser photo normalization and size validation.
+
+Protected routes improve navigation, but **the backend is responsible for authorization**. Never trust client-supplied user IDs for bookings or profile changes.
+
+## Validation and production build
+
+```bash
+cd frontend
+npx vitest run
+npm run build
+```
+
+Run Cypress E2E tests against an actively running backend/frontend when validating the full flow; the existing scenarios are in `cypress/e2e/`. The production build was verified on 12 November 2026, but every new change should be tested again.
+
+## Known scope limits
+
+The staff Reservations page, hiker booking edit/cancel flows and production email delivery setup are outside the currently completed UI. Mailgun keys must remain in the backend `.env` and must never be included in frontend code.
