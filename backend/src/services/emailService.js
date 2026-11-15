@@ -48,8 +48,8 @@ export function createEmailService({
 
   /**
    * Subject and Mailgun template of each booking email (see bookingNotifier.js).
-   * Each kind has its own template: email-templates/booking-confirmation.html
-   * and email-templates/booking-modification.html.
+   * Each kind has its own template: email-templates/booking-confirmation.html,
+   * booking-modification.html and booking-cancelled.html.
    */
   const bookingEmails = {
     created: { subject: 'Booking confirmation', template },

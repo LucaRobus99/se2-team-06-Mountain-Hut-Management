@@ -14,6 +14,9 @@ export const STAFF_ONLY_MESSAGE = 'Only employees and wardens can manage slots.'
 export const HIKER_BOOKING_MESSAGE =
   'Only hiker accounts can book online. Staff bookings are made from the staff reservations area.';
 
+/** 403 message for the hiker cancellation endpoint (DELETE /api/bookings/:id, MH-08). */
+export const HIKER_CANCEL_MESSAGE = 'Only hiker accounts can cancel their bookings.';
+
 export function isStaff(user) {
   return STAFF_ROLES.includes(user?.role);
 }
