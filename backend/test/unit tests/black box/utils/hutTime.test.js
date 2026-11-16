@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { zonedTimeToUtc, isSlotTooLate, todayInZone, isInPast } from '../../../../src/utils/hutTime.js';
+import { zonedTimeToUtc, isSlotTooLate, isTooLateToModify, todayInZone, isInPast } from '../../../../src/utils/hutTime.js';
 
 describe('hutTime - Black-Box Tests', () => {
 
@@ -17,6 +17,13 @@ describe('hutTime - Black-Box Tests', () => {
       const result = zonedTimeToUtc('2026-01-15', '13:00', 'Europe/Rome');
       expect(result).toBeInstanceOf(Date);
       expect(result.toISOString()).toBe('2026-01-15T12:00:00.000Z');
+    });
+
+    it('should reuse the formatter cache correctly for repeated calls with the same timezone', () => {
+      const res1 = zonedTimeToUtc('2026-08-14', '13:00', 'Europe/Rome');
+      const res2 = zonedTimeToUtc('2026-08-14', '14:00', 'Europe/Rome');
+      expect(res1.toISOString()).toBe('2026-08-14T11:00:00.000Z');
+      expect(res2.toISOString()).toBe('2026-08-14T12:00:00.000Z');
     });
 
   });
@@ -51,11 +58,33 @@ describe('hutTime - Black-Box Tests', () => {
       // Set a custom lead time of 4 hours instead of 2 (4 hours before 13:00 = 09:00 local / 07:00 UTC)
       const customLeadMs = 4 * 60 * 60 * 1000; 
       
-      // Simulate current time at 09:01 local (07:01 UTC), within the 4-hour window -> too late for custom lead rule
       const now = new Date('2026-08-14T07:01:00.000Z');
       
       const result = isSlotTooLate(slot, { timeZone, now, leadMs: customLeadMs });
       expect(result).toBe(true);
+    });
+
+  });
+
+  describe('isTooLateToModify (MH-06 48-hour rule)', () => {
+    
+    it('should return true if less than 48 hours remain before the slot starts', () => {
+      // Slot on August 14, 2026, at 13:00 local
+      const slot = { date: '2026-08-14', start_time: '13:00' };
+      // Current time: August 12, 2026, at 14:00 UTC (less than 48h remaining)
+      const now = new Date('2026-08-12T14:00:00.000Z');
+
+      const result = isTooLateToModify(slot, { timeZone: 'Europe/Rome', now });
+      expect(result).toBe(true);
+    });
+
+    it('should return false if more than 48 hours remain before the slot starts', () => {
+      const slot = { date: '2026-08-14', start_time: '13:00' };
+      // Current time: August 10, 2026, at 10:00 UTC (plenty of time)
+      const now = new Date('2026-08-10T10:00:00.000Z');
+
+      const result = isTooLateToModify(slot, { timeZone: 'Europe/Rome', now });
+      expect(result).toBe(false);
     });
 
   });

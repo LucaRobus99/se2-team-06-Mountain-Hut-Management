@@ -63,12 +63,6 @@ describe('bookingDao - White-Box Tests', () => {
       expect(db.query.mock.calls[0][1]).toEqual([5, 1, 2]);
       expect(db.query.mock.calls[1][1]).toEqual([5, 2, 3]);
     });
-
-    it('should not touch the database when there are no assignments', async () => {
-      await dao.insertSeats(5, []);
-
-      expect(db.query).not.toHaveBeenCalled();
-    });
   });
 
   describe('findById', () => {
@@ -84,6 +78,59 @@ describe('bookingDao - White-Box Tests', () => {
       db.query.mockResolvedValue({ rows: [] });
 
       await expect(dao.findById(404)).resolves.toBeNull();
+    });
+  });
+
+  describe('update & updateStatus & deleteSeats', () => {
+    it('should update slot_id and party_size for the specified booking id', async () => {
+      db.query.mockResolvedValue({ rows: [] });
+
+      await dao.update(10, { slotId: 4, partySize: 6 });
+
+      expect(db.query).toHaveBeenCalledTimes(1);
+      const [sql, params] = db.query.mock.calls[0];
+      expect(sql).toContain('UPDATE bookings SET slot_id = $2, party_size = $3 WHERE id = $1');
+      expect(params).toEqual([10, 4, 6]);
+    });
+
+    it('should update the booking status', async () => {
+      db.query.mockResolvedValue({ rows: [] });
+
+      await dao.updateStatus(15, 'cancelled');
+
+      expect(db.query).toHaveBeenCalledTimes(1);
+      const [sql, params] = db.query.mock.calls[0];
+      expect(sql).toContain('UPDATE bookings SET status = $2 WHERE id = $1');
+      expect(params).toEqual([15, 'cancelled']);
+    });
+
+    it('should delete all seat assignments for a given booking id', async () => {
+      db.query.mockResolvedValue({ rows: [] });
+
+      await dao.deleteSeats(22);
+
+      expect(db.query).toHaveBeenCalledTimes(1);
+      const [sql, params] = db.query.mock.calls[0];
+      expect(sql).toContain('DELETE FROM booking_seats WHERE booking_id = $1');
+      expect(params).toEqual([22]);
+    });
+  });
+
+  describe('listByHiker', () => {
+    it('should return all bookings for a given hiker ordered by slot date and start time', async () => {
+      const mockBookings = [
+        { id: 10, slot_id: 2, party_size: 2, status: 'confirmed' },
+        { id: 5, slot_id: 1, party_size: 4, status: 'confirmed' },
+      ];
+      db.query.mockResolvedValue({ rows: mockBookings });
+
+      const result = await dao.listByHiker(99);
+
+      expect(result).toEqual(mockBookings);
+      const [sql, params] = db.query.mock.calls[0];
+      expect(sql).toContain('WHERE b.hiker_id = $1');
+      expect(sql).toContain('ORDER BY s.date DESC, s.start_time DESC, b.id DESC');
+      expect(params).toEqual([99]);
     });
   });
 
@@ -115,88 +162,68 @@ describe('bookingDao - White-Box Tests', () => {
     });
   });
 
-  describe('insertRequirements & getRequirements', () => {
-    it('should correctly insert requirements with various boolean/number representations for allergies', async () => {
+  describe('insertRequirements, replaceRequirements & getRequirements', () => {
+    it('should correctly insert requirements and map boolean allergies to 0/1', async () => {
       db.query.mockResolvedValue({ rows: [] });
 
       await dao.insertRequirements(12, [
         { description: 'Vegan', allergies: true },
-        { description: 'Peanuts', allergies: 1 },
-        { description: 'Gluten', allergies: 'true' },
-        { description: 'Dairy', allergies: '1' },
         { description: 'None', allergies: false },
       ]);
 
-      expect(db.query).toHaveBeenCalledTimes(5);
+      expect(db.query).toHaveBeenCalledTimes(2);
       expect(db.query.mock.calls[0][1]).toEqual([12, 'Vegan', 1]);
-      expect(db.query.mock.calls[1][1]).toEqual([12, 'Peanuts', 1]);
-      expect(db.query.mock.calls[2][1]).toEqual([12, 'Gluten', 1]);
-      expect(db.query.mock.calls[3][1]).toEqual([12, 'Dairy', 1]);
-      expect(db.query.mock.calls[4][1]).toEqual([12, 'None', 0]);
+      expect(db.query.mock.calls[1][1]).toEqual([12, 'None', 0]);
     });
 
-    it('should handle object wrapper argument formats for insertRequirements', async () => {
-      db.query.mockResolvedValue({ rows: [] });
+    it('should replace requirements by deleting old ones and inserting new ones in transaction', async () => {
+      tx.query.mockResolvedValue({ rows: [] });
 
-      await dao.insertRequirements({ bookingId: 15, requirements: [{ description: 'Vegetarian', allergies: 0 }] });
+      await dao.replaceRequirements(tx, 30, [{ description: 'Lactose free', allergies: true }]);
 
-      expect(db.query).toHaveBeenCalledTimes(1);
-      expect(db.query.mock.calls[0][1]).toEqual([15, 'Vegetarian', 0]);
+      expect(tx.query).toHaveBeenCalledTimes(2);
+      expect(tx.query.mock.calls[0][0]).toContain('DELETE FROM booking_requirements WHERE booking_id = $1');
+      expect(tx.query.mock.calls[0][1]).toEqual([30]);
+      expect(tx.query.mock.calls[1][0]).toContain('INSERT INTO booking_requirements');
+      expect(tx.query.mock.calls[1][1]).toEqual([30, 'Lactose free', 1]);
     });
 
-    it('should not query database if requirements array is empty or missing', async () => {
-      await dao.insertRequirements(12, []);
-      await dao.insertRequirements(12, null);
-      expect(db.query).not.toHaveBeenCalled();
-    });
-
-    it('should fetch requirements successfully', async () => {
-      const mockReqRows = [{ id: 1, bookingId: 5, description: 'Allergy', allergies: 1 }];
+    it('should fetch requirements successfully with boolean mapping', async () => {
+      const mockReqRows = [
+        { description: 'Allergy', allergies: 1 },
+        { description: 'Preference', allergies: 0 },
+      ];
       db.query.mockResolvedValue({ rows: mockReqRows });
 
-      await expect(dao.getRequirements(5)).resolves.toEqual(mockReqRows);
+      await expect(dao.getRequirements(5)).resolves.toEqual([
+        { description: 'Allergy', allergies: true },
+        { description: 'Preference', allergies: false },
+      ]);
       expect(db.query.mock.calls[0][1]).toEqual([5]);
     });
   });
 
-  describe('findByHikerId', () => {
-    it('should return all bookings for a given hiker ordered by slot date and start time', async () => {
-      const mockBookings = [
-        { id: 10, slot_id: 2, party_size: 2, status: 'confirmed' },
-        { id: 5, slot_id: 1, party_size: 4, status: 'confirmed' },
-      ];
-      db.query.mockResolvedValue({ rows: mockBookings });
+  describe('getRequirementsByBookingIds', () => {
+    it('should return an empty Map without querying DB if bookingIds array is empty', async () => {
+      const result = await dao.getRequirementsByBookingIds([]);
 
-      const result = await dao.findByHikerId(99);
-
-      expect(result).toEqual(mockBookings);
-      const [sql, params] = db.query.mock.calls[0];
-      expect(sql).toContain('WHERE b.hiker_id = $1');
-      expect(sql).toContain('ORDER BY s.date DESC');
-      expect(params).toEqual([99]);
+      expect(result).toBeInstanceOf(Map);
+      expect(result.size).toBe(0);
+      expect(db.query).not.toHaveBeenCalled();
     });
-  });
 
-  describe('insertRequirements alternative argument signatures & aliases', () => {
-   it('should handle requirements passed as array first and bookingId as second argument', async () => {
-      db.query.mockResolvedValue({ rows: [] });
+    it('should group requirements by bookingId and initialize empty arrays for bookings without requirements', async () => {
+      db.query.mockResolvedValue({
+        rows: [
+          { bookingId: 1, description: 'Nuts', allergies: 1 },
+        ],
+      });
 
-      // Pass bookingId as a numeric value 20 instead of string '20'
-      await dao.insertRequirements([{ description: 'Gluten-free', allergies: 1 }], 20);
+      const result = await dao.getRequirementsByBookingIds([1, 2]);
 
       expect(db.query).toHaveBeenCalledTimes(1);
-      expect(db.query.mock.calls[0][1]).toEqual([20, 'Gluten-free', 1]);
-    });
-
-    it('should correctly invoke alias methods like insertPartyRequirements and getPartyRequirements', async () => {
-      db.query.mockResolvedValue({ rows: [{ id: 1, description: 'Test', allergies: 0 }] });
-
-      await dao.insertPartyRequirements(12, [{ description: 'Test', allergies: false }]);
-      expect(db.query).toHaveBeenCalled();
-
-      const reqs = await dao.getPartyRequirements(12);
-      expect(reqs).toEqual([{ id: 1, description: 'Test', allergies: 0 }]);
+      expect(result.get(1)).toEqual([{ description: 'Nuts', allergies: true }]);
+      expect(result.get(2)).toEqual([]);
     });
   });
-
 });

@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createBookingService } from '../../../../src/services/bookingService.js';
-import { ValidationError, AppError, NotFoundError } from '../../../../src/errors/AppError.js';
+import { ValidationError, AppError, NotFoundError, ConflictError } from '../../../../src/errors/AppError.js';
 
 describe('bookingService - White-Box Tests', () => {
   let db;
   let bookingDao;
   let slotDao;
+  let userDao;
   let bookingService;
   const timeZone = 'Europe/Rome';
   const fixedNow = new Date('2026-08-14T07:00:00.000Z');
@@ -46,10 +47,18 @@ describe('bookingService - White-Box Tests', () => {
       getTablesWithFreeForSlot: vi.fn(),
     };
 
+    userDao = {
+      findById: vi.fn(),
+      findByEmail: vi.fn(),
+      createHiker: vi.fn(),
+      searchHikers: vi.fn(),
+    };
+
     bookingService = createBookingService({
       db,
       bookingDao,
       slotDao,
+      userDao,
       timeZone,
       now: () => fixedNow,
     });
@@ -287,7 +296,6 @@ describe('bookingService - White-Box Tests', () => {
         id: 101, status: 'available', start_time: '14:00', date: '2026-08-14' 
       });
 
-      // Test with non-object entry inside array
       await expect(
         bookingService.createBooking(mockHiker, { 
           slotId: 101, 
@@ -296,7 +304,6 @@ describe('bookingService - White-Box Tests', () => {
         })
       ).rejects.toThrow(ValidationError);
 
-      // Test with description too long (>500 chars)
       await expect(
         bookingService.createBooking(mockHiker, { 
           slotId: 101, 
@@ -306,33 +313,42 @@ describe('bookingService - White-Box Tests', () => {
       ).rejects.toThrow(ValidationError);
     });
 
-    it('should fallback to body requirements if getRequirements getter throws an error', async () => {
-      slotDao.findById.mockResolvedValue({ 
-        id: 101, status: 'available', start_time: '14:00', end_time: '16:00', date: '2026-08-14', meal: 'lunch' 
-      });
-      bookingDao.findConfirmedByHikerAndSlot.mockResolvedValue(null);
-      slotDao.getTablesWithFreeForSlot.mockResolvedValue([{ id: 1, label: 'T1', seats: 4, free: 4 }]);
-      
-      bookingDao.insertRequirements = vi.fn().mockResolvedValue(true);
-      // Simulate getter throwing an error to test the catch fallback branch
-      bookingDao.getRequirements = vi.fn().mockRejectedValue(new Error('DB read error'));
+  });
 
-      bookingDao.create.mockResolvedValue(105);
-      bookingDao.findById.mockResolvedValue({
-        id: 105, status: 'confirmed', hiker_id: 10, slot_id: 101, slot_date: '2026-08-14',
-        slot_start_time: '14:00', slot_end_time: '16:00', meal: 'lunch', party_size: 2,
-        contact_name: 'Mario', email: 'm@example.com', phone: '123', created_at: '2026-08-14T07:05:00.000Z'
-      });
-      bookingDao.getSeatAssignments.mockResolvedValue([{ tableId: 1, tableLabel: 'T1', seats: 2 }]);
+  describe('Additional White-Box Coverage (Update & Staff Booking Validation)', () => {
 
-      const result = await bookingService.createBooking(mockHiker, {
-        slotId: 101,
-        partySize: 2,
-        requirements: [{ description: 'Gluten-free', allergies: false }]
-      });
+    it('should throw ValidationError in validateUpdateBody if body is not an object', async () => {
+      await expect(
+        bookingService.updateBooking(mockHiker, 100, null)
+      ).rejects.toThrow(ValidationError);
+    });
 
-      // Should fallback gracefully and return requirements from body normalization
-      expect(result.requirements).toEqual([{ description: 'Gluten-free', allergies: false }]);
+    it('should throw ValidationError in validateUpdateBody if no fields are provided for update', async () => {
+      await expect(
+        bookingService.updateBooking(mockHiker, 100, {})
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it('should throw NotFoundError if booking ID is null or invalid in updateBooking', async () => {
+      await expect(
+        bookingService.updateBooking(mockHiker, 'invalid', { partySize: 3 })
+      ).rejects.toThrow(NotFoundError);
+    });
+
+    it('should throw UnauthorizedError if createStaffBooking is called without user or non-staff', async () => {
+      await expect(
+        bookingService.createStaffBooking(mockHiker, { mode: 'guest', slotId: 101, partySize: 2, contactName: 'Guest' })
+      ).rejects.toThrow();
+    });
+
+    it('should throw ValidationError in searchHikers if query is too short or too long', async () => {
+      await expect(
+        bookingService.searchHikers(mockStaff, 'a')
+      ).rejects.toThrow(ValidationError);
+
+      await expect(
+        bookingService.searchHikers(mockStaff, 'a'.repeat(105))
+      ).rejects.toThrow(ValidationError);
     });
 
   });

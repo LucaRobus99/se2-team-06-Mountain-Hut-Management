@@ -55,6 +55,7 @@ describe('bookingService - Black-Box Tests', () => {
       replaceRequirements: vi.fn(),
       getRequirements: vi.fn().mockResolvedValue([]),
       getRequirementsByBookingIds: vi.fn().mockResolvedValue(new Map()),
+      listByHiker: vi.fn(),
     };
 
     slotDao = {
@@ -332,7 +333,7 @@ describe('bookingService - Black-Box Tests', () => {
       slotDao.getTablesWithFreeForSlot.mockResolvedValue([{ id: 1, label: 'T1', seats: 4, free: 4 }]);
       
       bookingDao.insertRequirements = vi.fn().mockResolvedValue(true);
-      bookingDao.getRequirements = vi.fn().mockResolvedValue([{ description: 'Peanut allergy', allergies: 1 }]);
+      bookingDao.getRequirements = vi.fn().mockResolvedValue([{ description: 'Peanut allergy', allergies: true }]);
 
       bookingDao.create.mockResolvedValue(105);
       bookingDao.findById.mockResolvedValue({
@@ -440,20 +441,42 @@ describe('bookingService - Black-Box Tests', () => {
 
   });
 
-  describe('listMyBookings & checkSlotBooking', () => {
-    it('should throw UnauthorizedError if listMyBookings is called without user', async () => {
-      await expect(bookingService.listMyBookings(null)).rejects.toThrow(UnauthorizedError);
+  describe('listBookings & checkSlotBooking (Additional Black-Box Coverage)', () => {
+    it('should throw UnauthorizedError if listBookings is called without user', async () => {
+      await expect(bookingService.listBookings(null)).rejects.toThrow(UnauthorizedError);
     });
 
-    it('should list bookings for the authenticated hiker', async () => {
-      bookingDao.findByHikerId = vi.fn().mockResolvedValue([
+    it('should list bookings for the authenticated hiker with empty results handled', async () => {
+      bookingDao.listByHiker.mockResolvedValue([]);
+      
+      const results = await bookingService.listBookings(mockHiker);
+      expect(results.bookings).toHaveLength(0);
+    });
+
+    it('should list bookings for the authenticated hiker with active items', async () => {
+      bookingDao.listByHiker.mockResolvedValue([
         { id: 100, status: 'confirmed', slot_id: 101, slot_date: '2026-08-14', slot_start_time: '14:00', party_size: 2 }
       ]);
       bookingDao.getSeatAssignments.mockResolvedValue([]);
       
-      const results = await bookingService.listMyBookings(mockHiker);
+      const results = await bookingService.listBookings(mockHiker);
       expect(results.bookings).toHaveLength(1);
       expect(results.bookings[0].id).toBe(100);
+    });
+
+    it('should throw UnauthorizedError if checkSlotBooking is called without user', async () => {
+      await expect(bookingService.checkSlotBooking(null, 101)).rejects.toThrow(UnauthorizedError);
+    });
+
+    it('should throw ValidationError if checkSlotBooking receives an invalid slot ID', async () => {
+      await expect(bookingService.checkSlotBooking(mockHiker, 'abc')).rejects.toThrow(ValidationError);
+    });
+
+    it('should check if slot is not booked correctly', async () => {
+      bookingDao.findConfirmedByHikerAndSlot.mockResolvedValue(null);
+
+      const check = await bookingService.checkSlotBooking(mockHiker, 101);
+      expect(check).toEqual({ alreadyBooked: false });
     });
 
     it('should check if slot is already booked correctly', async () => {
