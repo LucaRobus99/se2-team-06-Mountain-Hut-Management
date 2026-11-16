@@ -186,11 +186,12 @@ export function createBookingCore({ bookingDao, slotDao, timeZone, now = () => n
     },
 
     /**
-     * MH-08 (and later MH-15/MH-17): mark the booking cancelled. Its seats are
-     * kept for history; free-seat queries only count confirmed bookings.
+     * MH-08: mark the booking cancelled. Returns true when this call changed the
+     * status, false when it was already cancelled (idempotent repeat). The seats
+     * are kept for history; free-seat queries only count confirmed bookings.
      */
     async cancel(tx, booking) {
-      await bookingDao.updateStatus(tx, booking.id, 'cancelled');
+      return bookingDao.cancelIfConfirmed(tx, booking.id);
     },
 
     /**
