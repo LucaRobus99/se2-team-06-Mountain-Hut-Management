@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { getAvailableSlots, getSlotSeating, createBooking, checkSlotBooking } from '../../../../src/api/booking.js';
+import { getAvailableSlots, getSlotSeating, createBooking, getBooking, getMyBookings, bookingErrorMessage, checkSlotBooking } from '../../../../src/api/booking.js';
 
-describe('Booking API - White-Box Unit Tests', () => {
+describe('Booking API - White-Box Unit Tests (Complete Coverage)', () => {
 
   beforeEach(() => {
     // Clear all mocks and stubs before each test
@@ -17,6 +17,19 @@ describe('Booking API - White-Box Unit Tests', () => {
     it('should throw a validation error if date is missing or invalid', async () => {
       await expect(getAvailableSlots({ date: '', meal: 'lunch', partySize: 2 }))
         .rejects.toThrow('Please select a valid date.');
+      
+      await expect(getAvailableSlots({ date: 'invalid-date', meal: 'lunch', partySize: 2 }))
+        .rejects.toThrow('Please select a valid date.');
+    });
+
+    it('should throw validation error for past date', async () => {
+      await expect(getAvailableSlots({ date: '2020-01-01', meal: 'lunch', partySize: 2 }))
+        .rejects.toThrow('Please select today or a future date.');
+    });
+
+    it('should throw validation error for an invalid meal', async () => {
+      await expect(getAvailableSlots({ date: '2026-11-15', meal: 'brunch', partySize: 2 }))
+        .rejects.toThrow('Please select a meal.');
     });
 
     it('should return available slots for a valid query', async () => {
@@ -66,6 +79,12 @@ describe('Booking API - White-Box Unit Tests', () => {
         expect.objectContaining({ credentials: 'include' })
       );
     });
+
+    it('should throw an error if slotId or partySize is invalid in getSlotSeating', async () => {
+      await expect(getSlotSeating({ slotId: 0, partySize: 2 })).rejects.toThrow('Please select an available time and a valid number of guests.');
+      await expect(getSlotSeating({ slotId: 1, partySize: -1 })).rejects.toThrow('Please select an available time and a valid number of guests.');
+      await expect(getSlotSeating({ slotId: 'abc', partySize: 2 })).rejects.toThrow('Please select an available time and a valid number of guests.');
+    });
   });
 
   describe('checkSlotBooking', () => {
@@ -77,8 +96,16 @@ describe('Booking API - White-Box Unit Tests', () => {
       expect(fetch).toHaveBeenCalledWith('/api/bookings/slot-status?slotId=12',
         expect.objectContaining({ credentials: 'include' }));
     });
+
     it('rejects invalid slot IDs before contacting the backend', async () => {
       await expect(checkSlotBooking(0)).rejects.toThrow('Invalid time slot.');
+    });
+
+    it('throws an error if alreadyBooked in slot-status response is not a boolean', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true, status: 200, json: async () => ({ alreadyBooked: 'yes' }),
+      }));
+      await expect(checkSlotBooking(12)).rejects.toThrow('Unable to check your existing reservation. Please try again.');
     });
   });
 
@@ -150,7 +177,102 @@ describe('Booking API - White-Box Unit Tests', () => {
         requirements: [{ description: 'Peanut allergy', allergies: true }],
       })).rejects.toMatchObject({ code: 'VALIDATION_ERROR', status: 400 });
     });
+  });
 
+  describe('getBooking', () => {
+    it('should throw an error if bookingId is invalid', async () => {
+      await expect(getBooking(0)).rejects.toThrow('Invalid booking reference.');
+      await expect(getBooking('abc')).rejects.toThrow('Invalid booking reference.');
+    });
+
+    it('should successfully fetch booking details for a valid bookingId', async () => {
+      const mockBooking = { id: 10, status: 'confirmed', partySize: 2 };
+
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockBooking
+      }));
+
+      const result = await getBooking(10);
+      expect(result).toEqual(mockBooking);
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/bookings/10',
+        expect.objectContaining({ credentials: 'include' })
+      );
+    });
+
+    it('should throw NETWORK_ERROR if fetch fails completely', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network down')));
+
+      await expect(getBooking(10)).rejects.toMatchObject({
+        code: 'NETWORK_ERROR',
+        message: 'Unable to reach the server. Please try again later.'
+      });
+    });
+  });
+
+  describe('getMyBookings', () => {
+    it('should successfully return bookings array when server responds correctly', async () => {
+      const mockResponse = { bookings: [{ id: 1, status: 'confirmed' }] };
+
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockResponse
+      }));
+
+      const result = await getMyBookings();
+      expect(result).toEqual(mockResponse.bookings);
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/bookings',
+        expect.objectContaining({ credentials: 'include' })
+      );
+    });
+
+    it('should throw an error if the server response structure is invalid or missing bookings array', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ invalidKey: 'not an array' })
+      }));
+
+      await expect(getMyBookings()).rejects.toThrow('Unexpected bookings response from the server.');
+    });
+  });
+
+  describe('bookingErrorMessage', () => {
+    it('should return correct messages for known error codes', () => {
+      expect(bookingErrorMessage({ code: 'UNAUTHENTICATED' })).toContain('session has expired');
+      expect(bookingErrorMessage({ code: 'FORBIDDEN' })).toContain('Only Hiker accounts');
+      expect(bookingErrorMessage({ code: 'INVALID_CREDENTIALS' })).toContain('Incorrect email or password.');
+      expect(bookingErrorMessage({ code: 'BOOKING_ALREADY_EXISTS' })).toContain('already have a booking');
+      expect(bookingErrorMessage({ code: 'INSUFFICIENT_CAPACITY' })).toContain('remaining seats have just been booked');
+      expect(bookingErrorMessage({ code: 'SLOT_NOT_AVAILABLE' })).toContain('no longer open for booking');
+      expect(bookingErrorMessage({ code: 'SLOT_TOO_LATE' })).toContain('Bookings close two hours');
+      expect(bookingErrorMessage({ code: 'SLOT_NOT_FOUND' })).toContain('no longer available');
+      expect(bookingErrorMessage({ code: 'NETWORK_ERROR' })).toContain('cannot reach the server');
+    });
+
+    it('should handle requirement validation errors specifically', () => {
+      const error = {
+        code: 'VALIDATION_ERROR',
+        details: [{ field: 'requirements.0.description', message: 'Invalid' }]
+      };
+      expect(bookingErrorMessage(error)).toContain('dietary requirements');
+    });
+
+    it('should handle generic validation error details if present', () => {
+      const error = {
+        code: 'VALIDATION_ERROR',
+        details: [{ field: 'partySize', message: 'Party size is too large' }]
+      };
+      expect(bookingErrorMessage(error)).toBe('Party size is too large');
+    });
+
+    it('should fallback to default error message if code is unknown', () => {
+      expect(bookingErrorMessage({ message: 'Custom server error' })).toBe('Custom server error');
+    });
   });
 
 });

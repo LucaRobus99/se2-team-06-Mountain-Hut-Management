@@ -3,17 +3,19 @@ import express from 'express';
 import request from 'supertest';
 import { createAuthRouter } from '../../../../src/routes/authRoutes.js';
 import { errorHandler } from '../../../../src/middleware/errorHandler.js';
-import { ValidationError } from '../../../../src/errors/AppError.js';
+import { ValidationError, NotFoundError } from '../../../../src/errors/AppError.js';
 
-describe('authRoutes - Black-Box Tests', () => {
+describe('authRoutes - Black-Box Tests (Full Coverage)', () => {
   const fixedNow = new Date('2026-08-14T07:00:00.000Z');
   const dbUser = { id: 1, role: 'hiker', name: 'Mario Rossi', email: 'mario@example.com', phone: '+39333' };
 
-  let authResult;      // what passport hands back: { err, user }
-  let session;         // stub of req.session
+  let authResult;
+  let session;
   let logInError;
   let logoutError;
   let registrationService;
+  let accountService;
+  let passwordResetService;
   let app;
 
   beforeEach(() => {
@@ -25,11 +27,25 @@ describe('authRoutes - Black-Box Tests', () => {
       destroy: vi.fn((cb) => cb(null)),
     };
     registrationService = { registerHiker: vi.fn() };
+    accountService = {
+      updateProfile: vi.fn().mockResolvedValue(dbUser),
+      changePassword: vi.fn().mockResolvedValue(true),
+      getAvatar: vi.fn().mockResolvedValue({ avatar_blob: Buffer.from('fake-img'), avatar_mime: 'image/png' }),
+      uploadAvatar: vi.fn().mockResolvedValue(dbUser),
+      removeAvatar: vi.fn().mockResolvedValue(dbUser),
+    };
+    passwordResetService = {
+      request: vi.fn().mockResolvedValue(true),
+      reset: vi.fn().mockResolvedValue(true),
+    };
 
     const passport = {
       authenticate: vi.fn((_strategy, _options, callback) => () => callback(authResult.err, authResult.user)),
     };
-    const requireAuth = () => (req, _res, next) => {
+    const requireAuth = (roles = []) => (req, res, next) => {
+      if (roles.length > 0 && !roles.includes(dbUser.role)) {
+        return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Forbidden' } });
+      }
       req.user = dbUser;
       next();
     };
@@ -42,7 +58,15 @@ describe('authRoutes - Black-Box Tests', () => {
       req.logout = vi.fn((cb) => cb(logoutError));
       next();
     });
-    app.use('/api/auth', createAuthRouter({ passport, requireAuth, registrationService, now: () => fixedNow }));
+    
+    app.use('/api/auth', createAuthRouter({ 
+      passport, 
+      requireAuth, 
+      registrationService, 
+      accountService, 
+      passwordResetService, 
+      now: () => fixedNow 
+    }));
     app.use(errorHandler);
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -131,6 +155,72 @@ describe('authRoutes - Black-Box Tests', () => {
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ user: dbUser });
+    });
+  });
+
+  describe('Password Recovery Endpoints (forgot-password & reset-password)', () => {
+    it('should answer 204 on forgot-password request', async () => {
+      const res = await request(app).post('/api/auth/forgot-password').send({ email: 'mario@example.com' });
+      expect(res.status).toBe(204);
+    });
+
+    it('should answer 204 on reset-password execution', async () => {
+      const res = await request(app).post('/api/auth/reset-password').send({ token: 'tok', newPassword: 'NewPassword1!' });
+      expect(res.status).toBe(204);
+    });
+
+    it('should answer 404 if passwordResetService is not configured', async () => {
+      const customApp = express();
+      customApp.use(express.json());
+      customApp.use('/api/auth', createAuthRouter({
+        passport: { authenticate: vi.fn() },
+        requireAuth: () => (req, res, next) => next(),
+        registrationService,
+        passwordResetService: null,
+      }));
+      customApp.use(errorHandler);
+
+      const res = await request(customApp).post('/api/auth/forgot-password').send({ email: 'test@hut.test' });
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('Account Management Endpoints (PATCH /me & POST /change-password)', () => {
+    it('should successfully update hiker profile and return sanitized user', async () => {
+      const res = await request(app).patch('/api/auth/me').send({ name: 'Updated Name' });
+      expect(res.status).toBe(200);
+      expect(res.body.user).toBeDefined();
+    });
+
+    it('should successfully change password and return 204', async () => {
+      const res = await request(app).post('/api/auth/change-password').send({ oldPassword: 'old', newPassword: 'new' });
+      expect(res.status).toBe(204);
+    });
+  });
+
+  describe('Avatar Endpoints (/avatar)', () => {
+    it('should serve avatar image with correct headers', async () => {
+      const res = await request(app).get('/api/auth/avatar');
+      expect(res.status).toBe(200);
+      expect(res.header['cache-control']).toContain('private, no-store');
+      expect(res.header['x-content-type-options']).toBe('nosniff');
+      expect(res.header['content-type']).toContain('image/png');
+    });
+
+    it('should return 404 if avatar is not found', async () => {
+      accountService.getAvatar.mockResolvedValue(null);
+      const res = await request(app).get('/api/auth/avatar');
+      expect(res.status).toBe(404);
+    });
+
+    it('should upload avatar successfully', async () => {
+      const res = await request(app).patch('/api/auth/avatar').send({ image: 'data', mime: 'image/png' });
+      expect(res.status).toBe(200);
+    });
+
+    it('should remove avatar successfully', async () => {
+      const res = await request(app).delete('/api/auth/avatar');
+      expect(res.status).toBe(200);
     });
   });
 

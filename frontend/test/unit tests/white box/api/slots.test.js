@@ -19,7 +19,7 @@ describe('Slot API - White-Box Unit Tests', () => {
     it('should return the correct capitalized label for known meals', () => {
       expect(mealLabel('breakfast')).toBe('Breakfast');
       expect(mealLabel('lunch')).toBe('Lunch');
-      expect(mealLabel('aperitivo')).toBe('Aperitivo');
+      expect(mealLabel('aperitivo')).toBe('Aperitif');
       expect(mealLabel('dinner')).toBe('Dinner');
     });
 
@@ -123,6 +123,43 @@ describe('Slot API - White-Box Unit Tests', () => {
           body: JSON.stringify(payload)
         })
       );
+    });
+  });
+
+  describe('request error handling fallbacks', () => {
+    it('should use default error message if response error body lacks a message', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: {} })
+      }));
+
+      await expect(listStaffSlots('2026-11-20'))
+        .rejects.toThrow('Unable to complete the request.');
+    });
+
+    it('should attach status, code, and details to the thrown error object', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 422,
+        json: async () => ({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Invalid slot data',
+            details: ['Field date is required']
+          }
+        })
+      }));
+
+      try {
+        await listStaffSlots('2026-11-20');
+        expect.fail('Should have thrown an error');
+      } catch (err) {
+        expect(err.message).toBe('Invalid slot data');
+        expect(err.status).toBe(422);
+        expect(err.code).toBe('VALIDATION_ERROR');
+        expect(err.details).toEqual(['Field date is required']);
+      }
     });
   });
 

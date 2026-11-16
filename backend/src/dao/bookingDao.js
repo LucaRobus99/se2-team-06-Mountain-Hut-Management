@@ -116,6 +116,49 @@ export function createBookingDao(db) {
     },
 
 
+
+    /** MH-06: update the mutable fields (slot and party size) of a booking. */
+    async update(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const bookingId = a[0];
+      const booking = a[1] ?? {};
+      await exec.query(
+        `UPDATE bookings SET slot_id = $2, party_size = $3 WHERE id = $1`,
+        [bookingId, booking.slotId, booking.partySize]
+      );
+    },
+
+    /** MH-08 (later MH-15/MH-17): change the status, e.g. to 'cancelled'. */
+    async updateStatus(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      await exec.query(`UPDATE bookings SET status = $2 WHERE id = $1`, [a[0], a[1]]);
+    },
+
+    /** MH-06: release the seats a booking currently holds before re-allocating. */
+    async deleteSeats(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      await exec.query('DELETE FROM booking_seats WHERE booking_id = $1', [a[0]]);
+    },
+
+    /** MH-06: every booking owned by a hiker, newest slot first (same row shape as findById). */
+    async listByHiker(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const hikerId = a[0];
+      const { rows } = await exec.query(
+        `SELECT b.id, b.slot_id, b.hiker_id, b.created_by, b.contact_name, b.email, b.phone,
+                b.party_size, b.status, b.created_at,
+                s.date AS slot_date, s.start_time AS slot_start_time, s.end_time AS slot_end_time,
+                s.status AS slot_status, m.meal_type AS meal
+         FROM bookings b
+         JOIN slots s ON s.id = b.slot_id
+         LEFT JOIN meals m ON m.id = s.meal_id
+         WHERE b.hiker_id = $1
+         ORDER BY s.date DESC, s.start_time DESC, b.id DESC`,
+        [hikerId]
+      );
+      return rows;
+    },
+
     async getSeatAssignments(...args) {
       const { db: exec, args: a } = executorOf(args);
       const bookingId = a[0];

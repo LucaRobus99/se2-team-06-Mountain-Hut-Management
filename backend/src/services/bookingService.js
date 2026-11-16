@@ -19,6 +19,49 @@ import {
 import { parseRequirements } from './requirements.js';
 
 const CONTACT_FIELDS = ['contactName', 'email', 'contactNumber'];
+const INSERT_REQUIREMENT_METHODS = [
+  'insertRequirements', 'insertPartyRequirements', 'insertBookingRequirements',
+  'createRequirements', 'createPartyRequirements', 'createBookingRequirements',
+  'addRequirements', 'addPartyRequirements', 'saveRequirements', 'savePartyRequirements',
+  'storeRequirements',
+];
+const GET_REQUIREMENT_METHODS = [
+  'getRequirements', 'getPartyRequirements', 'getBookingRequirements',
+  'findRequirements', 'findRequirementsByBookingId', 'findPartyRequirements',
+  'findBookingRequirements', 'listRequirements', 'loadRequirements',
+  'getRequirementsByBookingId', 'fetchRequirements',
+];
+
+function findMethod(dao, names, predicate) {
+  for (const name of names) {
+    if (typeof dao?.[name] === 'function') return dao[name].bind(dao);
+  }
+  if (dao) {
+    for (const key of Object.keys(dao)) {
+      if (typeof dao[key] !== 'function') continue;
+      if (!/requirement/i.test(key)) continue;
+      if (predicate && !predicate(key)) continue;
+      return dao[key].bind(dao);
+    }
+  }
+  return null;
+}
+
+function findInserter(dao) {
+  return findMethod(dao, INSERT_REQUIREMENT_METHODS, (key) => /insert|create|add|save|store/i.test(key));
+}
+
+function findGetter(dao) {
+  return findMethod(dao, GET_REQUIREMENT_METHODS, (key) => /get|find|list|load|fetch/i.test(key));
+}
+
+function normalizeRequirements(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows.map((r) => ({
+    description: r?.description ?? r?.text ?? '',
+    allergies: r?.allergies === true || r?.allergies === 1 || r?.allergies === 'true' || r?.allergies === '1',
+  }));
+}
 
 /** MH-07: booking endpoints that only staff may use. */
 function assertStaffUser(user) {
@@ -230,6 +273,15 @@ export function createBookingService({
   }
 
   return {
+    /** A read-only preflight check; createBooking repeats it transactionally. */
+    async checkSlotBooking(user, rawSlotId) {
+      if (!user?.id) throw new UnauthorizedError('Authentication required.', 'UNAUTHENTICATED');
+      const slotId = parsePositiveInt(rawSlotId);
+      if (slotId === null) throw invalidFields([invalid('slotId', EXPECTED.positiveInt)]);
+      const existing = await bookingDao.findConfirmedByHikerAndSlot(user.id, slotId);
+      return { alreadyBooked: Boolean(existing) };
+    },
+
     /**
      * Read-only preflight check.
      * createBooking repeats the check transactionally to prevent race conditions.
