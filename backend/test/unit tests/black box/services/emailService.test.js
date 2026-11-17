@@ -103,4 +103,57 @@ describe('emailService - Black-Box Tests', () => {
 
   });
 
+  describe('sendBookingEmail (All Kinds & Errors)', () => {
+    it('should successfully send updated (modification) and cancelled booking emails', async () => {
+      const service = createEmailService({ apiKey: 'key-123', domain: 'example.com' });
+
+      const updatedRes = await service.sendBookingEmail('updated', 'mario@example.com', { name: 'Mario', booking_id: 100 });
+      expect(updatedRes).toBeUndefined();
+
+      const cancelledRes = await service.sendBookingEmail('cancelled', 'mario@example.com', { name: 'Mario', booking_id: 100 });
+      expect(cancelledRes).toBeUndefined();
+    });
+
+    it('should throw an Error when an unknown booking email kind is requested', async () => {
+      const service = createEmailService({ apiKey: 'key-123', domain: 'example.com' });
+
+      await expect(
+        service.sendBookingEmail('unknown_kind', 'test@example.com', {})
+      ).rejects.toThrow('Unknown booking email: unknown_kind');
+    });
+  });
+
+  describe('sendPasswordReset', () => {
+    it('should skip sending and return { skipped: true } if recipient (to) is missing', async () => {
+      const service = createEmailService({ apiKey: 'key-123', domain: 'example.com' });
+      const result = await service.sendPasswordReset({ to: null, name: 'Mario', resetUrl: 'http://link' });
+
+      expect(result).toEqual({ skipped: true });
+    });
+
+    it('should successfully send password reset email when valid parameters are provided', async () => {
+      const service = createEmailService({ apiKey: 'key-123', domain: 'example.com' });
+      const result = await service.sendPasswordReset({
+        to: 'mario@example.com',
+        name: 'Mario Rossi',
+        resetUrl: 'https://hut.test/reset?token=abc',
+        expiresInHours: 24,
+      });
+
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('Client Custom URL Configuration', () => {
+    it('should initialize successfully when a custom url option is provided', () => {
+      const service = createEmailService({
+        apiKey: 'key-123',
+        domain: 'example.com',
+        url: 'https://api.eu.mailgun.net',
+      });
+
+      expect(service.isEnabled()).toBe(true);
+    });
+  });
+
 });

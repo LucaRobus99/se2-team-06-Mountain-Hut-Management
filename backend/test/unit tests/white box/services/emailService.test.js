@@ -175,4 +175,64 @@ describe('emailService - White-Box Tests', () => {
 
   });
 
+  describe('sendBookingEmail & sendPasswordReset White-Box Branches', () => {
+    
+    it('should throw an Error if sendBookingEmail receives an unknown kind', async () => {
+      const service = createEmailService({ apiKey: 'key', domain: 'hut.org' });
+
+      await expect(
+        service.sendBookingEmail('invalid_kind', 'test@example.com', {})
+      ).rejects.toThrow('Unknown booking email: invalid_kind');
+    });
+
+    it('should return { skipped: true } in sendPasswordReset if recipient is missing', async () => {
+      const service = createEmailService({ apiKey: 'key', domain: 'hut.org' });
+      const result = await service.sendPasswordReset({ to: null });
+
+      expect(result).toEqual({ skipped: true });
+    });
+
+    it('should successfully deliver password reset email with correct variables', async () => {
+      mockCreateMessage.mockResolvedValueOnce({ id: '<reset-id>' });
+      const service = createEmailService({ apiKey: 'key', domain: 'hut.org' });
+
+      const result = await service.sendPasswordReset({
+        to: 'user@example.com',
+        name: 'Mario',
+        resetUrl: 'https://hut.org/reset?token=123',
+        expiresInHours: 12,
+      });
+
+      expect(result).toEqual({ id: '<reset-id>' });
+      expect(mockCreateMessage).toHaveBeenCalledWith(
+        'hut.org',
+        expect.objectContaining({
+          to: ['Mario <user@example.com>'],
+          subject: 'Reset your Edelweiss Hut password',
+          template: 'password reset',
+        })
+      );
+    });
+
+    it('should catch error in sendPasswordReset, log it, and rethrow', async () => {
+      const resetError = new Error('Mailgun service down');
+      mockCreateMessage.mockRejectedValueOnce(resetError);
+
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const service = createEmailService({ apiKey: 'key', domain: 'hut.org' });
+
+      await expect(
+        service.sendPasswordReset({ to: 'user@example.com', name: 'Mario', resetUrl: 'url' })
+      ).rejects.toThrow('Mailgun service down');
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Failed to send password reset email:',
+        resetError
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+  });
+
 });

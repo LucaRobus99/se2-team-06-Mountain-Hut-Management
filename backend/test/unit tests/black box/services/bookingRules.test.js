@@ -30,6 +30,20 @@ describe('bookingRules - Black-Box Tests', () => {
       expect(() => assertSlotOpen(slot, { timeZone, now })).toThrow(UnprocessableEntityError);
     });
 
+    it('should throw UnprocessableEntityError with SLOT_ALREADY_STARTED if leadMs is 0 and the slot has started', () => {
+      const slot = { status: 'available', date: '2026-08-14', start_time: '10:00' };
+      const timeZone = 'Europe/Rome';
+      const now = new Date('2026-08-14T10:05:00.000Z'); // Slot started 5 mins ago
+
+      expect(() => assertSlotOpen(slot, { timeZone, now, leadMs: 0 })).toThrow(UnprocessableEntityError);
+      
+      try {
+        assertSlotOpen(slot, { timeZone, now, leadMs: 0 });
+      } catch (err) {
+        expect(err.code).toBe('SLOT_ALREADY_STARTED');
+      }
+    });
+
   });
 
   describe('seatOrFail', () => {

@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { hashPassword, isPasswordHash, verifyPassword } from '../../../../src/services/password.js'; // Sostituisci con il percorso corretto
+import { 
+  hashPassword, 
+  isPasswordHash, 
+  verifyPassword, 
+  generateTemporaryPassword, 
+  hashToken 
+} from '../../../../src/services/password.js';
 
 describe('password - Black-Box Tests', () => {
 
@@ -68,6 +74,44 @@ describe('password - Black-Box Tests', () => {
       const hash = hashPassword('mypassword');
       expect(verifyPassword(hash, null)).toBe(false);
       expect(verifyPassword(hash, 12345)).toBe(false);
+    });
+
+  });
+  
+  describe('generateTemporaryPassword', () => {
+    
+    it('should generate a temporary password of default length 14 using the allowed alphabet', () => {
+      const tempPassword = generateTemporaryPassword();
+      expect(typeof tempPassword).toBe('string');
+      expect(tempPassword.length).toBe(14);
+      
+      // Verifica che non contenga caratteri ambigui (0, O, 1, l, I)
+      expect(tempPassword).not.toMatch(/[0O1lI]/);
+    });
+
+    it('should generate a temporary password with a custom valid length', () => {
+      const customLength = 20;
+      const tempPassword = generateTemporaryPassword(customLength);
+      expect(tempPassword.length).toBe(customLength);
+    });
+
+    it('should throw a RangeError if length is out of bounds (< 8 or > 64 or not an integer)', () => {
+      expect(() => generateTemporaryPassword(5)).toThrow(RangeError);
+      expect(() => generateTemporaryPassword(70)).toThrow(RangeError);
+      expect(() => generateTemporaryPassword(10.5)).toThrow(RangeError);
+      expect(() => generateTemporaryPassword('14')).toThrow(RangeError);
+    });
+
+  });
+
+  describe('hashToken', () => {
+    
+    it('should return a valid sha256 hex hash string for a token', () => {
+      const token = 'sample-secret-token-123';
+      const hashed = hashToken(token);
+
+      expect(typeof hashed).toBe('string');
+      expect(hashed.length).toBe(64); // SHA-256 hex output is 64 characters long
     });
 
   });

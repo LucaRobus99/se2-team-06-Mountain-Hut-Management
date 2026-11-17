@@ -197,5 +197,14 @@ describe('userDao - White-Box Tests (Extended Coverage)', () => {
       const params = db.query.mock.calls[0][1];
       expect(params[1]).toBeNull();
     });
+    
+ it('should include digitsLike parameter if search term contains 3 or more digits', async () => {
+      db.query.mockResolvedValue({ rows: [] });
+
+      await dao.searchHikers('user 1234');
+
+      const params = db.query.mock.calls[0][1];
+      expect(params[1]).toBe('%1234%');
+    });
   });
 });

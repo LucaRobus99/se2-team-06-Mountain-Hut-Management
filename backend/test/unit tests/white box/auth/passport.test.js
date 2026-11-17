@@ -185,6 +185,20 @@ describe('passport - White-Box Tests (Maximum Coverage)', () => {
       expect(result).not.toHaveProperty('passwordChangeRequired');
     });
 
+    it('should correctly format avatarUrl using valid avatar_version when avatar_mime is present', () => {
+      const userWithAvatar = {
+        id: 100,
+        email: 'avatar@hut.test',
+        name: 'Avatar Test',
+        role: 'hiker',
+        avatar_mime: 'image/jpeg',
+        avatar_version: '5', // string number that needs conversion
+      };
+
+      const result = sanitizeUser(userWithAvatar);
+      expect(result.avatarUrl).toBe('/api/auth/avatar?v=5');
+    });
+
   });
 
 });

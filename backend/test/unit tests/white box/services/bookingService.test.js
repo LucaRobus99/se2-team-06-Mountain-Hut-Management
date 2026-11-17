@@ -440,5 +440,27 @@ describe('bookingService - White-Box Tests', () => {
     });
 
   });
+it('should throw ConflictError if email is already registered when creating a staff booking in newHiker mode', async () => {
+      slotDao.findById.mockResolvedValue({
+        id: 101,
+        status: 'available',
+        date: '2026-08-25',
+        start_time: '14:00',
+        meal: 'lunch',
+      });
 
+      // Simula che l'email esista già nel database
+      userDao.findByEmail.mockResolvedValue({ id: 99, email: 'existing@example.com' });
+
+      await expect(
+        bookingService.createStaffBooking(mockStaff, {
+          slotId: 101,
+          partySize: 2,
+          mode: 'newHiker',
+          name: 'Existing Person',
+          email: 'existing@example.com',
+          phone: '+393330000000', // Aggiunto per superare la validazione iniziale del corpo
+        })
+      ).rejects.toThrow(ConflictError);
+    });
 });

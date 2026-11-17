@@ -193,4 +193,78 @@ describe('slotService - Black-Box Tests', () => {
 
   });
 
+  describe('createSlot - Edge Cases & Validations', () => {
+    
+    it('should throw a ConflictError if the new slot overlaps with an existing slot', async () => {
+      slotDao.findMealByType.mockResolvedValue({ id: 2, meal_type: 'lunch' });
+      // Esiste già uno slot dalle 12:00 alle 13:00
+      slotDao.listByDate.mockResolvedValue([
+        { id: 101, start_time: '12:00', end_time: '13:00' }
+      ]);
+
+      await expect(
+        slotService.createSlot(mockStaff, {
+          date: '2026-08-14',
+          startTime: '12:30', // Sovrapposto
+          endTime: '13:30',
+          meal: 'lunch',
+          tables: [{ tableIdentifier: 'T1', seats: 4 }]
+        })
+      ).rejects.toThrow(ConflictError);
+    });
+
+    it('should successfully create a slot by copying tables from another existing slot', async () => {
+      slotDao.findMealByType.mockResolvedValue({ id: 2, meal_type: 'lunch' });
+      slotDao.listByDate.mockResolvedValue([]);
+      
+      // Mock per la copia dei tavoli
+      slotDao.findById
+        .mockResolvedValueOnce({ id: 99, date: '2026-08-13' }) // Source slot
+        .mockResolvedValueOnce({
+          id: 106,
+          date: '2026-08-14',
+          start_time: '15:00',
+          end_time: '16:00',
+          status: 'available',
+          meal: 'lunch',
+        }); // Created slot returned by getSlot
+
+      slotDao.getTableSetForSlot.mockResolvedValue([
+        { tableId: 1, seats: 4 }
+      ]);
+      slotDao.createSlot.mockResolvedValue(106);
+      slotDao.addTableToSlot.mockResolvedValue();
+      slotDao.getTablesWithFreeForSlot.mockResolvedValue([
+        { id: 1, label: 'T1', seats: 4, free: 4 }
+      ]);
+
+      const result = await slotService.createSlot(mockStaff, {
+        date: '2026-08-14',
+        startTime: '15:00',
+        endTime: '16:00',
+        meal: 'lunch',
+        copyTablesFromSlotId: 99,
+      });
+
+      expect(result.id).toBe(106);
+      expect(slotDao.getTableSetForSlot).toHaveBeenCalled();
+    });
+
+  });
+
+  describe('listSlots (Staff Query Validation)', () => {
+    
+    it('should throw ValidationError if date format is invalid in listSlots query', async () => {
+      await expect(
+        slotService.listSlots(mockStaff, { date: 'invalid-date' })
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it('should throw ValidationError if meal type is not allowed in listSlots query', async () => {
+      await expect(
+        slotService.listSlots(mockStaff, { meal: 'midnight-snack' })
+      ).rejects.toThrow(ValidationError);
+    });
+
+  });
 });

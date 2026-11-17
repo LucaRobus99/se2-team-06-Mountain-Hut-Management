@@ -643,4 +643,81 @@ describe('bookingService - Black-Box Tests', () => {
     });
   });
 
+  describe('searchHikers (Staff Feature)', () => {
+    it('should throw UnauthorizedError if user is not authenticated', async () => {
+      await expect(bookingService.searchHikers(null, 'Mario')).rejects.toThrow(UnauthorizedError);
+    });
+
+    it('should throw ForbiddenError if a non-staff user attempts to search hikers', async () => {
+      await expect(bookingService.searchHikers(mockHiker, 'Mario')).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+    });
+
+    it('should throw ValidationError if query is too short (< 2 chars)', async () => {
+      let userDao = { searchHikers: vi.fn() };
+      let serviceWithDao = createBookingService({ db, bookingDao, slotDao, userDao, timeZone });
+
+      await expect(serviceWithDao.searchHikers(mockStaff, 'a')).rejects.toThrow(ValidationError);
+    });
+
+    it('should return mapped hikers successfully when query is valid', async () => {
+      const userDao = {
+        searchHikers: vi.fn().mockResolvedValue([
+          { id: 15, name: 'Mario Rossi', email: 'mario@hut.test', phone: '+39333' }
+        ])
+      };
+      const serviceWithDao = createBookingService({ db, bookingDao, slotDao, userDao, timeZone });
+
+      const result = await serviceWithDao.searchHikers(mockStaff, 'Mario');
+      expect(result.hikers).toHaveLength(1);
+      expect(result.hikers[0].name).toBe('Mario Rossi');
+    });
+  });
+
+  describe('createStaffBooking (MH-07)', () => {
+    it('should successfully create a staff booking in guest mode', async () => {
+      slotDao.findById.mockResolvedValue({ 
+        id: 101, 
+        status: 'available', 
+        start_time: '15:00', // Slot nel futuro rispetto alle 07:00 di fixedNow
+        end_time: '17:00', 
+        date: '2026-08-14', 
+        meal: 'lunch' 
+      });
+      slotDao.getTablesWithFreeForSlot.mockResolvedValue([{ id: 1, label: 'T1', seats: 4, free: 4 }]);
+      bookingDao.create.mockResolvedValue(200);
+      bookingDao.findById.mockResolvedValue({
+        id: 200, 
+        status: 'confirmed', 
+        hiker_id: null, 
+        created_by: 1, 
+        slot_id: 101,
+        slot_date: '2026-08-14', 
+        slot_start_time: '15:00', 
+        slot_end_time: '17:00', 
+        meal: 'lunch',
+        party_size: 2, 
+        contact_name: 'Walk-in Guest', 
+        email: 'guest@hut.test', 
+        phone: null, 
+        created_at: '2026-08-14T07:05:00.000Z'
+      });
+      bookingDao.getSeatAssignments.mockResolvedValue([{ tableId: 1, tableLabel: 'T1', seats: 2 }]);
+
+      const staffBookingPayload = {
+        slotId: 101,
+        partySize: 2,
+        mode: 'guest',
+        contactName: 'Walk-in Guest',
+        email: 'guest@hut.test'
+      };
+
+      const userDao = {};
+      const serviceWithDao = createBookingService({ db, bookingDao, slotDao, userDao, timeZone, now: () => fixedNow });
+
+      const result = await serviceWithDao.createStaffBooking(mockStaff, staffBookingPayload);
+      expect(result.id).toBe(200);
+      expect(result.mode).toBe('guest');
+    });
+  });
+
 });
