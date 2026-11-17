@@ -164,3 +164,39 @@ describe('Slot API - White-Box Unit Tests', () => {
   });
 
 });
+
+describe('request helper edge cases', () => {
+    it('should handle non-JSON error responses gracefully without crashing', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => { throw new Error('Invalid JSON stream'); }
+      }));
+
+      await expect(listStaffSlots('2026-11-20'))
+        .rejects.toThrow('Unable to complete the request.');
+    });
+
+    it('should default details to an empty array if error.details is not an array', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({
+          error: {
+            code: 'BAD_REQUEST',
+            message: 'Bad request format',
+            details: 'not-an-array' // String instead of array
+          }
+        })
+      }));
+
+      try {
+        await listStaffSlots('2026-11-20');
+        expect.fail('Should have thrown an error');
+      } catch (err) {
+        expect(err.message).toBe('Bad request format');
+        expect(err.status).toBe(400);
+        expect(err.details).toEqual([]);
+      }
+    });
+  });
