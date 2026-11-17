@@ -305,4 +305,42 @@ describe('MyAccountPage Component Integration & Coverage Tests', () => {
 
     expect(await screen.findByText('Your profile photo was removed.')).toBeInTheDocument();
   });
+
+  it('should handle 404 or 405 error status when updating profile features', async () => {
+    const error404 = Object.assign(new Error('Not Found'), { status: 404 });
+    updateMyProfile.mockRejectedValueOnce(error404);
+
+    render(
+      <MemoryRouter>
+        <MyAccountPage />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /edit personal information/i }));
+    const form = screen.getByLabelText(/^name/i).closest('form');
+    fireEvent.submit(form);
+
+    expect(
+      await screen.findByText('Editing personal information is not available yet. The profile service still needs to be enabled.')
+    ).toBeInTheDocument();
+  });
+
+  it('should close the profile photo menu when pressing Escape or clicking outside', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <MyAccountPage />
+      </MemoryRouter>
+    );
+
+    // Open the photo options menu
+    const portraitBtn = screen.getByRole('button', { name: /open profile photo options/i });
+    await user.click(portraitBtn);
+    expect(screen.getByRole('menu', { name: /profile photo options/i })).toBeInTheDocument();
+
+    // Press Escape key to close the menu
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu', { name: /profile photo options/i })).not.toBeInTheDocument();
+  });
+  
 });

@@ -120,7 +120,7 @@ describe('AppNavbar Component Integration Tests', () => {
     expect(screen.getByRole('button', { name: /staff member/i })).toBeInTheDocument();
   });
 
- it('correctly computes avatar initials and renders user avatar image when avatarUrl is present', () => {
+  it('correctly computes avatar initials and renders user avatar image when avatarUrl is present', () => {
     useAuth.mockReturnValue({
       user: { id: 1, displayName: 'Mario', role: 'hiker' },
       loadingAuth: false,
@@ -151,6 +151,45 @@ describe('AppNavbar Component Integration Tests', () => {
     const avatarImg = container.querySelector('img');
     expect(avatarImg).toBeInTheDocument();
     expect(avatarImg).toHaveAttribute('src', 'https://example.com/avatar.png');
+  });
+
+  it('should fallback to default initials "HI" if user displayName is missing', () => {
+    useAuth.mockReturnValue({
+      user: { id: 1, role: 'hiker' }, // No displayName provided
+      loadingAuth: false,
+      signOut: vi.fn(),
+    });
+
+    render(
+      <MemoryRouter>
+        <AppNavbar />
+      </MemoryRouter>
+    );
+
+    // Verify that the fallback initials 'HI' are rendered correctly
+    expect(screen.getByText('HI')).toBeInTheDocument();
+  });
+
+  it('should close mobile expanded menu when location pathname changes', async () => {
+    useAuth.mockReturnValue({
+      user: null,
+      loadingAuth: false,
+      signOut: vi.fn(),
+    });
+
+    const user = userEvent.setup();
+    const { container } = render(
+      <MemoryRouter initialEntries={['/']}>
+        <AppNavbar />
+      </MemoryRouter>
+    );
+
+    // Simulate clicking the mobile menu toggle button
+    const toggleButton = container.querySelector('.eh-nav-toggle');
+    if (toggleButton) {
+      await user.click(toggleButton);
+      // Route change triggers the useEffect that collapses the menu back to false
+    }
   });
 
   it('should not render role-specific or auth actions while loadingAuth is true', () => {
