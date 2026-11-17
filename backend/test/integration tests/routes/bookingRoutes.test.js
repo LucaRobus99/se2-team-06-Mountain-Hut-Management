@@ -150,6 +150,12 @@ describe('BookingRoutes - Integration Tests (Complete Coverage)', () => {
 
       expect(response.status).toBe(401);
     });
+
+    it('should return 401 when trying to cancel a booking without being logged in', async () => {
+      const response = await request(app).delete('/api/bookings/1');
+      expect(response.status).toBe(401);
+      expect(response.body.error.code).toBe('UNAUTHENTICATED');
+    });
   });
 
   describe('POST /api/bookings & GET /api/bookings/:bookingId', () => {
@@ -214,6 +220,27 @@ describe('BookingRoutes - Integration Tests (Complete Coverage)', () => {
         .send({ slotId: secondFutureSlotId, partySize: 2 });
 
       expect([400, 404, 422]).toContain(response.status);
+    });
+  });
+
+  describe('DELETE /api/bookings/:bookingId - Cancel booking', () => {
+    it('should allow an authenticated hiker to cancel their booking successfully', async () => {
+      await agent
+        .post('/api/auth/login')
+        .send({ email: 'hiker@hut.test', password: 'password' });
+
+      const createResponse = await agent
+        .post('/api/bookings')
+        .send({
+          slotId: futureSlotId,
+          partySize: 2
+        });
+
+      expect(createResponse.status).toBe(201);
+      const bookingId = createResponse.body.id;
+
+      const deleteResponse = await agent.delete(`/api/bookings/${bookingId}`);
+      expect(deleteResponse.status).toBe(200);
     });
   });
 

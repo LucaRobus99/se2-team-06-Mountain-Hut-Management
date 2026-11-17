@@ -226,4 +226,25 @@ describe('bookingDao - White-Box Tests', () => {
       expect(result.get(2)).toEqual([]);
     });
   });
+  describe('cancelIfConfirmed', () => {
+    it('should return true when exactly one row is updated from confirmed to cancelled', async () => {
+      db.query.mockResolvedValue({ rowCount: 1 });
+
+      const success = await dao.cancelIfConfirmed(12);
+
+      expect(success).toBe(true);
+      const [sql, params] = db.query.mock.calls[0];
+      expect(sql).toContain("UPDATE bookings SET status = 'cancelled'");
+      expect(sql).toContain("status = 'confirmed'");
+      expect(params).toEqual([12]);
+    });
+
+    it('should return false when no rows are updated (e.g., already cancelled)', async () => {
+      db.query.mockResolvedValue({ rowCount: 0 });
+
+      const success = await dao.cancelIfConfirmed(12);
+
+      expect(success).toBe(false);
+    });
+  });
 });

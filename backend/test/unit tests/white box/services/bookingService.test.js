@@ -28,6 +28,7 @@ describe('bookingService - White-Box Tests', () => {
   beforeEach(() => {
     db = {
       transaction: vi.fn(async (callback) => callback('mock-tx')),
+      query: vi.fn().mockResolvedValue({ rows: [] }),
     };
 
     bookingDao = {
@@ -40,6 +41,8 @@ describe('bookingService - White-Box Tests', () => {
       replaceRequirements: vi.fn(),
       getRequirements: vi.fn().mockResolvedValue([]),
       getRequirementsByBookingIds: vi.fn().mockResolvedValue(new Map()),
+      update: vi.fn(),
+      cancelIfConfirmed: vi.fn(),
     };
 
     slotDao = {
@@ -254,7 +257,7 @@ describe('bookingService - White-Box Tests', () => {
       bookingDao.findById.mockResolvedValue({
         id: 150,
         status: 'confirmed',
-        hiker_id: 99, // Different hiker
+        hiker_id: 99,
         created_by: 1,
         slot_id: 101,
         slot_date: '2026-08-14',
@@ -315,7 +318,7 @@ describe('bookingService - White-Box Tests', () => {
 
   });
 
-  describe('Additional White-Box Coverage (Update & Staff Booking Validation)', () => {
+  describe('Additional White-Box Coverage (Update, Cancel & Staff Flows)', () => {
 
     it('should throw ValidationError in validateUpdateBody if body is not an object', async () => {
       await expect(
@@ -349,6 +352,91 @@ describe('bookingService - White-Box Tests', () => {
       await expect(
         bookingService.searchHikers(mockStaff, 'a'.repeat(105))
       ).rejects.toThrow(ValidationError);
+    });
+
+ 
+
+    it('should handle idempotent cancellation in cancelBooking if already cancelled', async () => {
+      db.transaction = vi.fn(async (cb) => cb('mock-tx'));
+
+      bookingDao.findById.mockResolvedValue({
+        id: 100,
+        status: 'cancelled',
+        hiker_id: 10,
+        slot_id: 101,
+        party_size: 2,
+        slot_date: '2026-08-25',
+        slot_start_time: '14:00',
+      });
+
+      slotDao.findById.mockResolvedValue({
+        id: 101,
+        status: 'booked',
+        date: '2026-08-25',
+        start_time: '14:00',
+      });
+
+      bookingDao.cancelIfConfirmed.mockResolvedValue(false);
+      bookingDao.getSeatAssignments.mockResolvedValue([]);
+      bookingDao.getRequirements.mockResolvedValue([]);
+
+      const result = await bookingService.cancelBooking(mockHiker, 100);
+      
+      expect(result.alreadyCancelled).toBe(true);
+      expect(bookingDao.cancelIfConfirmed).not.toHaveBeenCalled();
+    });
+
+    it('should successfully resolve newHiker mode in createStaffBooking', async () => {
+      slotDao.findById.mockResolvedValue({
+        id: 101,
+        status: 'available',
+        date: '2026-08-25',
+        start_time: '14:00',
+        meal: 'lunch',
+      });
+
+      userDao.findByEmail.mockResolvedValue(null);
+      userDao.createHiker.mockResolvedValue({
+        id: 55,
+        name: 'New Hiker',
+        email: 'new@example.com',
+        phone: '+393339998877',
+      });
+
+      slotDao.getTablesWithFreeForSlot.mockResolvedValue([
+        { id: 1, label: 'T1', seats: 4, free: 4 }
+      ]);
+
+      bookingDao.create.mockResolvedValue(200);
+      bookingDao.findById.mockResolvedValue({
+        id: 200,
+        status: 'confirmed',
+        hiker_id: 55,
+        created_by: 1,
+        slot_id: 101,
+        slot_date: '2026-08-25',
+        slot_start_time: '14:00',
+        party_size: 2,
+        contact_name: 'New Hiker',
+        email: 'new@example.com',
+        phone: '+393339998877',
+        created_at: '2026-08-14T07:05:00.000Z',
+      });
+      bookingDao.getSeatAssignments.mockResolvedValue([]);
+
+      const response = await bookingService.createStaffBooking(mockStaff, {
+        slotId: 101,
+        partySize: 2,
+        mode: 'newHiker',
+        name: 'New Hiker',
+        email: 'new@example.com',
+        phone: '+393339998877',
+      });
+
+      expect(response.mode).toBe('newHiker');
+      expect(response.account).toBeDefined();
+      expect(response.initialPassword).toBeDefined();
+      expect(userDao.createHiker).toHaveBeenCalled();
     });
 
   });

@@ -185,4 +185,41 @@ describe('BookingDao - Integration Tests', () => {
       expect(map.get(b2)).toEqual([]);
     });
   });
+  describe('cancelIfConfirmed', () => {
+    it('should successfully cancel a confirmed booking and return true', async () => {
+      const bookingId = await bookingDao.create({
+        slotId: 1,
+        hikerId: 3,
+        contactName: 'Hanna',
+        partySize: 2,
+      });
+
+      const success = await bookingDao.cancelIfConfirmed(bookingId);
+      expect(success).toBe(true);
+
+      const retrieved = await bookingDao.findById(bookingId);
+      expect(retrieved.status).toBe('cancelled');
+    });
+
+    it('should return false if the booking is already cancelled or does not exist', async () => {
+      const bookingId = await bookingDao.create({
+        slotId: 1,
+        hikerId: 3,
+        contactName: 'Hanna',
+        partySize: 2,
+      });
+
+      // Prima cancellazione (successo)
+      await bookingDao.cancelIfConfirmed(bookingId);
+
+      // Seconda cancellazione (fallisce perché non è più 'confirmed')
+      const successAgain = await bookingDao.cancelIfConfirmed(bookingId);
+      expect(successAgain).toBe(false);
+
+      // Tentativo su ID inesistente
+      const successNonExistent = await bookingDao.cancelIfConfirmed(9999);
+      expect(successNonExistent).toBe(false);
+    });
+  });
+  
 });

@@ -56,6 +56,10 @@ describe('bookingService - Black-Box Tests', () => {
       getRequirements: vi.fn().mockResolvedValue([]),
       getRequirementsByBookingIds: vi.fn().mockResolvedValue(new Map()),
       listByHiker: vi.fn(),
+      update: vi.fn(),
+      updateStatus: vi.fn(),
+      deleteSeats: vi.fn(),
+      cancelIfConfirmed: vi.fn(),
     };
 
     slotDao = {
@@ -439,6 +443,158 @@ describe('bookingService - Black-Box Tests', () => {
       ]);
     });
 
+  });
+
+  describe('updateBooking', () => {
+    it('should throw an UnauthorizedError if user is not authenticated', async () => {
+      await expect(
+        bookingService.updateBooking(null, 100, { partySize: 3 })
+      ).rejects.toThrow(UnauthorizedError);
+    });
+
+    it('should throw a NotFoundError if booking ID format is invalid', async () => {
+      await expect(
+        bookingService.updateBooking(mockHiker, 'invalid', { partySize: 3 })
+      ).rejects.toThrow(NotFoundError);
+    });
+
+    it('should throw a ValidationError if update body is empty or invalid', async () => {
+      bookingDao.findById.mockResolvedValue({
+        id: 100,
+        status: 'confirmed',
+        hiker_id: 10,
+        slot_id: 101,
+      });
+      slotDao.findById.mockResolvedValue({
+        id: 101,
+        status: 'available',
+        date: '2026-08-16',
+        start_time: '14:00',
+      });
+
+      await expect(
+        bookingService.updateBooking(mockHiker, 100, {})
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it('should successfully update a booking when valid parameters are provided', async () => {
+      bookingDao.findById
+        .mockResolvedValueOnce({
+          id: 100,
+          status: 'confirmed',
+          hiker_id: 10,
+          slot_id: 101,
+          party_size: 2,
+          slot_date: '2026-08-16',
+          slot_start_time: '14:00',
+          slot_end_time: '16:00',
+          meal: 'lunch',
+          contact_name: 'Mario Rossi',
+          email: 'mario.rossi@example.com',
+          phone: '123',
+          created_at: '2026-08-14T07:05:00.000Z',
+        })
+        .mockResolvedValueOnce({
+          id: 100,
+          status: 'confirmed',
+          hiker_id: 10,
+          slot_id: 101,
+          party_size: 3,
+          slot_date: '2026-08-16',
+          slot_start_time: '14:00',
+          slot_end_time: '16:00',
+          meal: 'lunch',
+          contact_name: 'Mario Rossi',
+          email: 'mario.rossi@example.com',
+          phone: '123',
+          created_at: '2026-08-14T07:05:00.000Z',
+        });
+
+      slotDao.findById.mockResolvedValue({
+        id: 101,
+        status: 'available',
+        date: '2026-08-16',
+        start_time: '14:00',
+        end_time: '16:00',
+        meal: 'lunch',
+      });
+
+      slotDao.getTablesWithFreeForSlot.mockResolvedValue([
+        { id: 1, label: 'T1', seats: 4, free: 4 }
+      ]);
+
+      bookingDao.getSeatAssignments.mockResolvedValue([
+        { tableId: 1, tableLabel: 'T1', seats: 3 }
+      ]);
+
+      const result = await bookingService.updateBooking(mockHiker, 100, { partySize: 3 });
+
+      expect(result.partySize).toBe(3);
+      expect(bookingDao.update).toHaveBeenCalled();
+    });
+  });
+
+  describe('cancelBooking', () => {
+    it('should throw an UnauthorizedError if user is not authenticated', async () => {
+      await expect(
+        bookingService.cancelBooking(null, 100)
+      ).rejects.toThrow(UnauthorizedError);
+    });
+
+    it('should throw a NotFoundError if booking ID format is invalid', async () => {
+      await expect(
+        bookingService.cancelBooking(mockHiker, 'invalid')
+      ).rejects.toThrow(NotFoundError);
+    });
+
+    it('should successfully cancel a confirmed booking', async () => {
+      bookingDao.findById
+        .mockResolvedValueOnce({
+          id: 100,
+          status: 'confirmed',
+          hiker_id: 10,
+          slot_id: 101,
+          party_size: 2,
+          slot_date: '2026-08-16',
+          slot_start_time: '14:00',
+          slot_end_time: '16:00',
+          meal: 'lunch',
+          contact_name: 'Mario Rossi',
+          email: 'mario.rossi@example.com',
+          phone: '123',
+          created_at: '2026-08-14T07:05:00.000Z',
+        })
+        .mockResolvedValueOnce({
+          id: 100,
+          status: 'cancelled',
+          hiker_id: 10,
+          slot_id: 101,
+          party_size: 2,
+          slot_date: '2026-08-16',
+          slot_start_time: '14:00',
+          slot_end_time: '16:00',
+          meal: 'lunch',
+          contact_name: 'Mario Rossi',
+          email: 'mario.rossi@example.com',
+          phone: '123',
+          created_at: '2026-08-14T07:05:00.000Z',
+        });
+
+      slotDao.findById.mockResolvedValue({
+        id: 101,
+        status: 'booked',
+        date: '2026-08-16',
+        start_time: '14:00',
+      });
+
+      bookingDao.cancelIfConfirmed.mockResolvedValue(true);
+      bookingDao.getSeatAssignments.mockResolvedValue([]);
+
+      const result = await bookingService.cancelBooking(mockHiker, 100);
+
+      expect(result.status).toBe('cancelled');
+      expect(result.alreadyCancelled).toBe(false);
+    });
   });
 
   describe('listBookings & checkSlotBooking (Additional Black-Box Coverage)', () => {
