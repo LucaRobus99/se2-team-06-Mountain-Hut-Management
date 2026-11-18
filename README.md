@@ -59,6 +59,51 @@ Open **http://localhost:8081**. This builds the backend and frontend images and 
 
 The Product Owner runs the **published** images from Docker Hub (`jenissevereau/mountain-hut-backend`, `jenissevereau/mountain-hut-frontend`) with [`deploy/compose.yaml`](deploy/compose.yaml) only; see [`deploy/README.md`](deploy/README.md). Images are built and pushed by [`.github/workflows/release.yml`](.github/workflows/release.yml) when a `v*` or `sprint-*` tag is pushed. If the SQL scripts changed since the previous release, the generated release notes tell the PO to run `docker compose down -v` (demo data is lost).
 
+## Build and push the images to Docker Hub
+
+### Manual way
+
+Requires Docker with `buildx` (included in Docker Desktop) and an account with push rights on the `jenissevereau` namespace. Run from the repository root and set the version once:
+
+```bash
+export VERSION=v1.0.0
+```
+
+1. Log in (paste an access token when asked for the password):
+
+   ```bash
+   docker login -u <your_username>
+   ```
+
+2. Create a multi-platform builder (first time only):
+
+   ```bash
+   docker buildx create --name mountain-hut --use
+   ```
+
+3. Build and push the backend:
+
+   ```bash
+   docker buildx build --platform linux/amd64,linux/arm64 -t jenissevereau/mountain-hut-backend:$VERSION -t jenissevereau/mountain-hut-backend:latest --push ./backend
+   ```
+
+4. Build and push the frontend:
+
+   ```bash
+   docker buildx build --platform linux/amd64,linux/arm64 -t jenissevereau/mountain-hut-frontend:$VERSION -t jenissevereau/mountain-hut-frontend:latest --push ./frontend
+   ```
+
+5. Check that both platforms were published:
+
+   ```bash
+   docker buildx imagetools inspect jenissevereau/mountain-hut-frontend:$VERSION
+   ```
+   ```bash
+   docker buildx imagetools inspect jenissevereau/mountain-hut-backend:$VERSION
+   ```
+
+Note : A manual push does not run the tests or create the GitHub Release. Run the tests first (see [Tests and build](#tests-and-build)), and tell the Product Owner which version to use, including whether `docker compose down -v` is needed because the SQL scripts changed.
+
 ## Create demo meal slots (optional)
 
 `backend/scripts/populate-slots.mjs` adds future meal slots without overwriting reservations, existing slots or their capacity. Stop the backend first, then from `backend/`:

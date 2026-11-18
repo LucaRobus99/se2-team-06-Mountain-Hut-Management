@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { configurePassport } from '../../../../src/auth/passport.js';
+import { configurePassport, sanitizeUser } from '../../../../src/auth/passport.js';
 import { verifyPassword } from '../../../../src/services/password.js';
 
 // Mock the password verification utility
@@ -7,7 +7,7 @@ vi.mock('../../../../src/services/password.js', () => ({
   verifyPassword: vi.fn(),
 }));
 
-describe('passport - White-Box Tests', () => {
+describe('passport - White-Box Tests (Maximum Coverage)', () => {
   let userDao;
   let passportInstance;
 
@@ -22,9 +22,9 @@ describe('passport - White-Box Tests', () => {
     passportInstance = configurePassport({ userDao });
   });
 
-  describe('configurePassport - Local Strategy verification callback', () => {
+  describe('configurePassport - Local Strategy verification callback (White-Box)', () => {
 
-    it('should successfully authenticate user when credentials are valid', async () => {
+    it('should successfully authenticate user when credentials are valid, trimming email whitespace', async () => {
       const mockUser = {
         id: 10,
         email: 'test@hut.test',
@@ -37,12 +37,11 @@ describe('passport - White-Box Tests', () => {
       userDao.findByEmail.mockResolvedValue(mockUser);
       verifyPassword.mockReturnValue(true);
 
-      // Passport stores strategies in an object dictionary (_strategies)
       const localStrategy = passportInstance._strategies['local'];
       expect(localStrategy).toBeDefined();
 
       const done = vi.fn();
-      await localStrategy._verify('test@hut.test', 'CorrectPassword123!', done);
+      await localStrategy._verify('  test@hut.test   ', 'CorrectPassword123!', done);
 
       expect(userDao.findByEmail).toHaveBeenCalledWith('test@hut.test');
       expect(verifyPassword).toHaveBeenCalledWith('valid_hash', 'CorrectPassword123!');
@@ -55,7 +54,7 @@ describe('passport - White-Box Tests', () => {
       });
     });
 
-    it('should fail authentication if user is not found by email', async () => {
+    it('should fail authentication if user is not found by email (null return)', async () => {
       userDao.findByEmail.mockResolvedValue(null);
 
       const localStrategy = passportInstance._strategies['local'];
@@ -93,75 +92,97 @@ describe('passport - White-Box Tests', () => {
 
   });
 
-  describe('configurePassport - Session Serialization & Deserialization', () => {
+  describe('configurePassport - Session Serialization & Deserialization (White-Box)', () => {
 
-    it('should serialize user ID into session', async () => {
+    it('should serialize user ID into session correctly', async () => {
       const user = { id: 42, email: 'user@hut.test' };
-      const done = vi.fn();
 
-      // Passport exposes a serializeUser method wrapper or internal array
-      // We can invoke passport.serializeUser callback or test via the instance implementation
-      // Let's test by capturing through a wrapper or checking the internal serializer array/function
-      const serializeFn = passportInstance._serializers ? passportInstance._serializers[0] : null;
-      
-      if (serializeFn) {
-        await serializeFn(user, done);
-        expect(done).toHaveBeenCalledWith(null, 42);
-      } else {
-        // Fallback test structure if internal structure differs
-        expect(passportInstance).toBeDefined();
-      }
+      await new Promise((resolve) => {
+        passportInstance.serializeUser(user, (err, id) => {
+          expect(err).toBeNull();
+          expect(id).toBe(42);
+          resolve();
+        });
+      });
     });
 
-    it('should deserialize user by ID from session successfully', async () => {
-      const mockUser = { id: 42, email: 'user@hut.test', name: 'Serialized', role: 'hiker' };
-      userDao.findById.mockResolvedValue(mockUser);
+    it('should deserialize user by ID from session successfully including complex optional sanitizations', async () => {
+      const mockRichUser = {
+        id: 42,
+        email: 'user@hut.test',
+        name: 'Serialized Rich User',
+        role: 'staff',
+        phone: '+393330000000',
+        notes: undefined, // Exercises hasOwnProperty branch with falsy/undefined values
+        emergency_contact: '112',
+        avatar_mime: 'image/png',
+        // avatar_version omitted intentionally to test `Number(user.avatar_version) || 0` fallback to 0
+        password_change_required: true,
+      };
+      userDao.findById.mockResolvedValue(mockRichUser);
 
-      const done = vi.fn();
-      const deserializeFn = passportInstance._deserializers ? passportInstance._deserializers[0] : null;
-
-      if (deserializeFn) {
-        await deserializeFn(42, done);
-        expect(userDao.findById).toHaveBeenCalledWith(42);
-        expect(done).toHaveBeenCalledWith(null, {
-          id: 42,
-          email: 'user@hut.test',
-          displayName: 'Serialized',
-          role: 'hiker',
-          phone: null,
+      await new Promise((resolve) => {
+        passportInstance.deserializeUser(42, (err, user) => {
+          expect(err).toBeNull();
+          expect(userDao.findById).toHaveBeenCalledWith(42);
+          expect(user).toEqual({
+            id: 42,
+            email: 'user@hut.test',
+            displayName: 'Serialized Rich User',
+            role: 'staff',
+            phone: '+393330000000',
+            notes: null,
+            emergencyContact: '112',
+            avatarUrl: '/api/auth/avatar?v=0',
+            passwordChangeRequired: true,
+          });
+          resolve();
         });
-      } else {
-        expect(passportInstance).toBeDefined();
-      }
+      });
     });
 
     it('should return false during deserialization if user is no longer found in DB', async () => {
       userDao.findById.mockResolvedValue(null);
 
-      const done = vi.fn();
-      const deserializeFn = passportInstance._deserializers ? passportInstance._deserializers[0] : null;
-
-      if (deserializeFn) {
-        await deserializeFn(999, done);
-        expect(done).toHaveBeenCalledWith(null, false);
-      } else {
-        expect(passportInstance).toBeDefined();
-      }
+      await new Promise((resolve) => {
+        passportInstance.deserializeUser(999, (err, user) => {
+          expect(err).toBeNull();
+          expect(user).toBe(false);
+          resolve();
+        });
+      });
     });
 
     it('should handle errors during deserialization if DAO throws', async () => {
-      const dbError = new Error('Query error');
+      const dbError = new Error('Query error during deserialization');
       userDao.findById.mockRejectedValue(dbError);
 
-      const done = vi.fn();
-      const deserializeFn = passportInstance._deserializers ? passportInstance._deserializers[0] : null;
+      await new Promise((resolve) => {
+        passportInstance.deserializeUser(42, (err, user) => {
+          expect(err).toBe(dbError);
+          expect(user).toBeUndefined();
+          resolve();
+        });
+      });
+    });
 
-      if (deserializeFn) {
-        await deserializeFn(42, done);
-        expect(done).toHaveBeenCalledWith(dbError);
-      } else {
-        expect(passportInstance).toBeDefined();
-      }
+  });
+
+  describe('sanitizeUser - Deep White-Box Property Checks', () => {
+    
+    it('should omit notes and emergency_contact if properties are entirely absent from raw user object', () => {
+      const minimalUser = {
+        id: 99,
+        email: 'min@hut.test',
+        name: 'Minimal User',
+        role: 'hiker',
+      };
+
+      const result = sanitizeUser(minimalUser);
+      expect(result).not.toHaveProperty('notes');
+      expect(result).not.toHaveProperty('emergencyContact');
+      expect(result).not.toHaveProperty('avatarUrl');
+      expect(result).not.toHaveProperty('passwordChangeRequired');
     });
 
   });

@@ -11,8 +11,8 @@ services:
     image: postgres:17-alpine
     environment:
       POSTGRES_DB: mountain_hut
-      POSTGRES_USER: ${POSTGRES_USER:-mountain_hut}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mountain_hut_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -29,7 +29,7 @@ services:
     build: ./backend
     image: jenissevereau/mountain-hut-backend:dev
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-mountain_hut}:${POSTGRES_PASSWORD:-mountain_hut_dev}@db:5432/mountain_hut
+      DATABASE_URL: postgres://${POSTGRES_USER:-}:${POSTGRES_PASSWORD:-}@db:5432/mountain_hut
       SESSION_SECRET: ${SESSION_SECRET:-dev-only-session-secret-change-me}
       COOKIE_SECURE: "false"
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8081}
@@ -47,7 +47,7 @@ services:
     build: ./frontend
     image: jenissevereau/mountain-hut-frontend:dev
     ports:
-      - "${APP_PORT:-8081}:80"
+      - "${APP_PORT:-8081}:8080"
     depends_on:
       - backend
     networks: [edge]

@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createBookingService } from '../../../../src/services/bookingService.js';
-import { ValidationError, AppError, NotFoundError } from '../../../../src/errors/AppError.js';
+import { ValidationError, AppError, NotFoundError, ConflictError } from '../../../../src/errors/AppError.js';
 
 describe('bookingService - White-Box Tests', () => {
   let db;
   let bookingDao;
   let slotDao;
+  let userDao;
   let bookingService;
   const timeZone = 'Europe/Rome';
   const fixedNow = new Date('2026-08-14T07:00:00.000Z');
@@ -46,10 +47,18 @@ describe('bookingService - White-Box Tests', () => {
       getTablesWithFreeForSlot: vi.fn(),
     };
 
+    userDao = {
+      findById: vi.fn(),
+      findByEmail: vi.fn(),
+      createHiker: vi.fn(),
+      searchHikers: vi.fn(),
+    };
+
     bookingService = createBookingService({
       db,
       bookingDao,
       slotDao,
+      userDao,
       timeZone,
       now: () => fixedNow,
     });
@@ -262,6 +271,84 @@ describe('bookingService - White-Box Tests', () => {
 
       const result = await bookingService.getBooking(150, mockStaff);
       expect(result.id).toBe(150);
+    });
+
+  });
+
+  describe('Internal Party Requirements & Validation Branches', () => {
+
+    it('should throw ValidationError if requirements is not an array', async () => {
+      slotDao.findById.mockResolvedValue({ 
+        id: 101, status: 'available', start_time: '14:00', date: '2026-08-14' 
+      });
+
+      await expect(
+        bookingService.createBooking(mockHiker, { 
+          slotId: 101, 
+          partySize: 2, 
+          requirements: 'not-an-array' 
+        })
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it('should throw ValidationError if a requirement entry is not a valid object or has invalid description/allergies', async () => {
+      slotDao.findById.mockResolvedValue({ 
+        id: 101, status: 'available', start_time: '14:00', date: '2026-08-14' 
+      });
+
+      await expect(
+        bookingService.createBooking(mockHiker, { 
+          slotId: 101, 
+          partySize: 2, 
+          requirements: [null] 
+        })
+      ).rejects.toThrow(ValidationError);
+
+      await expect(
+        bookingService.createBooking(mockHiker, { 
+          slotId: 101, 
+          partySize: 2, 
+          requirements: [{ description: 'a'.repeat(501), allergies: true }] 
+        })
+      ).rejects.toThrow(ValidationError);
+    });
+
+  });
+
+  describe('Additional White-Box Coverage (Update & Staff Booking Validation)', () => {
+
+    it('should throw ValidationError in validateUpdateBody if body is not an object', async () => {
+      await expect(
+        bookingService.updateBooking(mockHiker, 100, null)
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it('should throw ValidationError in validateUpdateBody if no fields are provided for update', async () => {
+      await expect(
+        bookingService.updateBooking(mockHiker, 100, {})
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it('should throw NotFoundError if booking ID is null or invalid in updateBooking', async () => {
+      await expect(
+        bookingService.updateBooking(mockHiker, 'invalid', { partySize: 3 })
+      ).rejects.toThrow(NotFoundError);
+    });
+
+    it('should throw UnauthorizedError if createStaffBooking is called without user or non-staff', async () => {
+      await expect(
+        bookingService.createStaffBooking(mockHiker, { mode: 'guest', slotId: 101, partySize: 2, contactName: 'Guest' })
+      ).rejects.toThrow();
+    });
+
+    it('should throw ValidationError in searchHikers if query is too short or too long', async () => {
+      await expect(
+        bookingService.searchHikers(mockStaff, 'a')
+      ).rejects.toThrow(ValidationError);
+
+      await expect(
+        bookingService.searchHikers(mockStaff, 'a'.repeat(105))
+      ).rejects.toThrow(ValidationError);
     });
 
   });

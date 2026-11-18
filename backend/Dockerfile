@@ -8,7 +8,7 @@ WORKDIR /app
 
 # Production dependencies only (PGlite, Vitest, Supertest are dev-only).
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 # scripts/*.sql are applied by the backend on first start against an empty database.
 COPY src ./src

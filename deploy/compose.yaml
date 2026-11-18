@@ -48,7 +48,7 @@ services:
   frontend:
     image: jenissevereau/mountain-hut-frontend:${MOUNTAIN_HUT_VERSION:-latest}
     ports:
-      - "${APP_PORT:-8081}:80"
+      - "${APP_PORT:-8081}:8080"
     depends_on:
       - backend
     networks: [edge]

@@ -11,7 +11,8 @@ describe('AvailabilityRoutes - Integration Tests', () => {
     // Initialize a clean test database (PostgreSQL) with schema and seed data
     db = createTestDb();
     // Create the Express app injecting the test database
-    app = createApp({ db });
+    // Pin the clock before the seed slots (2026-11-15) so they are still bookable.
+    app = createApp({ db, now: () => new Date('2026-11-14T08:00:00.000Z') });
   });
 
   afterEach(async () => {

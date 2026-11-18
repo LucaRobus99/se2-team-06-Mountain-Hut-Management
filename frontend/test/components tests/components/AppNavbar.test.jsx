@@ -52,6 +52,55 @@ describe('AppNavbar Component Integration Tests', () => {
     // Verify user display name appears in the dropdown toggle title
     expect(screen.getByRole('button', { name: /mario rossi/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /^my bookings$/i })).toHaveAttribute('href', '/my-bookings');
+    expect(screen.getByRole('link', { name: /book a table/i })).toHaveAttribute('href', '/book');
+  });
+
+  it('should render correct booking link pointing to /availability for non-hiker users', () => {
+    useAuth.mockReturnValue({
+      user: { id: 2, displayName: 'Staff Member', role: 'employee' },
+      loadingAuth: false,
+      signOut: vi.fn(),
+    });
+
+    render(
+      <MemoryRouter>
+        <AppNavbar />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('link', { name: /book a table/i })).toHaveAttribute('href', '/availability');
+  });
+
+  it('should render "My Bookings" in the main navigation bar exclusively for authenticated hikers', () => {
+    useAuth.mockReturnValue({
+      user: { id: 1, displayName: 'Mario Rossi', role: 'hiker' },
+      loadingAuth: false,
+      signOut: vi.fn(),
+    });
+
+    const { rerender } = render(
+      <MemoryRouter>
+        <AppNavbar />
+      </MemoryRouter>
+    );
+
+    const myBookingsLink = screen.getByRole('link', { name: /^my bookings$/i });
+    expect(myBookingsLink).toBeInTheDocument();
+    expect(myBookingsLink).toHaveAttribute('href', '/my-bookings');
+
+    useAuth.mockReturnValue({
+      user: { id: 2, displayName: 'Staff Member', role: 'employee' },
+      loadingAuth: false,
+      signOut: vi.fn(),
+    });
+
+    rerender(
+      <MemoryRouter>
+        <AppNavbar />
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByRole('link', { name: /^my bookings$/i })).not.toBeInTheDocument();
   });
 
   it('should render employee user account info correctly when logged in as an employee or warden', () => {
@@ -69,6 +118,57 @@ describe('AppNavbar Component Integration Tests', () => {
 
     // Verify staff user display name appears in the dropdown toggle title
     expect(screen.getByRole('button', { name: /staff member/i })).toBeInTheDocument();
+  });
+
+ it('correctly computes avatar initials and renders user avatar image when avatarUrl is present', () => {
+    useAuth.mockReturnValue({
+      user: { id: 1, displayName: 'Mario', role: 'hiker' },
+      loadingAuth: false,
+      signOut: vi.fn(),
+    });
+
+    const { container, rerender } = render(
+      <MemoryRouter>
+        <AppNavbar />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('M')).toBeInTheDocument();
+
+    // Test with avatarUrl provided
+    useAuth.mockReturnValue({
+      user: { id: 1, displayName: 'Mario Rossi', role: 'hiker', avatarUrl: 'https://example.com/avatar.png' },
+      loadingAuth: false,
+      signOut: vi.fn(),
+    });
+
+    rerender(
+      <MemoryRouter>
+        <AppNavbar />
+      </MemoryRouter>
+    );
+
+    const avatarImg = container.querySelector('img');
+    expect(avatarImg).toBeInTheDocument();
+    expect(avatarImg).toHaveAttribute('src', 'https://example.com/avatar.png');
+  });
+
+  it('should not render role-specific or auth actions while loadingAuth is true', () => {
+    useAuth.mockReturnValue({
+      user: null,
+      loadingAuth: true,
+      signOut: vi.fn(),
+    });
+
+    render(
+      <MemoryRouter>
+        <AppNavbar />
+      </MemoryRouter>
+    );
+
+    // During loading, neither login/register nor user dropdown should be rendered in the actions area
+    expect(screen.queryByRole('link', { name: /^log in$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^register$/i })).not.toBeInTheDocument();
   });
 
   it('should call signOut and handle successful logout flow', async () => {
