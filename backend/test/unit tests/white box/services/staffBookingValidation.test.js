@@ -125,4 +125,37 @@ describe('staffBookingValidation - White-Box Tests', () => {
 
   });
 
+  describe('Missing Mode and Length Limit Branches (tooLong)', () => {
+    
+    it('should add required error for mode if mode is missing entirely', () => {
+      expect(() => validateStaffBookingBody({
+        slotId: 1,
+        partySize: 2,
+        unknownField: true,
+      })).toThrow(ValidationError);
+    });
+
+    it('should trigger tooLong branch if requiredText or optionalText exceeds maximum allowed length', () => {
+      // contactName in guest mode ha un limite di 100 caratteri
+      expect(() => validateStaffBookingBody({
+        mode: 'guest',
+        slotId: 1,
+        partySize: 2,
+        contactName: 'A'.repeat(105), // Supera max 100
+      })).toThrow(ValidationError);
+
+      // notes in newHiker mode ha un limite di 1000 caratteri
+      expect(() => validateStaffBookingBody({
+        mode: 'newHiker',
+        slotId: 5,
+        partySize: 2,
+        name: 'Jane Doe',
+        email: 'jane@example.org',
+        phone: '+393331112233',
+        notes: 'A'.repeat(1005), // Supera max 1000
+      })).toThrow(ValidationError);
+    });
+
+  });
+
 });

@@ -151,4 +151,75 @@ describe('staffBookingValidation - Black-Box Tests', () => {
 
   });
 
+  describe('Edge Cases, Types, and Length Limits', () => {
+    
+    it('should throw ValidationError if required text fields are not strings (e.g. numbers or objects)', () => {
+      expect(() => validateStaffBookingBody({
+        mode: 'guest',
+        slotId: 1,
+        partySize: 2,
+        contactName: 12345, // Numero invece di stringa
+      })).toThrow(ValidationError);
+
+      expect(() => validateStaffBookingBody({
+        mode: 'newHiker',
+        slotId: 1,
+        partySize: 2,
+        name: { first: 'John' }, // Oggetto invece di stringa
+        email: 'test@example.com',
+        phone: '12345678',
+      })).toThrow(ValidationError);
+    });
+
+    it('should throw ValidationError if phone or email exceed their maximum lengths in newHiker mode', () => {
+      expect(() => validateStaffBookingBody({
+        mode: 'newHiker',
+        slotId: 1,
+        partySize: 2,
+        name: 'User',
+        email: 'a'.repeat(250) + '@example.com', // Supera 255 caratteri
+        phone: '12345678',
+      })).toThrow(ValidationError);
+
+      expect(() => validateStaffBookingBody({
+        mode: 'newHiker',
+        slotId: 1,
+        partySize: 2,
+        name: 'User',
+        email: 'a@example.com',
+        phone: '1'.repeat(35), // Supera 30 caratteri
+        emergencyContact: 'A'.repeat(205), // Supera 200 caratteri
+      })).toThrow(ValidationError);
+    });
+
+    it('should throw ValidationError if newHiker phone format is invalid (< 6 digits)', () => {
+      expect(() => validateStaffBookingBody({
+        mode: 'newHiker',
+        slotId: 1,
+        partySize: 2,
+        name: 'User',
+        email: 'a@example.com',
+        phone: '12345', // Meno di 6 cifre
+      })).toThrow(ValidationError);
+    });
+
+    it('should treat whitespace-only optional text as absent (null)', () => {
+      const payload = {
+        mode: 'newHiker',
+        slotId: 1,
+        partySize: 2,
+        name: 'User',
+        email: 'user@example.com',
+        phone: '12345678',
+        notes: '   ', // Solo spazi -> opzionale vuoto
+        emergencyContact: null,
+      };
+
+      const result = validateStaffBookingBody(payload);
+      expect(result.account.notes).toBeNull();
+      expect(result.account.emergencyContact).toBeNull();
+    });
+
+  });
+
 });
