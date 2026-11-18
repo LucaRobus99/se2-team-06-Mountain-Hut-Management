@@ -11,7 +11,7 @@ function cookieOptions() {
   return {
     httpOnly: true,
     sameSite: 'lax',
-    secure: config.isProduction,
+    secure: config.cookieSecure,
     path: '/',
   };
 }

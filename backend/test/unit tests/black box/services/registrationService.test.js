@@ -65,7 +65,7 @@ describe('registrationService - Black-Box Tests', () => {
       };
 
       userDao.findByEmail.mockResolvedValue(null);
-      userDao.createHiker.mockRejectedValue(new Error('UNIQUE constraint failed: users.email'));
+      userDao.createHiker.mockRejectedValue(Object.assign(new Error('duplicate key value violates unique constraint "users_email_key"'), { code: '23505', constraint: 'users_email_key' }));
 
       try {
         await registrationService.registerHiker(inputBody);

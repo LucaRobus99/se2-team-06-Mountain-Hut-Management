@@ -1,0 +1,62 @@
+# Development stack: builds the backend and frontend images from this repository.
+#   docker compose up --build        → http://localhost:8081
+#   docker compose down -v           → also deletes the database (fresh seed on next start)
+#
+# The Product Owner uses deploy/compose.yaml instead, which pulls the published
+# images from Docker Hub (jenissevereau/mountain-hut-*) and needs no source code.
+name: mountain-hut-dev
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: mountain_hut
+      POSTGRES_USER: ${POSTGRES_USER:-}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d mountain_hut"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # Uncomment to inspect the database from the host (psql, DBeaver, ...).
+    # ports:
+    #   - "5432:5432"
+    networks: [data]
+
+  backend:
+    build: ./backend
+    image: jenissevereau/mountain-hut-backend:dev
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-}:${POSTGRES_PASSWORD:-}@db:5432/mountain_hut
+      SESSION_SECRET: ${SESSION_SECRET:-dev-only-session-secret-change-me}
+      COOKIE_SECURE: "false"
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8081}
+      HUT_TIMEZONE: ${HUT_TIMEZONE:-Europe/Rome}
+      MAILGUN_API_KEY: ${MAILGUN_API_KEY:-}
+      MAILGUN_DOMAIN: ${MAILGUN_DOMAIN:-}
+      MAILGUN_FROM: ${MAILGUN_FROM:-}
+      MAILGUN_URL: ${MAILGUN_URL:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [edge, data]
+
+  frontend:
+    build: ./frontend
+    image: jenissevereau/mountain-hut-frontend:dev
+    ports:
+      - "${APP_PORT:-8081}:8080"
+    depends_on:
+      - backend
+    networks: [edge]
+
+volumes:
+  pgdata:
+
+networks:
+  edge: {}
+  # Only the backend can reach the database; the db has no route to the internet.
+  data:
+    internal: true

@@ -110,11 +110,11 @@ export function createUserDao(db) {
            AND (lower(name) LIKE $1 ESCAPE '\\'
              OR lower(email) LIKE $1 ESCAPE '\\'
              OR lower(coalesce(phone, '')) LIKE $1 ESCAPE '\\'
-             OR ($2 IS NOT NULL AND
+             OR ($2::text IS NOT NULL AND
                  replace(replace(replace(replace(replace(replace(replace(
                    coalesce(phone, ''),
                    ' ', ''), '-', ''), '(', ''), ')', ''), '.', ''), '+', ''), '/', '')
-                 LIKE $2 ESCAPE '\\'))
+                 LIKE $2::text ESCAPE '\\'))
          ORDER BY lower(name), id
          LIMIT $3`,
         [like, digitsLike, limit]

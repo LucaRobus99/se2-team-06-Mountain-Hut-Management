@@ -3,7 +3,7 @@ import request from 'supertest';
 import { createApp } from '../../../src/app.js';
 import { createTestDb } from '../helpers/dbHelper.js';
 
-describe('BookingRoutes - Integration Tests (Complete Coverage)', () => {
+describe('BookingRoutes - Integration Tests', () => {
   let db;
   let app;
   let agent;
@@ -11,8 +11,11 @@ describe('BookingRoutes - Integration Tests (Complete Coverage)', () => {
   let secondFutureSlotId;
 
   beforeEach(async () => {
+    // Initialize a clean test database (PostgreSQL) with schema and seed data
     db = createTestDb();
+    // Create the Express app injecting the test database
     app = createApp({ db });
+    // Create a Supertest agent to maintain session cookies across requests
     agent = request.agent(app);
 
     // Creiamo dinamicamente uno slot nel futuro (es. 2027-06-15) per evitare qualsiasi blocco temporale (48h / slot passati)
@@ -42,6 +45,7 @@ describe('BookingRoutes - Integration Tests (Complete Coverage)', () => {
   });
 
   afterEach(async () => {
+    // Close the database connection after each test
     await db.close();
   });
 
@@ -87,17 +91,17 @@ describe('BookingRoutes - Integration Tests (Complete Coverage)', () => {
         { description: '1 vegetarian guest', allergies: false },
         { description: '1 peanut allergy', allergies: true },
       ]);
+      expect(booking.seatAssignments.length).toBeGreaterThan(0);
     });
   });
 
   describe('GET /api/bookings/slot-status - preflight duplicate check', () => {
-    it('requires a session and handles slot validation correctly', async () => {
-      // Richiesta anonima -> si attende 401 per via del middleware requireAuth
+    it('requires a session and a valid slot ID', async () => {
       const anonymous = await request(app).get(`/api/bookings/slot-status?slotId=${futureSlotId}`);
       expect(anonymous.status).toBe(401);
 
       await agent.post('/api/auth/login').send({ email: 'hiker@hut.test', password: 'password' });
-      
+
       const invalid = await agent.get('/api/bookings/slot-status?slotId=invalid');
       expect([400, 422]).toContain(invalid.status);
     });
@@ -108,26 +112,22 @@ describe('BookingRoutes - Integration Tests (Complete Coverage)', () => {
       expect(before.status).toBe(200);
       expect(before.body).toEqual({ alreadyBooked: false });
 
-      const created = await agent.post('/api/bookings').send({
-        slotId: futureSlotId,
-        partySize: 2
-      });
+      const created = await agent.post('/api/bookings').send({ slotId: futureSlotId, partySize: 2 });
       expect(created.status).toBe(201);
 
       const after = await agent.get(`/api/bookings/slot-status?slotId=${futureSlotId}`);
       expect(after.status).toBe(200);
       expect(after.body).toEqual({ alreadyBooked: true });
 
-      const duplicate = await agent.post('/api/bookings').send({
-        slotId: futureSlotId,
-        partySize: 2
-      });
+      // The POST still independently protects the booking from duplicate submissions.
+      const duplicate = await agent.post('/api/bookings').send({ slotId: futureSlotId, partySize: 2 });
       expect(duplicate.status).toBe(409);
       expect(duplicate.body.error.code).toBe('BOOKING_ALREADY_EXISTS');
     });
   });
 
   describe('Authentication requirements', () => {
+    
     it('should return 401 when trying to create a booking without being logged in', async () => {
       const response = await request(app)
         .post('/api/bookings')
@@ -149,17 +149,26 @@ describe('BookingRoutes - Integration Tests (Complete Coverage)', () => {
         .send({ slotId: futureSlotId, partySize: 2 });
 
       expect(response.status).toBe(401);
+      expect(response.body.error.code).toBe('UNAUTHENTICATED');
     });
+
   });
 
   describe('POST /api/bookings & GET /api/bookings/:bookingId', () => {
+    
     it('should allow an authenticated hiker to create a booking and then retrieve it', async () => {
+      // Step 1: Login as a hiker from the seed data (e.g., Hanna Hiker)
       const loginResponse = await agent
         .post('/api/auth/login')
-        .send({ email: 'hiker@hut.test', password: 'password' });
+        .send({
+          email: 'hiker@hut.test',
+          password: 'password'
+        });
 
       expect(loginResponse.status).toBe(200);
 
+      // Step 2: Create a new booking using the authenticated agent
+      // Slot ID 3 is available in the seed data for hut 1
       const createResponse = await agent
         .post('/api/bookings')
         .send({
@@ -173,7 +182,9 @@ describe('BookingRoutes - Integration Tests (Complete Coverage)', () => {
       
       const createdBookingId = createResponse.body.id;
 
-      const getResponse = await agent.get(`/api/bookings/${createdBookingId}`);
+      // Step 3: Retrieve the newly created booking using the same agent
+      const getResponse = await agent
+        .get(`/api/bookings/${createdBookingId}`);
 
       expect(getResponse.status).toBe(200);
       expect(getResponse.body).toHaveProperty('id', createdBookingId);
@@ -218,28 +229,36 @@ describe('BookingRoutes - Integration Tests (Complete Coverage)', () => {
   });
 
   describe('Edge cases and error handling', () => {
+
     it('should return 400 or error status when trying to create a booking with invalid payload/slot', async () => {
+      // Login first as a hiker
       await agent
         .post('/api/auth/login')
         .send({ email: 'hiker@hut.test', password: 'password' });
 
+      // Send invalid booking payload (e.g. non-existent slot or missing partySize)
       const response = await agent
         .post('/api/bookings')
         .send({ slotId: 9999, partySize: -5 });
 
+      // Expecting a client error status (400, 404, or 422 depending on business validation)
       expect([400, 404, 422, 409]).toContain(response.status);
       expect(response.body).toHaveProperty('error');
     });
 
     it('should return 404 when fetching a non-existent booking ID', async () => {
+      // Login first
       await agent
         .post('/api/auth/login')
         .send({ email: 'hiker@hut.test', password: 'password' });
 
-      const response = await agent.get('/api/bookings/999999');
+      const response = await agent
+        .get('/api/bookings/999999');
 
       expect(response.status).toBe(404);
       expect(response.body).toHaveProperty('error');
     });
+
   });
+
 });

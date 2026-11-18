@@ -9,7 +9,7 @@ describe('AuthRoutes - Integration Tests (Extended Coverage)', () => {
   let agent;
 
   beforeEach(() => {
-    // Initialize a clean in-memory SQLite database with schema and seed data
+    // Initialize a clean test database (PostgreSQL) with schema and seed data
     db = createTestDb();
     // Create the Express app injecting the test database
     app = createApp({ db });

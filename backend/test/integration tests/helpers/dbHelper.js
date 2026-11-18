@@ -1,4 +1,2 @@
-import { createSqliteDb } from '../../../src/db/sqlite.js';
-export function createTestDb() {
-  return createSqliteDb(':memory:');
-}
+// Fresh test database (embedded PostgreSQL) with schema and seed data.
+export { createTestDb } from '../../helpers/testDb.js';
