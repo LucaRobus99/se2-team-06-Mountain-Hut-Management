@@ -78,7 +78,7 @@ export function createBookingDao(db) {
     /**
      * MH-08: cancel only if the booking is still confirmed. Returns true when
      * this call performed the transition, false when it was already cancelled.
-     * The condition is evaluated by SQLite, so two concurrent cancellations
+     * The condition is evaluated by the database, so two concurrent cancellations
      * cannot both free the seats.
      */
     async cancelIfConfirmed(...args) {
@@ -116,54 +116,11 @@ export function createBookingDao(db) {
     },
 
 
-
-    /** MH-06: update the mutable fields (slot and party size) of a booking. */
-    async update(...args) {
-      const { db: exec, args: a } = executorOf(args);
-      const bookingId = a[0];
-      const booking = a[1] ?? {};
-      await exec.query(
-        `UPDATE bookings SET slot_id = $2, party_size = $3 WHERE id = $1`,
-        [bookingId, booking.slotId, booking.partySize]
-      );
-    },
-
-    /** MH-08 (later MH-15/MH-17): change the status, e.g. to 'cancelled'. */
-    async updateStatus(...args) {
-      const { db: exec, args: a } = executorOf(args);
-      await exec.query(`UPDATE bookings SET status = $2 WHERE id = $1`, [a[0], a[1]]);
-    },
-
-    /** MH-06: release the seats a booking currently holds before re-allocating. */
-    async deleteSeats(...args) {
-      const { db: exec, args: a } = executorOf(args);
-      await exec.query('DELETE FROM booking_seats WHERE booking_id = $1', [a[0]]);
-    },
-
-    /** MH-06: every booking owned by a hiker, newest slot first (same row shape as findById). */
-    async listByHiker(...args) {
-      const { db: exec, args: a } = executorOf(args);
-      const hikerId = a[0];
-      const { rows } = await exec.query(
-        `SELECT b.id, b.slot_id, b.hiker_id, b.created_by, b.contact_name, b.email, b.phone,
-                b.party_size, b.status, b.created_at,
-                s.date AS slot_date, s.start_time AS slot_start_time, s.end_time AS slot_end_time,
-                s.status AS slot_status, m.meal_type AS meal
-         FROM bookings b
-         JOIN slots s ON s.id = b.slot_id
-         LEFT JOIN meals m ON m.id = s.meal_id
-         WHERE b.hiker_id = $1
-         ORDER BY s.date DESC, s.start_time DESC, b.id DESC`,
-        [hikerId]
-      );
-      return rows;
-    },
-
     async getSeatAssignments(...args) {
       const { db: exec, args: a } = executorOf(args);
       const bookingId = a[0];
       const { rows } = await exec.query(
-        `SELECT bs.table_id AS tableId, dt.label AS tableLabel, bs.seats
+        `SELECT bs.table_id AS "tableId", dt.label AS "tableLabel", bs.seats
          FROM booking_seats bs
          JOIN dining_tables dt ON dt.id = bs.table_id
          WHERE bs.booking_id = $1
@@ -237,7 +194,7 @@ export function createBookingDao(db) {
       if (ids.length === 0) return byBooking;
       const placeholders = ids.map((_, i) => `$${i + 1}`).join(', ');
       const { rows } = await exec.query(
-        `SELECT booking_id AS bookingId, description, allergies
+        `SELECT booking_id AS "bookingId", description, allergies
          FROM booking_requirements
          WHERE booking_id IN (${placeholders})
          ORDER BY booking_id, id`,
@@ -249,7 +206,7 @@ export function createBookingDao(db) {
   };
 }
 
-/** SQLite stores the allergy flag as 0/1; the API uses booleans. */
+/** The allergy flag is stored as 0/1 (SMALLINT); the API uses booleans. */
 function toRequirement(row) {
   return { description: row.description, allergies: row.allergies === 1 };
 }

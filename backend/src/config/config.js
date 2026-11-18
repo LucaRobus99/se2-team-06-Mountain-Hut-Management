@@ -11,8 +11,13 @@ if (isProduction && !process.env.SESSION_SECRET) {
 export const config = {
   port: Number(process.env.PORT ?? 8080),
 
-  /** SQLite database file. ":memory:" = temporary database in RAM (lost on restart). */
-  sqliteFile: process.env.SQLITE_FILE ?? 'database/database.sqlite',
+  /**
+   * PostgreSQL connection string, e.g. postgres://user:pass@db:5432/mountain_hut.
+   * Set by docker compose. When empty, an embedded PostgreSQL (PGlite) stored in
+   * `pgliteDir` is used instead, so `npm run dev` works without Docker.
+   */
+  databaseUrl: process.env.DATABASE_URL || null,
+  pgliteDir: process.env.PGLITE_DIR ?? 'database/pglite',
 
   /** IANA time zone used to interpret slot dates/times (hut local time). */
   hutTimeZone: process.env.HUT_TIMEZONE ?? 'Europe/Rome',
@@ -37,4 +42,11 @@ export const config = {
   appBaseUrl: process.env.APP_BASE_URL ?? 'http://localhost:5173',
 
   isProduction,
+
+  /**
+   * Send the session cookie only over HTTPS. Defaults to true in production;
+   * set COOKIE_SECURE=false when the app is served over plain HTTP (e.g. the
+   * docker compose demo on http://localhost), otherwise login silently fails.
+   */
+  cookieSecure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : isProduction,
 };

@@ -1,6 +1,6 @@
 # Edelweiss Hut — Backend
 
-**Stack:** Node.js >=22.13, Express 5, native `node:sqlite`, Passport Local, `express-session` and optional Mailgun (`mailgun.js`). This service manages one mountain hut.
+**Stack:** Node.js >=22.13, Express 5, PostgreSQL (`pg`; embedded PGlite when `DATABASE_URL` is unset), Passport Local, `express-session` and optional Mailgun (`mailgun.js`). This service manages one mountain hut.
 
 ## Setup and startup
 
@@ -13,9 +13,11 @@ npm start
 
 The API listens on `http://localhost:8080` by default. Use `npm run dev` for watch-mode development (restarting the process also resets its in-memory login sessions). Both start scripts read an optional `.env` file; copy `.env.example` when configuring local overrides.
 
-On first startup the service creates `database/database.sqlite` and initializes the schema and demo records. Later startups apply supported, non-destructive migrations: notes, emergency contact and profile photos on `users`, the MH-05 `booking_requirements` table, the MH-07 `password_change_required` column and `password_reset_tokens` table, and a one-time rebuild of `bookings` so a booking can record both its owner (`hiker_id`) and the staff member who created it (`created_by`). Existing bookings, seats, requirements, slots and users are preserved.
+**Database.** With `DATABASE_URL` set (Docker), the service connects to that PostgreSQL server. Without it, it uses an embedded PostgreSQL (PGlite) in `database/pglite` (`PGLITE_DIR`). On first start against an empty database it runs `scripts/01-schema.sql` and `scripts/02-seed.sql`. Existing databases are **never migrated**: after changing the SQL scripts, reset the database (`npm run db:reset` locally, `docker compose down -v` in Docker), and say so in the release notes (the release workflow detects it automatically).
 
-**Data safety:** `npm run db:reset` deletes the local SQLite database. Do not use it on a database containing important data. Keep `.env`, Mailgun credentials and `database/` out of Git.
+The connection layer is `src/db/postgres.js`: `query(sql, params)` returns `{ rows, rowCount }`, with `$1, $2…` placeholders. `transaction(fn)` takes one global advisory lock, so transactions run one at a time (the first booking saved wins, AC-01.9). `bigint` results (`COUNT`, `SUM`) are parsed as numbers. Quote camelCase column aliases (`AS "tableId"`): PostgreSQL lowercases unquoted names.
+
+**Data safety:** `npm run db:reset` deletes the local embedded database (`database/pglite`). Do not use it on a database containing important data. Keep `.env`, Mailgun credentials and `database/` out of Git.
 
 ## API routes
 
@@ -55,10 +57,10 @@ The application serves one hut. Slot creation uses explicit `startTime` and `end
 
 Hikers register with **name, email, phone and password**; notes and emergency contact are optional. The email address and account role are not editable via the profile endpoint. The API identifies the account through the authenticated session rather than accepting a user ID from the request body.
 
-- `PATCH /api/auth/me` validates the supplied fields and saves them to SQLite.
+- `PATCH /api/auth/me` validates the supplied fields and saves them to the database.
 - `POST /api/auth/change-password` requires `currentPassword` and `newPassword` (8–128 characters), verifies the current password and stores a new password hash.
 - `PATCH /api/auth/avatar` accepts one `imageData` field containing a base64-encoded JPEG/PNG/WebP image of at most **400 KB**. The backend checks both the content type and the file signature; the frontend resizes normal uploads before sending.
-- Photo bytes are stored in SQLite (`users.avatar_blob`, `avatar_mime`, `avatar_version`). `GET /api/auth/avatar` is private and sends `Cache-Control: private, no-store`; `DELETE` removes the image.
+- Photo bytes are stored in PostgreSQL (`users.avatar_blob` BYTEA, `avatar_mime`, `avatar_version`). `GET /api/auth/avatar` is private and sends `Cache-Control: private, no-store`; `DELETE` removes the image.
 
 All profile, password and photo endpoints enforce authentication; changing a hiker's profile or avatar additionally requires the hiker role.
 
@@ -209,12 +211,12 @@ The actual number of inserted slots depends on the current database. Re-running 
 
 ## Session, time zone and production considerations
 
-- HTTP session cookie `sid` is HttpOnly/SameSite=Lax; Secure cookies apply in production. Sessions are stored in process memory during development and are lost when the server restarts. Use a durable session store for a deployed multi-instance service.
-- Booking and seat allocation run inside serialized SQLite transactions; availability and seating previews do not reserve seats.
+- HTTP session cookie `sid` is HttpOnly/SameSite=Lax; Secure cookies apply in production (override with `COOKIE_SECURE=false` when serving over plain HTTP, as the Docker demo does). Express trusts only private-network proxies (`trust proxy`), i.e. the nginx frontend container. Sessions are stored in process memory during development and are lost when the server restarts. Use a durable session store for a deployed multi-instance service.
+- Booking and seat allocation run inside serialized PostgreSQL transactions (global advisory lock); availability and seating previews do not reserve seats.
 - Slot capacity can vary by meal, date and time. Slot overlap is currently prohibited, pending the Product Owner's response to issue #31.
 - `HUT_TIMEZONE` defaults to `Europe/Rome` and is used for slot dates, booking cutoffs and the 48-hour modification window.
 - Production requires a strong `SESSION_SECRET`; never commit secrets.
-- Back up the single SQLite database file before schema work or importing demo data.
+- Releases never migrate existing databases; a schema change requires `docker compose down -v` (demo data is lost).
 
 ## Testing
 
@@ -225,6 +227,6 @@ npm test            # vitest run
 npm run test:watch  # interactive
 ```
 
-Tests build in-memory SQLite databases (`:memory:`) using `scripts/01-schema.sql` and `scripts/02-seed.sql`, without touching `backend/database/database.sqlite`. Suites are organized under `test/unit tests/black box`, `test/unit tests/white box` and `test/integration tests`.
+Tests use an in-memory embedded PostgreSQL (PGlite): no Docker or database server needed. `test/globalSetup.js` builds one seeded template; each test file starts from it and every `createTestDb()` resets the data to the seed (`test/helpers/testDb.js`). Suites are organized under `test/unit tests/black box`, `test/unit tests/white box` and `test/integration tests`.
 
 On 12 November 2026 the account branch passed **377 tests in 52 files** before merging the newer work from `main`. Run the full suite again after resolving the merge: these earlier results do not validate the combined branch. MH-06 currently has integration coverage for `GET /api/bookings`; `PATCH /api/bookings/:bookingId` and `updateBooking()` still need dedicated unit/route-level coverage before the story is considered Done.
