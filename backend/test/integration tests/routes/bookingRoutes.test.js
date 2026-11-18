@@ -287,4 +287,27 @@ describe('BookingRoutes - Integration Tests', () => {
 
   });
 
+  describe('Role authorization messages (Forbidden access)', () => {
+    it('should forbid staff accounts from creating hiker bookings via /api/bookings', async () => {
+      // Effettua il login come dipendente/staff (es. staff@hut.test o analogo seed)
+      await agent.post('/api/auth/login').send({ email: 'employee@hut.test', password: 'password' });
+
+      const response = await agent
+        .post('/api/bookings')
+        .send({ slotId: futureSlotId, partySize: 2 });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.message).toContain('Only hiker accounts can book online');
+    });
+
+    it('should forbid staff accounts from cancelling bookings via DELETE /api/bookings/:id', async () => {
+      await agent.post('/api/auth/login').send({ email: 'employee@hut.test', password: 'password' });
+
+      const response = await agent.delete('/api/bookings/1');
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.message).toContain('Only hiker accounts can cancel their bookings');
+    });
+  });
+
 });
