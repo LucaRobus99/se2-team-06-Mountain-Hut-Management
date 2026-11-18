@@ -78,7 +78,7 @@ export function createBookingDao(db) {
     /**
      * MH-08: cancel only if the booking is still confirmed. Returns true when
      * this call performed the transition, false when it was already cancelled.
-     * The condition is evaluated by SQLite, so two concurrent cancellations
+     * The condition is evaluated by the database, so two concurrent cancellations
      * cannot both free the seats.
      */
     async cancelIfConfirmed(...args) {
@@ -120,7 +120,7 @@ export function createBookingDao(db) {
       const { db: exec, args: a } = executorOf(args);
       const bookingId = a[0];
       const { rows } = await exec.query(
-        `SELECT bs.table_id AS tableId, dt.label AS tableLabel, bs.seats
+        `SELECT bs.table_id AS "tableId", dt.label AS "tableLabel", bs.seats
          FROM booking_seats bs
          JOIN dining_tables dt ON dt.id = bs.table_id
          WHERE bs.booking_id = $1
@@ -194,7 +194,7 @@ export function createBookingDao(db) {
       if (ids.length === 0) return byBooking;
       const placeholders = ids.map((_, i) => `$${i + 1}`).join(', ');
       const { rows } = await exec.query(
-        `SELECT booking_id AS bookingId, description, allergies
+        `SELECT booking_id AS "bookingId", description, allergies
          FROM booking_requirements
          WHERE booking_id IN (${placeholders})
          ORDER BY booking_id, id`,
@@ -206,7 +206,7 @@ export function createBookingDao(db) {
   };
 }
 
-/** SQLite stores the allergy flag as 0/1; the API uses booleans. */
+/** The allergy flag is stored as 0/1 (SMALLINT); the API uses booleans. */
 function toRequirement(row) {
   return { description: row.description, allergies: row.allergies === 1 };
 }

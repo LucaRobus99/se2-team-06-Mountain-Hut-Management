@@ -1,5 +1,5 @@
 -- Sample data. Run automatically after 01-schema.sql when the database is created.
--- After changing this file, run `npm run db:reset`.
+-- After changing this file, reset the database (see 01-schema.sql).
 
 -- Staff accounts are created here: only hikers can register themselves.
 -- Passwords are never stored in plaintext: each value below is a salted scrypt
@@ -57,3 +57,11 @@ INSERT INTO slot_tables (slot_id, table_id, seats) VALUES
     (7, 4, 6), (7, 5, 8),
     (9, 2, 4), (9, 4, 6),
     (10, 3, 4), (10, 4, 6), (10, 5, 8);
+
+-- The rows above use explicit ids, which do not advance the identity
+-- sequences. Move each sequence past the seeded ids so the next INSERT
+-- without an id does not collide.
+SELECT setval(pg_get_serial_sequence('users', 'id'), (SELECT max(id) FROM users));
+SELECT setval(pg_get_serial_sequence('dining_tables', 'id'), (SELECT max(id) FROM dining_tables));
+SELECT setval(pg_get_serial_sequence('meals', 'id'), (SELECT max(id) FROM meals));
+SELECT setval(pg_get_serial_sequence('slots', 'id'), (SELECT max(id) FROM slots));

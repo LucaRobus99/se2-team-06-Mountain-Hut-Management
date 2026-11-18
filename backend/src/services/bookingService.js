@@ -5,6 +5,7 @@ import { createBookingNotifier } from './bookingNotifier.js';
 import { HIKER_BOOKING_MESSAGE, isStaff, STAFF_ONLY_MESSAGE } from '../auth/roles.js';
 import { generateTemporaryPassword, hashPassword } from './password.js';
 import { validateStaffBookingBody } from './staffBookingValidation.js';
+import { isUniqueEmailViolation } from '../db/errors.js';
 import {
   EXPECTED,
   invalid,
@@ -207,7 +208,7 @@ export function createBookingService({
           passwordChangeRequired: 1,
         });
       } catch (err) {
-        if (/UNIQUE constraint failed.*(users\.email|idx_users_email_ci|index.*email)/i.test(err.message)) {
+        if (isUniqueEmailViolation(err)) {
           throw emailTaken();
         }
         throw err;
@@ -355,7 +356,7 @@ export function createBookingService({
 
       const data = validateStaffBookingBody(body);
 
-      // #36: generate the password and its hash before opening the SQLite
+      // #36: generate the password and its hash before opening the database
       // transaction, so the CPU-heavy scrypt work does not hold the write lock.
       const initialPassword = data.mode === 'newHiker' ? generateTemporaryPassword() : null;
       const passwordHash = initialPassword ? hashPassword(initialPassword) : null;

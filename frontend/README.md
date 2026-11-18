@@ -1,6 +1,6 @@
 # Edelweiss Hut — Frontend
 
-**Stack:** React 19, Vite 7, React Router 7 and Bootstrap/React-Bootstrap. The frontend connects to the real Express/SQLite backend using authenticated sessions; no mocked booking or account data is used in the application.
+**Stack:** React 19, Vite 7, React Router 7 and Bootstrap/React-Bootstrap. The frontend connects to the real Express/PostgreSQL backend using authenticated sessions; no mocked booking or account data is used in the application.
 
 ## Run locally
 
@@ -18,7 +18,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173`. Vite proxies `/api` requests to `http://localhost:8080` (backend default). Use `npm start` for the backend during manual testing to avoid watch-mode restarts losing the login session.
+Open `http://localhost:5173`. In Docker, the production build is served by nginx (`nginx.conf`), which also forwards `/api` to the backend container; see the root README. Vite proxies `/api` requests to `http://localhost:8080` (backend default). Use `npm start` for the backend during manual testing to avoid watch-mode restarts losing the login session.
 
 ## Routes
 
@@ -60,7 +60,7 @@ On successful submission, the confirmation page shows the booking reference, tim
 - Personal information: update **name, phone, optional notes and emergency contact** and see the saved details after refreshing the page. Email is read-only.
 - Password & Security: provide the current password and a new one, then confirm it.
 
-Profile edits, password changes and photo operations call the real backend endpoints in `src/api/auth.js`. `AuthContext.jsx` refreshes the signed-in user after updates so the navbar reflects new names/photos. The photo is persisted in SQLite, not only in browser memory.
+Profile edits, password changes and photo operations call the real backend endpoints in `src/api/auth.js`. `AuthContext.jsx` refreshes the signed-in user after updates so the navbar reflects new names/photos. The photo is persisted in the database, not only in browser memory.
 
 The profile design uses the same forest-green, sage and cream palette as the rest of the site, with small inline SVG icons and a photo menu accessible by clicking the avatar.
 

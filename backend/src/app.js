@@ -25,6 +25,11 @@ import { config } from './config/config.js';
 export function createApp({ db, timeZone = config.hutTimeZone, now = () => new Date() }) {
   const app = express();
 
+  // In Docker the frontend's nginx forwards /api from the private network.
+  // Trust only private/loopback proxies, so req.secure and the client IP come
+  // from X-Forwarded-* headers set by nginx, never from arbitrary clients.
+  app.set('trust proxy', 'loopback, linklocal, uniquelocal');
+
   // Avatar uploads need a larger body, but other endpoints retain the default 100 KB limit.
   app.use('/api/auth/avatar', express.json({ limit: '768kb' }));
   app.use(express.json());

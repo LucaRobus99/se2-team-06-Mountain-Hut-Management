@@ -1,6 +1,7 @@
 import { ConflictError } from '../errors/AppError.js';
 import { validatedRegistration } from '../auth/registerValidation.js';
 import { hashPassword } from './password.js';
+import { isUniqueEmailViolation } from '../db/errors.js';
 
 export function createRegistrationService({ userDao }) {
   return {
@@ -17,7 +18,7 @@ export function createRegistrationService({ userDao }) {
         });
       } catch (err) {
         // Another request may have registered this email after the lookup.
-        if (/UNIQUE constraint failed.*(users\.email|idx_users_email_ci|index.*email)/i.test(err.message)) {
+        if (isUniqueEmailViolation(err)) {
           throw new ConflictError('An account with this email already exists.', 'EMAIL_ALREADY_REGISTERED');
         }
         throw err;

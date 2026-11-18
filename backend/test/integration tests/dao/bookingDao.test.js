@@ -7,7 +7,7 @@ describe('BookingDao - Integration Tests', () => {
   let bookingDao;
 
   beforeEach(() => {
-    // Initialize a clean in-memory SQLite database with schema and seed data
+    // Initialize a clean test database (PostgreSQL) with schema and seed data
     db = createTestDb();
     bookingDao = createBookingDao(db);
   });

@@ -7,12 +7,14 @@
  * Optional: --from=YYYY-MM-DD --to=YYYY-MM-DD
  * The default end date is 30 September 2027.
  *
- * The script uses the same SQLite file as the server (SQLITE_FILE or
- * database/database.sqlite). Stop the backend before running it.
+ * The script uses the same database as the server: DATABASE_URL (PostgreSQL,
+ * e.g. the docker compose db) or, when unset, the embedded database in
+ * PGLITE_DIR (default database/pglite). With the embedded database, stop the
+ * backend before running it (only one process can open it).
+ * Inside Docker: docker compose exec backend node scripts/populate-slots.mjs
  */
-import fs from 'node:fs';
-import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { config } from '../src/config/config.js';
+import { createDb, describeDb } from '../src/db/index.js';
 
 const TEMPLATE = [
   { meal: 'breakfast', start: '09:00', end: '10:00' },
@@ -70,76 +72,76 @@ function overlaps(existing, proposed) {
   return existing.some((slot) => slot.start < proposed.end && proposed.start < slot.end);
 }
 
-function run() {
-  const { from, to, dryRun } = parseArgs(process.argv.slice(2));
-  const dbFile = process.env.SQLITE_FILE || 'database/database.sqlite';
-  const absoluteFile = path.resolve(dbFile);
-  if (!fs.existsSync(absoluteFile)) {
-    throw new Error(`Database does not exist: ${absoluteFile}. Start the backend once to create it, then stop it and retry.`);
+async function populate(db, { from, to, dryRun }) {
+  const mealRows = (await db.query('SELECT id, meal_type FROM meals')).rows;
+  const mealIds = new Map(mealRows.map((m) => [m.meal_type, m.id]));
+  for (const item of TEMPLATE) {
+    if (!mealIds.has(item.meal)) throw new Error(`Missing meal '${item.meal}' in database. No changes made.`);
   }
+  const tables = (await db.query('SELECT id, label FROM dining_tables ORDER BY id')).rows
+    .filter((table) => SEATS_BY_LABEL.has(table.label));
+  if (!tables.length) throw new Error('No T1–T5 dining tables found. No changes made.');
 
-  const db = new DatabaseSync(absoluteFile);
-  let inTransaction = false;
-  try {
-    db.exec('PRAGMA foreign_keys = ON');
-    const mealIds = new Map(db.prepare('SELECT id, meal_type FROM meals').all().map((m) => [m.meal_type, m.id]));
-    for (const item of TEMPLATE) {
-      if (!mealIds.has(item.meal)) throw new Error(`Missing meal '${item.meal}' in database. No changes made.`);
-    }
-    const tables = db.prepare('SELECT id, label FROM dining_tables ORDER BY id').all()
-      .filter((table) => SEATS_BY_LABEL.has(table.label));
-    if (!tables.length) throw new Error('No T1–T5 dining tables found. No changes made.');
-
-    const loadSlots = db.prepare('SELECT start_time, end_time FROM slots WHERE date = ?');
-    const addSlot = db.prepare("INSERT INTO slots (meal_id, date, start_time, end_time, status) VALUES (?, ?, ?, ?, 'available')");
-    const addTable = db.prepare('INSERT INTO slot_tables (slot_id, table_id, seats) VALUES (?, ?, ?)');
-
-    if (!dryRun) {
-      db.exec('BEGIN IMMEDIATE');
-      inTransaction = true;
-    }
-    const result = { days: 0, added: 0, skipped: 0 };
-    const byMeal = Object.fromEntries([...new Set(TEMPLATE.map((s) => s.meal))].map((meal) => [meal, 0]));
-    for (const date of datesBetween(from, to)) {
-      result.days++;
-      const existing = loadSlots.all(date).map((s) => ({ start: s.start_time, end: s.end_time }));
-      for (const desired of TEMPLATE) {
-        if (overlaps(existing, desired)) {
-          result.skipped++;
-          continue;
-        }
-        if (!dryRun) {
-          const { lastInsertRowid } = addSlot.run(mealIds.get(desired.meal), date, desired.start, desired.end);
-          for (const table of tables) {
-            addTable.run(lastInsertRowid, table.id, SEATS_BY_LABEL.get(table.label));
-          }
-        }
-        existing.push(desired); // Also prevents overlap among slots generated in this run.
-        result.added++;
-        byMeal[desired.meal]++;
+  const result = { days: 0, added: 0, skipped: 0, tables: tables.length };
+  result.byMeal = Object.fromEntries([...new Set(TEMPLATE.map((s) => s.meal))].map((meal) => [meal, 0]));
+  for (const date of datesBetween(from, to)) {
+    result.days++;
+    const { rows } = await db.query('SELECT start_time, end_time FROM slots WHERE date = $1', [date]);
+    const existing = rows.map((s) => ({ start: s.start_time, end: s.end_time }));
+    for (const desired of TEMPLATE) {
+      if (overlaps(existing, desired)) {
+        result.skipped++;
+        continue;
       }
+      if (!dryRun) {
+        const { rows: [slot] } = await db.query(
+          `INSERT INTO slots (meal_id, date, start_time, end_time, status)
+           VALUES ($1, $2, $3, $4, 'available') RETURNING id`,
+          [mealIds.get(desired.meal), date, desired.start, desired.end]
+        );
+        for (const table of tables) {
+          await db.query(
+            'INSERT INTO slot_tables (slot_id, table_id, seats) VALUES ($1, $2, $3)',
+            [slot.id, table.id, SEATS_BY_LABEL.get(table.label)]
+          );
+        }
+      }
+      existing.push(desired); // Also prevents overlap among slots generated in this run.
+      result.added++;
+      result.byMeal[desired.meal]++;
     }
-    if (inTransaction) {
-      db.exec('COMMIT');
-      inTransaction = false;
-    }
-    console.log(`${dryRun ? 'PREVIEW ONLY — no changes made' : 'Slots successfully added'}\n` +
-      `Database: ${absoluteFile}\n` +
-      `Period: ${from} to ${to} (${result.days} days)\n` +
-      `New slots: ${result.added}\n` +
-      `Already occupied/overlapping times skipped: ${result.skipped}\n` +
-      `New slots by meal: ${Object.entries(byMeal).map(([meal, count]) => `${meal}=${count}`).join(', ')}\n` +
-      `Tables assigned per new slot: ${tables.length} (seats per table defined by MH-02)`);
-  } catch (error) {
-    if (inTransaction) db.exec('ROLLBACK');
-    throw error;
+  }
+  return result;
+}
+
+async function run() {
+  const options = parseArgs(process.argv.slice(2));
+  const db = createDb({ databaseUrl: config.databaseUrl, pgliteDir: config.pgliteDir });
+  try {
+    // A dry run only reads; a real run is one transaction (all slots or none).
+    const result = options.dryRun
+      ? await populate(db, options)
+      : await db.transaction((tx) => populate(tx, options));
+    console.log(`${options.dryRun ? 'PREVIEW ONLY — no changes made' : 'Slots successfully added'}
+` +
+      `Database: ${describeDb(config)}
+` +
+      `Period: ${options.from} to ${options.to} (${result.days} days)
+` +
+      `New slots: ${result.added}
+` +
+      `Already occupied/overlapping times skipped: ${result.skipped}
+` +
+      `New slots by meal: ${Object.entries(result.byMeal).map(([meal, count]) => `${meal}=${count}`).join(', ')}
+` +
+      `Tables assigned per new slot: ${result.tables} (seats per table defined by MH-02)`);
   } finally {
-    db.close();
+    await db.close();
   }
 }
 
 try {
-  run();
+  await run();
 } catch (error) {
   console.error(`Slot population failed: ${error.message}`);
   process.exitCode = 1;
