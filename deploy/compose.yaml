@@ -1,0 +1,64 @@
+# Mountain Hut Management: run the published release (no source code needed).
+#
+#   1. Copy .env.example to .env and set the passwords / secret.
+#   2. docker compose pull && docker compose up -d
+#   3. Open http://localhost:8081  (or the APP_PORT you chose)
+#
+# Images: https://hub.docker.com/u/jenissevereau
+# The compose file attached to each GitHub Release already pins that release's
+# version. With this copy, set MOUNTAIN_HUT_VERSION in .env (e.g. v1.0.0).
+name: mountain-hut
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: mountain_hut
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d mountain_hut"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [data]
+    restart: unless-stopped
+
+  backend:
+    image: jenissevereau/mountain-hut-backend:${MOUNTAIN_HUT_VERSION:-latest}
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/mountain_hut
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env}
+      # The demo is served over plain HTTP; set to true behind HTTPS.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8081}
+      HUT_TIMEZONE: ${HUT_TIMEZONE:-Europe/Rome}
+      MAILGUN_API_KEY: ${MAILGUN_API_KEY:-}
+      MAILGUN_DOMAIN: ${MAILGUN_DOMAIN:-}
+      MAILGUN_FROM: ${MAILGUN_FROM:-}
+      MAILGUN_URL: ${MAILGUN_URL:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [edge, data]
+    restart: unless-stopped
+
+  frontend:
+    image: jenissevereau/mountain-hut-frontend:${MOUNTAIN_HUT_VERSION:-latest}
+    ports:
+      - "${APP_PORT:-8081}:8080"
+    depends_on:
+      - backend
+    networks: [edge]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+
+networks:
+  edge: {}
+  # Only the backend can reach the database; the db has no route to the internet.
+  data:
+    internal: true

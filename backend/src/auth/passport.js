@@ -18,6 +18,9 @@ export function sanitizeUser(user) {
     ...(Object.prototype.hasOwnProperty.call(user, 'avatar_mime') ? {
       avatarUrl: user.avatar_mime ? `/api/auth/avatar?v=${Number(user.avatar_version) || 0}` : null,
     } : {}),
+    // MH-07: only advertised while the account must still change its password,
+    // so the shape of every other response stays unchanged.
+    ...(user.password_change_required ? { passwordChangeRequired: true } : {}),
   };
 }
 

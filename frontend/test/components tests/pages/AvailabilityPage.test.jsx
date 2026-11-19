@@ -174,4 +174,128 @@ describe('AvailabilityPage Component Integration Tests', () => {
     expect(screen.getByLabelText(/guests/i)).toHaveValue(4);
   });
 
+  it('should handle split seating confirmation modal flow', async () => {
+    useAuth.mockReturnValue({ user: { id: 1, role: 'hiker' } });
+    const mockSlotsResponse = {
+      date: '2026-11-15',
+      meal: 'lunch',
+      partySize: 6,
+      slots: [{ id: 103, startTime: '13:00', availableSeats: 6 }]
+    };
+    const mockSeatingResponse = {
+      requiresConfirmation: true,
+      fit: 'split_table',
+      seatAssignments: [{ tableLabel: 'Table 1', seats: 4 }, { tableLabel: 'Table 2', seats: 2 }]
+    };
+
+    getAvailableSlots.mockResolvedValueOnce(mockSlotsResponse);
+    getSlotSeating.mockResolvedValueOnce(mockSeatingResponse);
+
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <AvailabilityPage />
+      </MemoryRouter>
+    );
+
+    const dateInput = screen.getByLabelText(/date/i);
+    fireEvent.change(dateInput, { target: { value: '2026-11-15' } });
+    await user.click(screen.getByRole('button', { name: /search/i }));
+
+    await screen.findByText('13:00');
+    await user.click(screen.getByRole('button', { name: /13:00/i }));
+
+    // Verify split seating modal appears by checking its actual title or text
+    await waitFor(() => {
+      expect(screen.getByText(/seating details/i)).toBeInTheDocument();
+      expect(screen.getByText(/seated across multiple tables/i)).toBeInTheDocument();
+    });
+
+   
+    const continueSplitBtn = screen.getByRole('button', { name: /continue with split seating/i });
+    await user.click(continueSplitBtn);
+
+    
+    const selectionSummary = await screen.findByText(/your selection/i);
+    expect(selectionSummary).toBeInTheDocument();
+    expect(screen.getAllByText(/seated across multiple tables/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /continue to booking/i })).toBeInTheDocument();
+  });
+
+  it('shows a warning message if a non-hiker user tries to book', async () => {
+    useAuth.mockReturnValue({ user: { id: 2, role: 'staff' } });
+    const mockSlotsResponse = {
+      date: '2026-11-15',
+      meal: 'lunch',
+      partySize: 2,
+      slots: [{ id: 101, startTime: '12:30', availableSeats: 6 }]
+    };
+    const mockSeatingResponse = {
+      fit: 'single_table',
+      seatAssignments: [{ tableLabel: 'Table 4', seats: 2 }]
+    };
+
+    getAvailableSlots.mockResolvedValueOnce(mockSlotsResponse);
+    getSlotSeating.mockResolvedValueOnce(mockSeatingResponse);
+
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <AvailabilityPage />
+      </MemoryRouter>
+    );
+
+    const dateInput = screen.getByLabelText(/date/i);
+    fireEvent.change(dateInput, { target: { value: '2026-11-15' } });
+    await user.click(screen.getByRole('button', { name: /search/i }));
+
+    await user.click(await screen.findByRole('button', { name: /12:30/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/only hikers can make online bookings/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: /continue to booking/i })).not.toBeInTheDocument();
+  });
+
+  it('redirects unauthenticated users to login when continuing to booking', async () => {
+    useAuth.mockReturnValue({ user: null });
+    const mockSlotsResponse = {
+      date: '2026-11-15',
+      meal: 'lunch',
+      partySize: 2,
+      slots: [{ id: 101, startTime: '12:30', availableSeats: 6 }]
+    };
+    const mockSeatingResponse = {
+      fit: 'single_table',
+      seatAssignments: [{ tableLabel: 'Table 4', seats: 2 }]
+    };
+
+    getAvailableSlots.mockResolvedValueOnce(mockSlotsResponse);
+    getSlotSeating.mockResolvedValueOnce(mockSeatingResponse);
+
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={['/availability']}>
+        <Routes>
+          <Route path="/availability" element={<AvailabilityPage />} />
+          <Route path="/login" element={<div>Login Page</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const dateInput = screen.getByLabelText(/date/i);
+    fireEvent.change(dateInput, { target: { value: '2026-11-15' } });
+    await user.click(screen.getByRole('button', { name: /search/i }));
+
+    await user.click(await screen.findByRole('button', { name: /12:30/i }));
+
+    const continueBtn = await screen.findByRole('button', { name: /continue to booking/i });
+    await user.click(continueBtn);
+
+    expect(screen.getByText('Login Page')).toBeInTheDocument();
+  });
+
 });

@@ -74,6 +74,49 @@ describe('AvailabilitySlotCard Component and Utils Tests', () => {
       expect(screen.getByText('Multiple-table seating available').querySelector('.eh-status-dot--orange')).toBeInTheDocument();
     });
 
+    it('should render green status dot when 3 or more tables are available', () => {
+      render(
+        <AvailabilitySlotCard
+          slot={{
+            startTime: '13:30',
+            tables: [{ freeSeats: 5 }, { freeSeats: 5 }, { freeSeats: 5 }]
+          }}
+          index={0}
+          partySize={2}
+          selected={false}
+          disabled={false}
+          onClick={() => {}}
+        />
+      );
+      expect(screen.getByText('3 tables available').querySelector('.eh-status-dot--green')).toBeInTheDocument();
+    });
+
+    it('should correctly resolve photos for different meals and fallback when meal is unknown', () => {
+      const { rerender } = render(
+        <AvailabilitySlotCard
+          slot={{ startTime: '09:00', meal: 'breakfast', tables: null }}
+          index={0}
+          partySize={2}
+          selected={false}
+          disabled={false}
+          onClick={() => {}}
+        />
+      );
+      expect(screen.getByRole('button').querySelector('img')).toBeInTheDocument();
+
+      rerender(
+        <AvailabilitySlotCard
+          slot={{ startTime: '15:00', meal: 'brunch', tables: null }}
+          index={0}
+          partySize={2}
+          selected={false}
+          disabled={false}
+          onClick={() => {}}
+        />
+      );
+      expect(screen.getByRole('button').querySelector('img')).toBeInTheDocument();
+    });
+
     it('should apply selected class and aria-pressed when selected is true', () => {
       render(
         <AvailabilitySlotCard

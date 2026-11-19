@@ -7,7 +7,7 @@ describe('BookingDao - Integration Tests', () => {
   let bookingDao;
 
   beforeEach(() => {
-    // Initialize a clean in-memory SQLite database with schema and seed data
+    // Initialize a clean test database (PostgreSQL) with schema and seed data
     db = createTestDb();
     bookingDao = createBookingDao(db);
   });
@@ -110,6 +110,75 @@ describe('BookingDao - Integration Tests', () => {
 
   });
 
+    describe('update and updateStatus', () => {
+        it('should update mutable fields (slot_id and party_size)', async () => {
+            const bookingId = await bookingDao.create({
+                slotId: 1,
+                hikerId: 3,
+                contactName: 'Hanna',
+                partySize: 2,
+            });
+
+            await bookingDao.update(bookingId, { slotId: 2, partySize: 5 });
+
+            const retrieved = await bookingDao.findById(bookingId);
+            expect(retrieved.slot_id).toBe(2);
+            expect(retrieved.party_size).toBe(5);
+        });
+
+        it('should update booking status (e.g. to cancelled)', async () => {
+            const bookingId = await bookingDao.create({
+                slotId: 1,
+                hikerId: 3,
+                contactName: 'Hanna',
+                partySize: 2,
+            });
+
+            await bookingDao.updateStatus(bookingId, 'cancelled');
+
+            const retrieved = await bookingDao.findById(bookingId);
+            expect(retrieved.status).toBe('cancelled');
+        });
+    });
+
+    describe('listByHiker', () => {
+        it('should return all bookings for a specific hiker sorted by slot date and start time descending', async () => {
+            await bookingDao.create({ slotId: 1, hikerId: 3, contactName: 'Hanna', partySize: 2 });
+            await bookingDao.create({ slotId: 2, hikerId: 3, contactName: 'Hanna', partySize: 1 });
+
+            const bookings = await bookingDao.listByHiker(3);
+            expect(bookings).toBeInstanceOf(Array);
+            expect(bookings.length).toBeGreaterThanOrEqual(2);
+            expect(bookings[0]).toHaveProperty('slot_date');
+        });
+
+        it('should return an empty array if the hiker has no bookings', async () => {
+            const bookings = await bookingDao.listByHiker(9999);
+            expect(bookings).toEqual([]);
+        });
+    });
+
+    describe('insertSeats, getSeatAssignments and deleteSeats', () => {
+        it('should insert, retrieve, and delete seat assignments correctly', async () => {
+            const bookingId = await bookingDao.create({ slotId: 2, hikerId: 3, contactName: 'Hanna', partySize: 3 });
+
+            const assignments = [
+                { tableId: 1, seats: 2 },
+                { tableId: 2, seats: 1 },
+            ];
+
+            await bookingDao.insertSeats(bookingId, assignments);
+
+            const retrievedSeats = await bookingDao.getSeatAssignments(bookingId);
+            expect(retrievedSeats.length).toBe(2);
+            expect(retrievedSeats[0]).toMatchObject({ tableId: 1, seats: 2 });
+
+            await bookingDao.deleteSeats(bookingId);
+            const clearedSeats = await bookingDao.getSeatAssignments(bookingId);
+            expect(clearedSeats).toEqual([]);
+        });
+    });
+
   describe('findConfirmedByHikerAndSlot', () => {
     
     it('should find a confirmed booking for a specific hiker and slot', async () => {
@@ -132,7 +201,40 @@ describe('BookingDao - Integration Tests', () => {
       const found = await bookingDao.findConfirmedByHikerAndSlot(3, 99);
       expect(found).toBeNull();
     });
-
   });
 
+  describe('requirements management (insert, get, replace, getByBookingIds)', () => {
+    it('should successfully save, retrieve and replace party requirements', async () => {
+      const bookingId = await bookingDao.create({ slotId: 3, hikerId: 3, contactName: 'Hanna', partySize: 2 });
+
+      await bookingDao.insertRequirements(bookingId, [
+        { description: 'Peanut allergy', allergies: true },
+      ]);
+
+      let reqs = await bookingDao.getRequirements(bookingId);
+      expect(reqs.length).toBe(1);
+      expect(reqs[0]).toMatchObject({ description: 'Peanut allergy', allergies: true });
+
+      // Test replaceRequirements
+      await bookingDao.replaceRequirements(bookingId, [
+        { description: 'Gluten free', allergies: false },
+      ]);
+
+      reqs = await bookingDao.getRequirements(bookingId);
+      expect(reqs.length).toBe(1);
+      expect(reqs[0]).toMatchObject({ description: 'Gluten free', allergies: false });
+    });
+
+    it('should fetch requirements by multiple booking IDs into a Map', async () => {
+      const b1 = await bookingDao.create({ slotId: 1, hikerId: 3, contactName: 'H1', partySize: 1 });
+      const b2 = await bookingDao.create({ slotId: 2, hikerId: 3, contactName: 'H2', partySize: 1 });
+
+      await bookingDao.insertRequirements(b1, [{ description: 'Vegan', allergies: false }]);
+
+      const map = await bookingDao.getRequirementsByBookingIds([b1, b2, 9999]);
+      expect(map).toBeInstanceOf(Map);
+      expect(map.get(b1)).toEqual([{ description: 'Vegan', allergies: false }]);
+      expect(map.get(b2)).toEqual([]);
+    });
+  });
 });

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { errorHandler, notFoundHandler } from '../../../../src/middleware/errorHandler.js';
 import { AppError, ConflictError } from '../../../../src/errors/AppError.js';
 
-describe('White Box Test - errorHandler & notFoundHandler', () => {
+describe('White Box Test - errorHandler & notFoundHandler (Extended Coverage)', () => {
   let req, res, next;
 
   beforeEach(() => {
@@ -26,6 +26,15 @@ describe('White Box Test - errorHandler & notFoundHandler', () => {
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({
       error: { code: 'VALIDATION_ERROR', message: 'Request body is not valid JSON.', details: [] },
+    });
+  });
+
+  it('returns 413 when the payload is too large (entity.too.large)', () => {
+    errorHandler({ type: 'entity.too.large' }, req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(413);
+    expect(res.json).toHaveBeenCalledWith({
+      error: { code: 'IMAGE_TOO_LARGE', message: 'The uploaded photo is too large.' },
     });
   });
 
@@ -69,18 +78,34 @@ describe('White Box Test - errorHandler & notFoundHandler', () => {
   });
 
   it('forces an empty array for details if code is VALIDATION_ERROR or INSUFFICIENT_CAPACITY and details is missing', () => {
-    const errorWithoutDetails = new AppError('Bad request', 400);
-    errorWithoutDetails.status = 400;
-    errorWithoutDetails.message = 'Bad request';
-    errorWithoutDetails.code = 'VALIDATION_ERROR';
-    errorWithoutDetails.details = null;
+    const errorValidation = new AppError('Bad request', 400);
+    errorValidation.status = 400;
+    errorValidation.message = 'Bad request';
+    errorValidation.code = 'VALIDATION_ERROR';
+    errorValidation.details = null;
 
-    errorHandler(errorWithoutDetails, req, res, next);
+    errorHandler(errorValidation, req, res, next);
 
     expect(res.json).toHaveBeenCalledWith({
       error: {
         code: 'VALIDATION_ERROR',
         message: 'Bad request',
+        details: [],
+      },
+    });
+
+    const errorCapacity = new AppError('Not enough capacity', 409);
+    errorCapacity.status = 409;
+    errorCapacity.message = 'Not enough capacity';
+    errorCapacity.code = 'INSUFFICIENT_CAPACITY';
+    errorCapacity.details = undefined;
+
+    errorHandler(errorCapacity, req, res, next);
+
+    expect(res.json).toHaveBeenCalledWith({
+      error: {
+        code: 'INSUFFICIENT_CAPACITY',
+        message: 'Not enough capacity',
         details: [],
       },
     });

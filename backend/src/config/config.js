@@ -11,8 +11,13 @@ if (isProduction && !process.env.SESSION_SECRET) {
 export const config = {
   port: Number(process.env.PORT ?? 8080),
 
-  /** SQLite database file. ":memory:" = temporary database in RAM (lost on restart). */
-  sqliteFile: process.env.SQLITE_FILE ?? 'database/database.sqlite',
+  /**
+   * PostgreSQL connection string, e.g. postgres://user:pass@db:5432/mountain_hut.
+   * Set by docker compose. When empty, an embedded PostgreSQL (PGlite) stored in
+   * `pgliteDir` is used instead, so `npm run dev` works without Docker.
+   */
+  databaseUrl: process.env.DATABASE_URL || null,
+  pgliteDir: process.env.PGLITE_DIR ?? 'database/pglite',
 
   /** IANA time zone used to interpret slot dates/times (hut local time). */
   hutTimeZone: process.env.HUT_TIMEZONE ?? 'Europe/Rome',
@@ -25,7 +30,23 @@ export const config = {
   mailgunDomain: process.env.MAILGUN_DOMAIN || null,
   mailgunFrom: process.env.MAILGUN_FROM || null,
   mailgunTemplate: process.env.MAILGUN_TEMPLATE ?? 'booking confirmation',
+  /** MH-06 (#41): Mailgun template sent after a hiker changes a booking. */
+  mailgunUpdatedTemplate: process.env.MAILGUN_UPDATED_TEMPLATE ?? 'booking modification',
+  /** MH-08 (#41): Mailgun template sent after a hiker cancels a booking. */
+  mailgunCancelledTemplate: process.env.MAILGUN_CANCELLED_TEMPLATE ?? 'booking cancelled',
+  /** MH-07 (#44): Mailgun template for the password reset link. */
+  mailgunResetTemplate: process.env.MAILGUN_RESET_TEMPLATE ?? 'password reset',
   mailgunUrl: process.env.MAILGUN_URL ?? null,
 
+  /** Public frontend URL used to build password reset links (#44). */
+  appBaseUrl: process.env.APP_BASE_URL ?? 'http://localhost:5173',
+
   isProduction,
+
+  /**
+   * Send the session cookie only over HTTPS. Defaults to true in production;
+   * set COOKIE_SECURE=false when the app is served over plain HTTP (e.g. the
+   * docker compose demo on http://localhost), otherwise login silently fails.
+   */
+  cookieSecure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : isProduction,
 };

@@ -46,7 +46,7 @@ describe('registrationService - White-Box Tests', () => {
     it('should catch database unique constraint failure matching users.email and map to EMAIL_ALREADY_REGISTERED', async () => {
       const body = { email: 'unique@hut.test', password: 'password123', name: 'Test', phone: '3331234567' };
       userDao.findByEmail.mockResolvedValue(null);
-      userDao.createHiker.mockRejectedValue(new Error('SQLITE_CONSTRAINT: UNIQUE constraint failed: users.email'));
+      userDao.createHiker.mockRejectedValue(Object.assign(new Error('duplicate key value violates unique constraint "users_email_key"'), { code: '23505', constraint: 'users_email_key' }));
 
       try {
         await registrationService.registerHiker(body);
@@ -60,7 +60,7 @@ describe('registrationService - White-Box Tests', () => {
     it('should catch database unique constraint failure matching idx_users_email_ci and map to EMAIL_ALREADY_REGISTERED', async () => {
       const body = { email: 'case@hut.test', password: 'password123', name: 'Test', phone: '3331234567' };
       userDao.findByEmail.mockResolvedValue(null);
-      userDao.createHiker.mockRejectedValue(new Error('SQLITE_CONSTRAINT: UNIQUE constraint failed: idx_users_email_ci'));
+      userDao.createHiker.mockRejectedValue(Object.assign(new Error('duplicate key value violates unique constraint "idx_users_email_ci"'), { code: '23505', constraint: 'idx_users_email_ci' }));
 
       try {
         await registrationService.registerHiker(body);

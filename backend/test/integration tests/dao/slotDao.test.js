@@ -7,7 +7,7 @@ describe('SlotDao - Integration Tests', () => {
   let slotDao;
 
   beforeEach(() => {
-    // Initialize a clean in-memory SQLite database with schema and seed data
+    // Initialize a clean test database (PostgreSQL) with schema and seed data
     db = createTestDb();
     slotDao = createSlotDao(db);
   });

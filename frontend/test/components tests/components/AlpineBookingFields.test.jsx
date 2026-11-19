@@ -53,6 +53,18 @@ describe('AlpineBookingFields Component Tests', () => {
       expect(screen.getByText('November 2026')).toBeInTheDocument();
     });
 
+    it('should disable the previous month arrow when minDate restricts going back further', async () => {
+      const user = userEvent.setup();
+      render(<AlpineDatePicker id="date-picker" value="2026-11-15" onChange={() => {}} minDate="2026-11-01" />);
+
+      await user.click(screen.getByRole('button', { name: /date:/i }));
+      expect(screen.getByText('November 2026')).toBeInTheDocument();
+
+      // Since minDate is 2026-11-01 and we are in November 2026, the previous month arrow should be disabled
+      const prevButton = screen.getByRole('button', { name: /previous month/i });
+      expect(prevButton).toBeDisabled();
+    });
+
     it('should disable days prior to minDate', async () => {
       const user = userEvent.setup();
       render(<AlpineDatePicker id="date-picker" value="2026-11-15" onChange={() => {}} minDate="2026-11-15" />);
@@ -78,6 +90,21 @@ describe('AlpineBookingFields Component Tests', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
+    it('should close the calendar popup when pressing Escape and focus the trigger', async () => {
+      const user = userEvent.setup();
+      render(<AlpineDatePicker id="date-picker" value="2026-11-15" onChange={() => {}} />);
+
+      const trigger = screen.getByRole('button', { name: /date:/i });
+      await user.click(trigger);
+
+      expect(screen.getByRole('dialog', { name: /choose a date/i })).toBeInTheDocument();
+
+      await user.keyboard('{Escape}');
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+    });
+
   });
 
   describe('AlpineMealSelect', () => {
@@ -88,6 +115,11 @@ describe('AlpineBookingFields Component Tests', () => {
       const trigger = screen.getByRole('button', { name: /meal:/i });
       expect(trigger).toBeInTheDocument();
       expect(screen.getByText('Select a meal')).toBeInTheDocument();
+    });
+
+    it('should correctly display Aperitif label for aperitivo value', () => {
+      render(<AlpineMealSelect id="meal-select" value="aperitivo" onChange={() => {}} />);
+      expect(screen.getByText('Aperitif')).toBeInTheDocument();
     });
 
     it('should open listbox and allow selecting a meal option', async () => {

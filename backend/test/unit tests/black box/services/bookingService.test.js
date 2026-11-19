@@ -9,7 +9,8 @@ import {
 } from '../../../../src/errors/AppError.js';
 
 // Mock isStaff to ensure staff roles are correctly recognized in tests
-vi.mock('../../../../src/auth/roles.js', () => ({
+vi.mock('../../../../src/auth/roles.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   isStaff: vi.fn((user) => user?.role === 'staff' || user?.id === 1),
 }));
 
@@ -50,6 +51,11 @@ describe('bookingService - Black-Box Tests', () => {
       insertSeats: vi.fn(),
       findById: vi.fn(),
       getSeatAssignments: vi.fn(),
+      insertRequirements: vi.fn(),
+      replaceRequirements: vi.fn(),
+      getRequirements: vi.fn().mockResolvedValue([]),
+      getRequirementsByBookingIds: vi.fn().mockResolvedValue(new Map()),
+      listByHiker: vi.fn(),
     };
 
     slotDao = {
@@ -145,21 +151,15 @@ describe('bookingService - Black-Box Tests', () => {
       ).rejects.toThrow(ValidationError);
     });
 
-    it('should throw a ValidationError if staff provides no contact details', async () => {
-      slotDao.findById.mockResolvedValue({ 
-        id: 101, 
-        status: 'available', 
-        start_time: '14:00', 
-        date: '2026-08-14' 
-      });
-
+    it('should refuse staff with FORBIDDEN: staff book through createStaffBooking (MH-07)', async () => {
       await expect(
-        bookingService.createBooking(mockStaff, { 
-          slotId: 101, 
-          partySize: 2 
-          // Missing contactName, email, and contactNumber
+        bookingService.createBooking(mockStaff, {
+          slotId: 101,
+          partySize: 2,
+          contactName: 'Walk-in guest',
         })
-      ).rejects.toThrow(ValidationError);
+      ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+      expect(db.transaction).not.toHaveBeenCalled();
     });
 
     it('should successfully create a booking when all conditions and seating fit are met', async () => {
@@ -282,7 +282,7 @@ describe('bookingService - Black-Box Tests', () => {
 
     it('should succeed even if email notification service throws an error', async () => {
       const failingNotifier = {
-        send: vi.fn().mockRejectedValue(new Error('SMTP Down')),
+        sendBookingEmail: vi.fn().mockRejectedValue(new Error('SMTP Down')),
       };
 
       const serviceWithEmail = createBookingService({
@@ -309,6 +309,48 @@ describe('bookingService - Black-Box Tests', () => {
 
       const result = await serviceWithEmail.createBooking(mockHiker, { slotId: 101, partySize: 2 });
       expect(result.id).toBe(100);
+    });
+
+    it('should throw a ValidationError if party requirements contain a non-boolean allergy flag', async () => {
+      slotDao.findById.mockResolvedValue({ 
+        id: 101, status: 'available', start_time: '14:00', date: '2026-08-14' 
+      });
+
+      await expect(
+        bookingService.createBooking(mockHiker, { 
+          slotId: 101, 
+          partySize: 2, 
+          requirements: [{ description: 'Vegan', allergies: 'yes' }] 
+        })
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it('should successfully create a booking including party requirements', async () => {
+      slotDao.findById.mockResolvedValue({ 
+        id: 101, status: 'available', start_time: '14:00', end_time: '16:00', date: '2026-08-14', meal: 'lunch' 
+      });
+      bookingDao.findConfirmedByHikerAndSlot.mockResolvedValue(null);
+      slotDao.getTablesWithFreeForSlot.mockResolvedValue([{ id: 1, label: 'T1', seats: 4, free: 4 }]);
+      
+      bookingDao.insertRequirements = vi.fn().mockResolvedValue(true);
+      bookingDao.getRequirements = vi.fn().mockResolvedValue([{ description: 'Peanut allergy', allergies: true }]);
+
+      bookingDao.create.mockResolvedValue(105);
+      bookingDao.findById.mockResolvedValue({
+        id: 105, status: 'confirmed', hiker_id: 10, slot_id: 101, slot_date: '2026-08-14',
+        slot_start_time: '14:00', slot_end_time: '16:00', meal: 'lunch', party_size: 2,
+        contact_name: 'Mario', email: 'm@example.com', phone: '123', created_at: '2026-08-14T07:05:00.000Z'
+      });
+      bookingDao.getSeatAssignments.mockResolvedValue([{ tableId: 1, tableLabel: 'T1', seats: 2 }]);
+
+      const result = await bookingService.createBooking(mockHiker, {
+        slotId: 101,
+        partySize: 2,
+        requirements: [{ description: 'Peanut allergy', allergies: true }]
+      });
+
+      expect(bookingDao.insertRequirements).toHaveBeenCalled();
+      expect(result.requirements).toEqual([{ description: 'Peanut allergy', allergies: true }]);
     });
 
   });
@@ -397,6 +439,52 @@ describe('bookingService - Black-Box Tests', () => {
       ]);
     });
 
+  });
+
+  describe('listBookings & checkSlotBooking (Additional Black-Box Coverage)', () => {
+    it('should throw UnauthorizedError if listBookings is called without user', async () => {
+      await expect(bookingService.listBookings(null)).rejects.toThrow(UnauthorizedError);
+    });
+
+    it('should list bookings for the authenticated hiker with empty results handled', async () => {
+      bookingDao.listByHiker.mockResolvedValue([]);
+      
+      const results = await bookingService.listBookings(mockHiker);
+      expect(results.bookings).toHaveLength(0);
+    });
+
+    it('should list bookings for the authenticated hiker with active items', async () => {
+      bookingDao.listByHiker.mockResolvedValue([
+        { id: 100, status: 'confirmed', slot_id: 101, slot_date: '2026-08-14', slot_start_time: '14:00', party_size: 2 }
+      ]);
+      bookingDao.getSeatAssignments.mockResolvedValue([]);
+      
+      const results = await bookingService.listBookings(mockHiker);
+      expect(results.bookings).toHaveLength(1);
+      expect(results.bookings[0].id).toBe(100);
+    });
+
+    it('should throw UnauthorizedError if checkSlotBooking is called without user', async () => {
+      await expect(bookingService.checkSlotBooking(null, 101)).rejects.toThrow(UnauthorizedError);
+    });
+
+    it('should throw ValidationError if checkSlotBooking receives an invalid slot ID', async () => {
+      await expect(bookingService.checkSlotBooking(mockHiker, 'abc')).rejects.toThrow(ValidationError);
+    });
+
+    it('should check if slot is not booked correctly', async () => {
+      bookingDao.findConfirmedByHikerAndSlot.mockResolvedValue(null);
+
+      const check = await bookingService.checkSlotBooking(mockHiker, 101);
+      expect(check).toEqual({ alreadyBooked: false });
+    });
+
+    it('should check if slot is already booked correctly', async () => {
+      bookingDao.findConfirmedByHikerAndSlot.mockResolvedValue({ id: 50 });
+
+      const check = await bookingService.checkSlotBooking(mockHiker, 101);
+      expect(check).toEqual({ alreadyBooked: true });
+    });
   });
 
 });

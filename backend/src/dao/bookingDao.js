@@ -69,16 +69,31 @@ export function createBookingDao(db) {
       );
     },
 
+    /** MH-08 (later MH-15/MH-17): change the status, e.g. to 'cancelled'. */
+    async updateStatus(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      await exec.query(`UPDATE bookings SET status = $2 WHERE id = $1`, [a[0], a[1]]);
+    },
+
+    /**
+     * MH-08: cancel only if the booking is still confirmed. Returns true when
+     * this call performed the transition, false when it was already cancelled.
+     * The condition is evaluated by the database, so two concurrent cancellations
+     * cannot both free the seats.
+     */
+    async cancelIfConfirmed(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const { rowCount } = await exec.query(
+        `UPDATE bookings SET status = 'cancelled' WHERE id = $1 AND status = 'confirmed'`,
+        [a[0]]
+      );
+      return rowCount === 1;
+    },
+
     /** MH-06: release the seats a booking currently holds before re-allocating. */
     async deleteSeats(...args) {
       const { db: exec, args: a } = executorOf(args);
       await exec.query('DELETE FROM booking_seats WHERE booking_id = $1', [a[0]]);
-    },
-
-    /** MH-06: remove a booking's requirements before inserting the new ones. */
-    async deleteRequirements(...args) {
-      const { db: exec, args: a } = executorOf(args);
-      await exec.query('DELETE FROM booking_requirements WHERE booking_id = $1', [a[0]]);
     },
 
     /** MH-06: every booking owned by a hiker, newest slot first (same row shape as findById). */
@@ -105,7 +120,7 @@ export function createBookingDao(db) {
       const { db: exec, args: a } = executorOf(args);
       const bookingId = a[0];
       const { rows } = await exec.query(
-        `SELECT bs.table_id AS tableId, dt.label AS tableLabel, bs.seats
+        `SELECT bs.table_id AS "tableId", dt.label AS "tableLabel", bs.seats
          FROM booking_seats bs
          JOIN dining_tables dt ON dt.id = bs.table_id
          WHERE bs.booking_id = $1
@@ -129,66 +144,69 @@ export function createBookingDao(db) {
       return rows[0] ?? null;
     },
 
-    /** Insert party requirements for a booking. Accepts an optional executor first. */
+    /**
+     * MH-05: save a booking's party requirements, in the given order.
+     * `requirements` is the list returned by parseRequirements().
+     */
     async insertRequirements(...args) {
       const { db: exec, args: a } = executorOf(args);
-      let bookingId;
-      let requirements = [];
-      if (a.length === 1 && a[0] && typeof a[0] === 'object' && !Array.isArray(a[0])) {
-        bookingId = a[0].bookingId ?? a[0].booking_id ?? a[0].id;
-        requirements = a[0].requirements ?? a[0].items ?? a[0].entries ?? [];
-      } else if (Array.isArray(a[0]) && (typeof a[1] === 'number' || (typeof a[1] === 'string' && /^\\d+$/.test(String(a[1]).trim())))) {
-        requirements = a[0];
-        bookingId = a[1];
-      } else {
-        bookingId = a[0];
-        requirements = a[1] ?? [];
-      }
-      if (!Array.isArray(requirements) || requirements.length === 0) return;
-      for (const req of requirements) {
-        const description = typeof req?.description === 'string' ? req.description : (req?.description ?? '');
-        const allergies = req?.allergies === true || req?.allergies === 1 || req?.allergies === 'true' || req?.allergies === '1' ? 1 : 0;
+      const [bookingId, requirements] = a;
+      for (const { description, allergies } of requirements) {
         await exec.query(
           `INSERT INTO booking_requirements (booking_id, description, allergies) VALUES ($1, $2, $3)`,
-          [bookingId, description, allergies]
+          [bookingId, description, allergies ? 1 : 0]
         );
       }
     },
 
+    /**
+     * MH-06: replace the whole list (an empty list clears it). Run it inside the
+     * caller's transaction so a failed change keeps the previous list.
+     */
+    async replaceRequirements(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const [bookingId, requirements] = a;
+      await exec.query(`DELETE FROM booking_requirements WHERE booking_id = $1`, [bookingId]);
+      await this.insertRequirements(exec, bookingId, requirements);
+    },
+
+    /** MH-05: a booking's requirements as [{ description, allergies: boolean }]. */
     async getRequirements(...args) {
       const { db: exec, args: a } = executorOf(args);
-      const bookingId = a[0];
       const { rows } = await exec.query(
-        `SELECT id, booking_id AS bookingId, description, allergies
+        `SELECT description, allergies
          FROM booking_requirements
          WHERE booking_id = $1
          ORDER BY id`,
-        [bookingId]
+        [a[0]]
       );
-      return rows;
+      return rows.map(toRequirement);
     },
 
-    // Aliases for compatibility with possible hidden tests / naming conventions.
-    async insertPartyRequirements(...args) { return this.insertRequirements(...args); },
-    async insertBookingRequirements(...args) { return this.insertRequirements(...args); },
-    async createRequirements(...args) { return this.insertRequirements(...args); },
-    async createPartyRequirements(...args) { return this.insertRequirements(...args); },
-    async createBookingRequirements(...args) { return this.insertRequirements(...args); },
-    async addRequirements(...args) { return this.insertRequirements(...args); },
-    async addPartyRequirements(...args) { return this.insertRequirements(...args); },
-    async saveRequirements(...args) { return this.insertRequirements(...args); },
-    async savePartyRequirements(...args) { return this.insertRequirements(...args); },
-    async storeRequirements(...args) { return this.insertRequirements(...args); },
-
-    async getPartyRequirements(...args) { return this.getRequirements(...args); },
-    async getBookingRequirements(...args) { return this.getRequirements(...args); },
-    async findRequirements(...args) { return this.getRequirements(...args); },
-    async findRequirementsByBookingId(...args) { return this.getRequirements(...args); },
-    async findPartyRequirements(...args) { return this.getRequirements(...args); },
-    async findBookingRequirements(...args) { return this.getRequirements(...args); },
-    async listRequirements(...args) { return this.getRequirements(...args); },
-    async loadRequirements(...args) { return this.getRequirements(...args); },
-    async getRequirementsByBookingId(...args) { return this.getRequirements(...args); },
-    async fetchRequirements(...args) { return this.getRequirements(...args); },
+    /**
+     * Requirements of several bookings in one query (booking lists).
+     * Returns a Map bookingId -> list; bookings without requirements get [].
+     */
+    async getRequirementsByBookingIds(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const ids = a[0];
+      const byBooking = new Map(ids.map((id) => [id, []]));
+      if (ids.length === 0) return byBooking;
+      const placeholders = ids.map((_, i) => `$${i + 1}`).join(', ');
+      const { rows } = await exec.query(
+        `SELECT booking_id AS "bookingId", description, allergies
+         FROM booking_requirements
+         WHERE booking_id IN (${placeholders})
+         ORDER BY booking_id, id`,
+        ids
+      );
+      for (const row of rows) byBooking.get(row.bookingId)?.push(toRequirement(row));
+      return byBooking;
+    },
   };
+}
+
+/** The allergy flag is stored as 0/1 (SMALLINT); the API uses booleans. */
+function toRequirement(row) {
+  return { description: row.description, allergies: row.allergies === 1 };
 }

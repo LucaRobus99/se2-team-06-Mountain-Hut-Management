@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app.js';
-import { createSqliteDb } from '../src/db/sqlite.js';
+import { createTestDb } from './helpers/testDb.js';
 
 const fixedNow = () => new Date('2026-11-02T10:00:00Z');
 const payload = { date: '2026-11-18', startTime: '11:30', endTime: '12:15', meal: 'dinner', tables: [{ tableIdentifier: 'T1', seats: 3 }, { tableIdentifier: 'T6', seats: 5 }] };
 
 async function context(role = 'employee') {
-  const db = createSqliteDb(':memory:');
+  const db = createTestDb();
   const app = createApp({ db, now: fixedNow });
   const agent = request.agent(app);
   const response = await agent.post('/api/auth/login').send({ email: `${role}@hut.test`, password: 'password' });
@@ -57,7 +57,7 @@ describe('MH-02 staff slot configuration', () => {
   });
 
   it('protects staff routes from unauthenticated visitors and hikers', async () => {
-    const db = createSqliteDb(':memory:');
+    const db = createTestDb();
     try {
       const app = createApp({ db, now: fixedNow });
       expect((await request(app).post('/api/slots').send(payload)).status).toBe(401);

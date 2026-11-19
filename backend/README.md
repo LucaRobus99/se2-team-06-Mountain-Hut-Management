@@ -1,6 +1,6 @@
 # Edelweiss Hut — Backend
 
-**Stack:** Node.js >=22.13, Express 5, native `node:sqlite`, Passport Local, `express-session` and optional Mailgun (`mailgun.js`). This service manages one mountain hut.
+**Stack:** Node.js >=22.13, Express 5, PostgreSQL (`pg`; embedded PGlite when `DATABASE_URL` is unset), Passport Local, `express-session` and optional Mailgun (`mailgun.js`). This service manages one mountain hut.
 
 ## Setup and startup
 
@@ -13,9 +13,11 @@ npm start
 
 The API listens on `http://localhost:8080` by default. Use `npm run dev` for watch-mode development (restarting the process also resets its in-memory login sessions). Both start scripts read an optional `.env` file; copy `.env.example` when configuring local overrides.
 
-On first startup the service creates `database/database.sqlite` and initializes the schema and demo records. Later startups apply supported, non-destructive user-table schema updates for notes, emergency contact and profile photos. Existing bookings, slots and user data are preserved by these migrations.
+**Database.** With `DATABASE_URL` set (Docker), the service connects to that PostgreSQL server. Without it, it uses an embedded PostgreSQL (PGlite) in `database/pglite` (`PGLITE_DIR`). On first start against an empty database it runs `scripts/01-schema.sql` and `scripts/02-seed.sql`. Existing databases are **never migrated**: after changing the SQL scripts, reset the database (`npm run db:reset` locally, `docker compose down -v` in Docker), and say so in the release notes (the release workflow detects it automatically).
 
-**Data safety:** `npm run db:reset` deletes the local SQLite database. Do not use it on a database containing important data. Keep `.env`, Mailgun credentials and `database/` out of Git.
+The connection layer is `src/db/postgres.js`: `query(sql, params)` returns `{ rows, rowCount }`, with `$1, $2…` placeholders. `transaction(fn)` takes one global advisory lock, so transactions run one at a time (the first booking saved wins, AC-01.9). `bigint` results (`COUNT`, `SUM`) are parsed as numbers. Quote camelCase column aliases (`AS "tableId"`): PostgreSQL lowercases unquoted names.
+
+**Data safety:** `npm run db:reset` deletes the local embedded database (`database/pglite`). Do not use it on a database containing important data. Keep `.env`, Mailgun credentials and `database/` out of Git.
 
 ## API routes
 
@@ -24,6 +26,8 @@ On first startup the service creates `database/database.sqlite` and initializes 
 | GET | `/api/health` | Public | Health check |
 | POST | `/api/auth/register` | Public | Register and sign in a hiker |
 | POST | `/api/auth/login` | Public | Sign in |
+| POST | `/api/auth/forgot-password` | Public | Request a password reset link (always 204) |
+| POST | `/api/auth/reset-password` | Public | Set a new password with a single-use token (MH-07) |
 | GET | `/api/auth/me` | Authenticated | Current user profile |
 | PATCH | `/api/auth/me` | Hiker | Update name, phone, notes and emergency contact |
 | POST | `/api/auth/change-password` | Authenticated | Change password using the current password |
@@ -33,25 +37,30 @@ On first startup the service creates `database/database.sqlite` and initializes 
 | POST | `/api/auth/logout` | Authenticated | Log out |
 | GET | `/api/availability` | Public | Available meal slots for date, meal and party size |
 | GET | `/api/availability/:slotId/seating` | Public | Seating proposal for a slot |
-| POST | `/api/bookings` | Authenticated | Create a booking (self-service hiker or staff acting for a guest) |
+| POST | `/api/bookings` | Hiker | Create the signed-in hiker's own booking (staff get `403` and use `POST /api/staff/bookings`) |
 | GET | `/api/bookings` | Hiker | List only the signed-in hiker's bookings (MH-06) |
 | GET | `/api/bookings/slot-status?slotId=…` | Hiker | Check whether the hiker already booked the selected slot |
 | GET | `/api/bookings/:bookingId` | Owner or staff | Booking details |
 | PATCH | `/api/bookings/:bookingId` | Owner (Hiker) | Change slot, party size or requirements (MH-06) |
+| DELETE | `/api/bookings/:bookingId` | Owner (Hiker) | Cancel a booking; idempotent and with no time limit (MH-08) |
+| GET | `/api/staff/hikers?query=…` | Employee/Warden | Search hikers by name, email or phone (MH-07) |
+| GET | `/api/staff/availability` | Employee/Warden | Availability including slots that start within two hours |
+| GET | `/api/staff/availability/:slotId/seating` | Employee/Warden | Seating preview for staff bookings |
+| POST | `/api/staff/bookings` | Employee/Warden | Book for an existing hiker, a temporary guest or a new hiker account (MH-07) |
 | GET | `/api/slots` | Employee/Warden | List slots, optionally filtering by date/meal |
 | GET | `/api/slots/:slotId` | Employee/Warden | Slot details |
 | POST | `/api/slots` | Employee/Warden | Create a slot and configure its table capacity |
 
-The application serves one hut. Slot creation uses explicit `startTime` and `endTime` values, not `durationMinutes`; routes containing `/api/huts/:hutId/slots` are not part of the current API. The literal route `/api/bookings/slot-status` is registered before `/api/bookings/:bookingId` so it is not parsed as an ID. Booking cancellation and the staff Reservations management page are not implemented yet.
+The application serves one hut. Slot creation uses explicit `startTime` and `endTime` values, not `durationMinutes`; routes containing `/api/huts/:hutId/slots` are not part of the current API. The literal route `/api/bookings/slot-status` is registered before `/api/bookings/:bookingId` so it is not parsed as an ID. MH-07 currently provides the backend API only (the staff page is a frontend task).
 
 ## Accounts, password changes and avatars
 
 Hikers register with **name, email, phone and password**; notes and emergency contact are optional. The email address and account role are not editable via the profile endpoint. The API identifies the account through the authenticated session rather than accepting a user ID from the request body.
 
-- `PATCH /api/auth/me` validates the supplied fields and saves them to SQLite.
+- `PATCH /api/auth/me` validates the supplied fields and saves them to the database.
 - `POST /api/auth/change-password` requires `currentPassword` and `newPassword` (8–128 characters), verifies the current password and stores a new password hash.
 - `PATCH /api/auth/avatar` accepts one `imageData` field containing a base64-encoded JPEG/PNG/WebP image of at most **400 KB**. The backend checks both the content type and the file signature; the frontend resizes normal uploads before sending.
-- Photo bytes are stored in SQLite (`users.avatar_blob`, `avatar_mime`, `avatar_version`). `GET /api/auth/avatar` is private and sends `Cache-Control: private, no-store`; `DELETE` removes the image.
+- Photo bytes are stored in PostgreSQL (`users.avatar_blob` BYTEA, `avatar_mime`, `avatar_version`). `GET /api/auth/avatar` is private and sends `Cache-Control: private, no-store`; `DELETE` removes the image.
 
 All profile, password and photo endpoints enforce authentication; changing a hiker's profile or avatar additionally requires the hiker role.
 
@@ -59,13 +68,13 @@ All profile, password and photo endpoints enforce authentication; changing a hik
 
 The backend enforces table capacity and seating transactionally, even when the UI has already shown an availability preview. A hiker cannot create a second confirmed booking in the same slot. Party requirements (MH-05) include separate dietary/allergy entries and affected guest counts; they are stored with the reservation and returned in booking details.
 
-When Mailgun is configured, creating or updating a booking attempts a confirmation email. Successful **POST** and **PATCH** responses include `confirmationEmail.status`:
+When Mailgun is configured, creating, updating or cancelling a booking attempts an email. Successful **POST** and **PATCH** responses include `confirmationEmail.status`; **DELETE** returns the same information as `cancellationEmail.status`:
 
 - `sent` — Mailgun accepted the request;
 - `failed` — the submission failed;
-- `skipped` — no email configuration/recipient was available.
+- `skipped` — no email configuration/recipient was available (also used when a repeated cancellation does not send a second email).
 
-A successfully persisted booking stays confirmed/updated regardless of email status; failed email submissions do not roll back an already committed transaction. `GET /api/bookings` and `GET /api/bookings/:bookingId` do not include this notification result because it is not persisted. Configure `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_FROM` (optional), `MAILGUN_TEMPLATE` and optional `MAILGUN_URL` in `.env`. A Mailgun sandbox may require authorizing recipient addresses. The email template lives in Mailgun, not in this repository.
+A successfully persisted booking stays confirmed/updated/cancelled regardless of email status; failed email submissions do not roll back an already committed transaction. `GET /api/bookings` and `GET /api/bookings/:bookingId` do not include this notification result because it is not persisted. Configure `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_FROM` (optional), `MAILGUN_TEMPLATE`, `MAILGUN_UPDATED_TEMPLATE`, `MAILGUN_CANCELLED_TEMPLATE`, `MAILGUN_RESET_TEMPLATE` and optional `MAILGUN_URL` in `.env`. A Mailgun sandbox may require authorizing recipient addresses. Ready-to-upload templates live in `email-templates/` (`booking-confirmation.html`, `booking-modification.html`, `booking-cancelled.html`).
 
 ## Booking history and changes (MH-06)
 
@@ -124,6 +133,69 @@ The rules below are enforced inside a single serialized transaction:
 
 A successful change returns the updated booking in the same shape as a list item, plus `confirmationEmail`. There is no `Location` header because the resource address does not change.
 
+## Cancelling a booking (MH-08)
+
+`DELETE /api/bookings/:bookingId` cancels a booking owned by the authenticated Hiker. There is **no time limit**: cancellation is allowed even after the slot has started.
+
+1. **Ownership** — an unknown ID and another hiker's booking both return `404 BOOKING_NOT_FOUND`, so booking IDs cannot be enumerated. Staff accounts receive `403 FORBIDDEN`.
+2. **Seat release** — the booking status becomes `cancelled`. Availability queries count only confirmed bookings, so the seats are immediately available again; `booking_seats` rows are kept for history.
+3. **Idempotency** — the transition is one conditional `UPDATE ... WHERE status = 'confirmed'`. Repeated requests return `200` with `alreadyCancelled: true`, do not change availability again and do not resend the email.
+4. **Cancellation email** — attempted after the commit; its outcome is `cancellationEmail.status` (`sent`, `failed` or `skipped`). A delivery failure never undoes the cancellation.
+
+```json
+{
+  "id": 12,
+  "status": "cancelled",
+  "alreadyCancelled": false,
+  "cancellationEmail": { "status": "skipped" },
+  "...": "same fields as GET /api/bookings/:bookingId"
+}
+```
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| 401 | `UNAUTHENTICATED` | Missing or expired session |
+| 403 | `FORBIDDEN` | Authenticated, but not a Hiker |
+| 404 | `BOOKING_NOT_FOUND` | Unknown booking, or owned by another user |
+
+## Staff reservations and password recovery (MH-07)
+
+`POST /api/staff/bookings` is restricted to **Employee/Warden** and accepts a `mode` that selects one of three flows. Seat allocation, availability checks and party requirements are the same as MH-01/MH-05.
+
+```json
+{ "mode": "existingHiker", "hikerId": 3, "slotId": 3, "partySize": 2,
+  "requirements": [{ "description": "1 vegan guest", "allergies": false }] }
+
+{ "mode": "guest", "slotId": 3, "partySize": 2,
+  "contactName": "Temporary Guest", "contactNumber": "+393331112222" }
+
+{ "mode": "newHiker", "slotId": 3, "partySize": 2,
+  "name": "New Hiker", "email": "new.hiker@example.com", "phone": "+393339998877" }
+```
+
+- **existingHiker** — the booking records both `hiker_id` (owner, so it appears in that hiker's `GET /api/bookings`) and `created_by` (staff member). Contact details are copied from the profile. The staff search matches name, email and phone, including phone numbers typed without their stored separators (`3331234567` also finds `+39 333 123 4567`).
+- **guest** — no user row is created, so a temporary guest cannot authenticate. `contactName` is required; `contactNumber` and `email` are optional. `POST /api/staff/bookings` is the only way for staff to book; `POST /api/bookings` is hiker-only.
+- **newHiker** — a complete hiker account and the booking are created in **one transaction**. The initial password is generated server-side with `node:crypto` (`password_change_required = 1`), only its scrypt hash is stored, and the plaintext value is returned **once** in the `201` response (`initialPassword`, `Cache-Control: no-store`). It is never emailed, logged or exposed by any other endpoint (#46, option A: the attending staff member communicates it). If the booking fails (e.g. `INSUFFICIENT_CAPACITY`), the account is rolled back too.
+
+`#35`: staff may book **until the slot starts**; afterwards the request fails with `422 SLOT_ALREADY_STARTED`. Hikers keep the two-hour cut-off (`422 SLOT_TOO_LATE`). `GET /api/staff/availability` returns the same slots as the public availability plus those starting within two hours.
+
+While `passwordChangeRequired` is true, every authenticated endpoint except `/api/auth/me`, `/api/auth/change-password`, `/api/auth/logout` returns `403 PASSWORD_CHANGE_REQUIRED`; changing the password clears the flag.
+
+### Password recovery (#44)
+
+- `POST /api/auth/forgot-password` always answers `204`, even for unknown addresses (no account enumeration).
+- The reset token is random (32 bytes), stored only as a SHA-256 hash, single-use and valid for **24 hours**; a new request invalidates previous links.
+- `POST /api/auth/reset-password` accepts `{ "token": "…", "newPassword": "…" }`, clears `passwordChangeRequired` and deletes the outstanding tokens. Invalid, expired or already-used tokens return `400 INVALID_RESET_TOKEN`.
+- Configure `APP_BASE_URL` (reset link host) and the Mailgun template `MAILGUN_RESET_TEMPLATE`. Without Mailgun the reset email is skipped, as for booking confirmations.
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| 403 | `PASSWORD_CHANGE_REQUIRED` | The account must change its first password |
+| 404 | `HIKER_NOT_FOUND` | `hikerId` does not exist or is not a hiker |
+| 409 | `EMAIL_ALREADY_REGISTERED` | `newHiker` email already used |
+| 422 | `SLOT_ALREADY_STARTED` | Staff booking after the slot began |
+| 400 | `INVALID_RESET_TOKEN` | Unknown, expired or reused reset token |
+
 ## Populate demo slots safely
 
 From `backend/`, with the server **stopped** and a backup made:
@@ -139,12 +211,12 @@ The actual number of inserted slots depends on the current database. Re-running 
 
 ## Session, time zone and production considerations
 
-- HTTP session cookie `sid` is HttpOnly/SameSite=Lax; Secure cookies apply in production. Sessions are stored in process memory during development and are lost when the server restarts. Use a durable session store for a deployed multi-instance service.
-- Booking and seat allocation run inside serialized SQLite transactions; availability and seating previews do not reserve seats.
+- HTTP session cookie `sid` is HttpOnly/SameSite=Lax; Secure cookies apply in production (override with `COOKIE_SECURE=false` when serving over plain HTTP, as the Docker demo does). Express trusts only private-network proxies (`trust proxy`), i.e. the nginx frontend container. Sessions are stored in process memory during development and are lost when the server restarts. Use a durable session store for a deployed multi-instance service.
+- Booking and seat allocation run inside serialized PostgreSQL transactions (global advisory lock); availability and seating previews do not reserve seats.
 - Slot capacity can vary by meal, date and time. Slot overlap is currently prohibited, pending the Product Owner's response to issue #31.
 - `HUT_TIMEZONE` defaults to `Europe/Rome` and is used for slot dates, booking cutoffs and the 48-hour modification window.
 - Production requires a strong `SESSION_SECRET`; never commit secrets.
-- Back up the single SQLite database file before schema work or importing demo data.
+- Releases never migrate existing databases; a schema change requires `docker compose down -v` (demo data is lost).
 
 ## Testing
 
@@ -155,6 +227,6 @@ npm test            # vitest run
 npm run test:watch  # interactive
 ```
 
-Tests build in-memory SQLite databases (`:memory:`) using `scripts/01-schema.sql` and `scripts/02-seed.sql`, without touching `backend/database/database.sqlite`. Suites are organized under `test/unit tests/black box`, `test/unit tests/white box` and `test/integration tests`.
+Tests use an in-memory embedded PostgreSQL (PGlite): no Docker or database server needed. `test/globalSetup.js` builds one seeded template; each test file starts from it and every `createTestDb()` resets the data to the seed (`test/helpers/testDb.js`). Suites are organized under `test/unit tests/black box`, `test/unit tests/white box` and `test/integration tests`.
 
 On 12 November 2026 the account branch passed **377 tests in 52 files** before merging the newer work from `main`. Run the full suite again after resolving the merge: these earlier results do not validate the combined branch. MH-06 currently has integration coverage for `GET /api/bookings`; `PATCH /api/bookings/:bookingId` and `updateBooking()` still need dedicated unit/route-level coverage before the story is considered Done.

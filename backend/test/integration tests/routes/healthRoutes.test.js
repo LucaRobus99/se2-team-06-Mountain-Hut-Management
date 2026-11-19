@@ -8,7 +8,7 @@ describe('HealthRoutes - Integration Tests', () => {
   let app;
 
   beforeEach(() => {
-    // Initialize a clean in-memory SQLite database
+    // Initialize a clean test database (PostgreSQL)
     db = createTestDb();
     // Create the Express app injecting the test database
     app = createApp({ db });

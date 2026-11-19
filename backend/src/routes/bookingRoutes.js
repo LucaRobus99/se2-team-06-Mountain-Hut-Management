@@ -1,10 +1,11 @@
 import { Router } from 'express';
-import { ROLES } from '../auth/roles.js';
+import { HIKER_BOOKING_MESSAGE, HIKER_CANCEL_MESSAGE } from '../auth/roles.js';
 
 export function createBookingRouter(bookingService, requireAuth) {
   const router = Router();
 
-  router.post('/', requireAuth(ROLES), async (req, res, next) => {
+  // MH-01: hikers book for themselves. Staff use POST /api/staff/bookings (MH-07).
+  router.post('/', requireAuth(['hiker'], HIKER_BOOKING_MESSAGE), async (req, res, next) => {
     try {
       const result = await bookingService.createBooking(req.user, req.body);
       res.status(201).set('Location', `/api/bookings/${result.id}`).json(result);
@@ -45,6 +46,16 @@ export function createBookingRouter(bookingService, requireAuth) {
   router.patch('/:bookingId', requireAuth(['hiker']), async (req, res, next) => {
     try {
       const result = await bookingService.updateBooking(req.user, req.params.bookingId, req.body);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // MH-08: annullamento prenotazione (idempotente, nessun limite temporale).
+  router.delete('/:bookingId', requireAuth(['hiker'], HIKER_CANCEL_MESSAGE), async (req, res, next) => {
+    try {
+      const result = await bookingService.cancelBooking(req.user, req.params.bookingId);
       res.json(result);
     } catch (err) {
       next(err);

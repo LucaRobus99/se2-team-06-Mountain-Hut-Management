@@ -1,5 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { login, getCurrentUser, logout, registerHiker } from '../../../../src/api/auth.js';
+import { 
+  login, 
+  getCurrentUser, 
+  logout, 
+  registerHiker, 
+  updateMyProfile, 
+  changeMyPassword, 
+  uploadMyAvatar, 
+  removeMyAvatar 
+} from '../../../../src/api/auth.js';
 
 describe('Auth API - White-Box Unit Tests', () => {
   
@@ -158,7 +167,6 @@ describe('Auth API - White-Box Unit Tests', () => {
       expect(options.method).toBe('POST');
       expect(options.credentials).toBe('include');
       expect(options.headers).toEqual({ 'Content-Type': 'application/json' });
-      // Parse the JSON body to compare object keys independently of string serialization order
       expect(JSON.parse(options.body)).toEqual(newHikerData);
     });
 
@@ -178,6 +186,143 @@ describe('Auth API - White-Box Unit Tests', () => {
 
       await expect(registerHiker(duplicateUser))
         .rejects.toThrow('This email already has an account. Please log in instead.');
+    });
+
+  });
+
+  describe('updateMyProfile', () => {
+    it('should successfully update profile and return updated user data', async () => {
+      const mockUpdatedUser = { id: 1, name: 'Mario Updated', phone: '+393339999999' };
+
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ user: mockUpdatedUser })
+      }));
+
+      const profileData = { name: 'Mario Updated', phone: '+393339999999' };
+      const result = await updateMyProfile(profileData);
+
+      expect(result).toEqual(mockUpdatedUser);
+      expect(fetch).toHaveBeenCalledWith('/api/auth/me', expect.objectContaining({
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profileData)
+      }));
+    });
+  });
+
+  describe('changeMyPassword', () => {
+    it('should successfully change password', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        status: 204,
+        json: async () => null
+      }));
+
+      const passData = { currentPassword: 'OldPass', newPassword: 'NewPass123!' };
+      await expect(changeMyPassword(passData)).resolves.toBeNull();
+
+      expect(fetch).toHaveBeenCalledWith('/api/auth/change-password', expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(passData)
+      }));
+    });
+  });
+
+  describe('uploadMyAvatar & removeMyAvatar', () => {
+    
+    it('should successfully upload avatar and return updated user data', async () => {
+      const mockUser = { id: 1, avatarUrl: '/api/auth/avatar?v=1' };
+
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ user: mockUser })
+      }));
+
+      const user = await uploadMyAvatar('base64imagedata');
+
+      expect(user).toEqual(mockUser);
+      expect(fetch).toHaveBeenCalledWith('/api/auth/avatar', expect.objectContaining({
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageData: 'base64imagedata' })
+      }));
+    });
+
+    it('should successfully remove avatar and return updated user data', async () => {
+      const mockUser = { id: 1, avatarUrl: null };
+
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ user: mockUser })
+      }));
+
+      const user = await removeMyAvatar();
+
+      expect(user).toEqual(mockUser);
+      expect(fetch).toHaveBeenCalledWith('/api/auth/avatar', expect.objectContaining({
+        method: 'DELETE'
+      }));
+    });
+
+  });
+
+  describe('request helper fallbacks and edge cases', () => {
+    
+    it('should use default error message if error body lacks a message', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: {} })
+      }));
+
+      await expect(login({ email: 'test@hut.test', password: 'pwd' }))
+        .rejects.toThrow('The request could not be completed.');
+    });
+
+    it('should handle non-JSON error responses gracefully and default details to empty array', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => { throw new Error('Invalid JSON stream'); }
+      }));
+
+      try {
+        await getCurrentUser();
+        expect.fail('Should have thrown an error');
+      } catch (err) {
+        expect(err.message).toBe('The request could not be completed.');
+        expect(err.status).toBe(500);
+        expect(err.details).toEqual([]);
+      }
+    });
+
+    it('should correctly capture and populate error details when provided as an array', async () => {
+      const mockDetails = [{ field: 'email', rule: 'invalid' }];
+
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Validation failed',
+            details: mockDetails
+          }
+        })
+      }));
+
+      try {
+        await login({ email: 'bad', password: 'pwd' });
+        expect.fail('Should have thrown an error');
+      } catch (err) {
+        expect(err.code).toBe('VALIDATION_ERROR');
+        expect(err.details).toEqual(mockDetails);
+      }
     });
 
   });
