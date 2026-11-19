@@ -43,7 +43,9 @@ INSERT INTO slots (id, meal_id, date, start_time, end_time, status) VALUES
     (7,  4, '2026-11-15', '20:00', '21:00', 'off'),
     (8,  1, '2026-11-16', '09:00', '09:30', 'available'),
     (9,  2, '2026-11-16', '12:00', '13:00', 'available'),
-    (10, 4, '2026-11-16', '19:00', '20:00', 'available');
+    (10, 4, '2026-11-16', '19:00', '20:00', 'available'),
+    (11, 2, '2027-03-15', '12:00', '13:00', 'available'),
+    (12, 2, '2027-03-16', '12:00', '13:00', 'available');
 
 -- Table set of each slot: table and its seats in that slot (T1 = 2, T2/T3 = 4,
 -- T4 = 6, T5 = 8). Slot 7 is off and slot 8 has no tables (zero capacity, issue #17).
@@ -56,7 +58,8 @@ INSERT INTO slot_tables (slot_id, table_id, seats) VALUES
     (6, 1, 2), (6, 2, 4), (6, 3, 4), (6, 4, 6), (6, 5, 8),
     (7, 4, 6), (7, 5, 8),
     (9, 2, 4), (9, 4, 6),
-    (10, 3, 4), (10, 4, 6), (10, 5, 8);
+    (10, 3, 4), (10, 4, 6), (10, 5, 8),
+    (11, 1, 4), (11, 2, 2);
 
 -- The rows above use explicit ids, which do not advance the identity
 -- sequences. Move each sequence past the seeded ids so the next INSERT

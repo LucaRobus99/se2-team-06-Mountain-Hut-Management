@@ -10,9 +10,15 @@ describe('Mountain Hut - Availability Search & Slot Management (MH-04)', () => {
     cy.visit('http://localhost:5173/availability');
     cy.get('form.eh-availability-search', { timeout: 10000 }).should('be.visible');
 
-    // 2. Select target date (Nov 15, 2026)
+    // 2. Open datepicker and advance 4 months to March 2027, then select day 15
     cy.get('#availability-date').click();
-    cy.get('.react-datepicker__day, .calendar-day, td, button').contains('15').click();
+    // Avanza di 4 mesi (da novembre 2026 a marzo 2027)
+    for (let i = 0; i < 4; i++) {
+      cy.get('button[aria-label*="Next month"], button.ea-calendar-next, .react-datepicker__navigation--next')
+        .first()
+        .click();
+    }
+    cy.get('button.ea-calendar-day:not([disabled])').contains(/^15$/).click();
 
     // 3. Select meal (lunch)
     cy.get('#availability-meal', { timeout: 10000 }).should('be.visible').click();
@@ -39,13 +45,18 @@ describe('Mountain Hut - Availability Search & Slot Management (MH-04)', () => {
     cy.visit('http://localhost:5173/availability');
     cy.get('form.eh-availability-search', { timeout: 10000 }).should('be.visible');
 
-    // 2. Select target date (Nov 16, 2026) where slot 8 has zero tables/capacity in seed data
+    // 2. Open datepicker and advance 4 months to March 2027, then select day 16 (slot 12 with no tables)
     cy.get('#availability-date').click();
-    cy.get('.react-datepicker__day, .calendar-day, td, button').contains('16').click();
+    for (let i = 0; i < 4; i++) {
+      cy.get('button[aria-label*="Next month"], button.ea-calendar-next, .react-datepicker__navigation--next')
+        .first()
+        .click();
+    }
+    cy.get('button.ea-calendar-day:not([disabled])').contains(/^16$/).click();
 
-    // 3. Select meal (breakfast)
+    // 3. Select meal (lunch - matching slot 12 on 2027-03-16)
     cy.get('#availability-meal', { timeout: 10000 }).should('be.visible').click();
-    cy.contains('div, span, li, option', /^breakfast$/i).click();
+    cy.contains('div, span, li, option', /^lunch$/i).click();
 
     // 4. Select party size
     cy.get('select#availability-guests, input#availability-guests, #availability-guests', { timeout: 10000 })
@@ -65,10 +76,8 @@ describe('Mountain Hut - Availability Search & Slot Management (MH-04)', () => {
     cy.get('body').then(($body) => {
       const hasSlots = $body.find('.eh-slot-tile').length > 0;
       if (hasSlots) {
-        // Se compaiono tile, verifichiamo che siano contrassegnati come non disponibili o disabilitati
         cy.get('.eh-slot-tile').should('have.class', 'is-disabled').or('contain.text', 'unavailable');
       } else {
-        // Se non ci sono slot disponibili per quella ricerca, l'assenza è corretta (gestione capienza zero)
         cy.get('.eh-availability-search').should('be.visible');
       }
     });
