@@ -24,7 +24,6 @@ function RequirementSummary({ requirements }) {
   if (!requirements?.length) return <p className="eh-manage-none">No dietary requirements added.</p>;
   return <ul className="eh-manage-diet-list">{requirements.map((item, index) => (
     <li key={index} className={item.allergies ? 'has-allergy' : ''}>
-      <span className="eh-manage-diet-icon" aria-hidden="true">{item.allergies ? '!' : '✦'}</span>
       <span><strong>{item.description}</strong>{item.allergies && <small>Allergy · special care required</small>}</span>
     </li>
   ))}</ul>;
@@ -197,7 +196,7 @@ export default function MyBookingsPage() {
                   aria-controls={selected?.id === booking.id ? 'eh-manage-active-panel' : undefined}
                   aria-label={`${selected?.id === booking.id ? 'Close' : 'Open'} booking #${booking.id}: ${readableMeal(booking.slot.meal)}`}
                   onClick={() => toggleBooking(booking.id)}>
-                  <span className={`eh-manage-card-arrow${selected?.id === booking.id ? ' is-open' : ''}`} aria-hidden="true">›</span>
+                  <svg className={`eh-manage-card-arrow${selected?.id === booking.id ? ' is-open' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7" /></svg>
                 </button>
               </article>)}
               {editing && <p className="eh-manage-cutoff">Changes close 48 hours before the meal.</p>}

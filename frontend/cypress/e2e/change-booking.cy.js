@@ -1,18 +1,37 @@
 const host = 'http://localhost:5173';
-const api = (path, options = {}) => cy.request({ url: `${host}/api${path}`, ...options });
+const api = (path, options = {}) => cy.request({
+  url: `${host}/api${path}`,
+  // Do not repeat a write if its HTTP response is interrupted.
+  retryOnNetworkFailure: !options.method || options.method === 'GET',
+  ...options,
+});
+
+// Each run needs a date without any slots, including disabled ones.
+// Check as staff, so existing test or seed slots cannot overlap our fixtures.
+function findFreeDate(daysAhead = 7) {
+  if (daysAhead > 60) throw new Error('No empty date found for MH-06 E2E fixtures.');
+  const date = new Date(Date.now() + daysAhead * 86400000).toISOString().slice(0, 10);
+  return api('/slots', { qs: { date } }).then(({ body }) => {
+    expect(body.slots).to.be.an('array');
+    return body.slots.length === 0 ? date : findFreeDate(daysAhead + 1);
+  });
+}
 
 describe('MH-06 — change a booking', () => {
   it('updates a booking, rechecks available times and preserves it when capacity is insufficient', () => {
     // Refuse to run against anyone's regular database.
     api('/mh06-e2e').its('body').should('deep.equal', { isolated: true });
     cy.viewport(390, 844);
-    const date = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    let date;
     const tables = [{ tableIdentifier: 'E2E table', seats: 2 }];
     const unique = Date.now();
     const email = `mh06-${unique}@hut.test`;
     api('/auth/login', { method: 'POST', body: { email: 'warden@hut.test', password: 'password' } });
-    // An isolated server is started fresh for this spec (no resetDb task).
-    api('/slots', { method: 'POST', body: { date, meal: 'lunch', startTime: '12:00', endTime: '13:00', tables } })
+    // Keep fixtures separate even if the isolated server has not been restarted.
+    findFreeDate().then(freeDate => {
+      date = freeDate;
+      return api('/slots', { method: 'POST', body: { date, meal: 'lunch', startTime: '12:00', endTime: '13:00', tables } });
+    })
       .its('body.id').then(original => {
         api('/slots', { method: 'POST', body: { date, meal: 'lunch', startTime: '13:00', endTime: '14:00',
           tables: [{ tableIdentifier: 'E2E table', seats: 4 }] } }).its('body.id').then(target => {

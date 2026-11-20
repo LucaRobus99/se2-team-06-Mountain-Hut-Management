@@ -37,6 +37,7 @@ describe('Edit booking — photographic availability slots', () => {
     render(<EditBookingForm booking={booking} onCancel={vi.fn()} onSaved={vi.fn()} />);
     expect(await screen.findByText(/13:00 · Available for your group/i)).toBeInTheDocument();
     expect(screen.getByText(/12:00 · Current time/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Selected:/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Time')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
   });
@@ -95,5 +96,27 @@ describe('Edit booking — photographic availability slots', () => {
     expect(screen.getByLabelText('Requirement 1')).toHaveValue('Vegetarian');
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
     expect(saved).not.toHaveBeenCalled();
+  });
+
+  it('edits and removes dietary entries and saves the allergy flag without changing the time', async () => {
+    const user = userEvent.setup();
+    const saved = vi.fn();
+    render(<EditBookingForm booking={booking} onCancel={vi.fn()} onSaved={saved} />);
+    await screen.findByRole('button', { name: /12:00 · Current time/i });
+    await user.click(screen.getByRole('button', { name: /add dietary requirement/i }));
+    await user.click(screen.getByRole('button', { name: /add dietary requirement/i }));
+    expect(screen.getByRole('alert')).toHaveTextContent(/please describe dietary requirement 1/i);
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+    await user.type(screen.getByLabelText('Requirement 1'), '1 guest allergic to peanuts');
+    await user.click(screen.getAllByRole('checkbox', { name: 'Allergy' })[0]);
+    expect(screen.getAllByRole('checkbox', { name: 'Allergy' })[0]).toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Remove requirement 2' }));
+    expect(screen.queryByLabelText('Requirement 2')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() => expect(updateBooking).toHaveBeenCalledWith(8, {
+      requirements: [{ description: '1 guest allergic to peanuts', allergies: true }],
+    }));
+    expect(saved).toHaveBeenCalledTimes(1);
   });
 });

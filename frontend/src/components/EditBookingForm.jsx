@@ -137,7 +137,7 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
           {checking ? 'Checking availability for your selection…'
             : available.error ? available.error
             : !choices.length ? 'No times available. Try another date, meal or guest count.'
-            : `Choose one of the available slots for ${numberGuests} ${numberGuests === 1 ? 'guest' : 'guests'}. Final availability is checked when saving.`}
+            : <><span>Choose one of the available slots for {numberGuests} {numberGuests === 1 ? 'guest' : 'guests'}.</span><span className="eh-edit-availability-note">Final availability is checked when saving.</span></>}
         </div>
         {available.error && !checking &&
           <button type="button" className="eh-edit-add" onClick={() => setRefresh(value => value + 1)} disabled={saving}>Try again</button>}
@@ -152,25 +152,25 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
                 onClick={() => { setSelectedSlotId(slot.id); setSaveError(''); }} />
             ))}
           </div>}
-        {selectedOption && !checking && <p className="eh-edit-time-selection">Selected: <strong>{timeLabel(selectedOption)}</strong>{selectedOption.current ? ' · your original time' : ''}</p>}
       </section>
 
       <div className="eh-edit-requirements-title"><h4>Dietary requirements</h4><span>Optional</span></div>
       {requirements.length === 0 && <p className="eh-edit-no-requirements">No dietary requirements saved.</p>}
       {requirements.map((requirement, index) => (
         <div className="eh-edit-requirement" key={requirement.id}>
-          <label htmlFor={`edit-requirement-${requirement.id}`}>Requirement {index + 1}
-            <input id={`edit-requirement-${requirement.id}`} value={requirement.description} maxLength={500}
-              placeholder="e.g. 2 vegetarian guests" disabled={saving}
-              onChange={event => changeRequirement(requirement.id, { description: event.target.value })} />
-          </label>
-          <label className="eh-edit-allergy"><input type="checkbox" checked={Boolean(requirement.allergies)} disabled={saving}
-            onChange={event => changeRequirement(requirement.id, { allergies: event.target.checked })} /> Allergy</label>
-          <button className="eh-edit-remove" type="button" disabled={saving} onClick={() => removeRequirement(requirement.id)} aria-label={`Remove requirement ${index + 1}`}>×</button>
+          <div className="eh-edit-requirement-head">
+            <label htmlFor={`edit-requirement-${requirement.id}`}>Requirement {index + 1}</label>
+            <button className="eh-edit-remove" type="button" disabled={saving} onClick={() => removeRequirement(requirement.id)} aria-label={`Remove requirement ${index + 1}`}>Remove</button>
+          </div>
+          <textarea id={`edit-requirement-${requirement.id}`} value={requirement.description} maxLength={500}
+            rows={2} placeholder="e.g. 2 vegetarian guests" disabled={saving}
+            onChange={event => changeRequirement(requirement.id, { description: event.target.value })} />
+          <label className={`eh-edit-allergy${requirement.allergies ? ' is-checked' : ''}`}><input type="checkbox" checked={Boolean(requirement.allergies)} disabled={saving}
+            onChange={event => changeRequirement(requirement.id, { allergies: event.target.checked })} /> <span>Allergy</span></label>
         </div>
       ))}
       <button type="button" className="eh-edit-add" disabled={saving} onClick={addRequirement}>+ Add dietary requirement</button>
-      {requirementsError && <p className="eh-edit-error" role="alert">{requirementsError}</p>}
+      {requirementsError && <p className="eh-edit-error eh-edit-requirements-error" role="alert">{requirementsError}</p>}
       <p className="eh-edit-policy">Changes close 48 hours before the original or new meal. Your booking stays unchanged until you save.</p>
       {!canEdit && <p role="alert" className="eh-edit-error">This booking can no longer be modified.</p>}
       {saveError && <p role="alert" className="eh-edit-error">{saveError}</p>}

@@ -139,6 +139,35 @@ describe('MH-06 — modification availability and transactional updates', () => 
     expect((await change(owner, { partySize: 1 }, cancelled.id)).body.error.code).toBe('BOOKING_NOT_CONFIRMED');
   });
 
+  it('sends one modification email with the saved reservation details after a successful update', async () => {
+    const newDate = '2027-06-17';
+    const target = await slot(newDate, '13:00', '14:00', 6);
+    const newRequirements = [
+      { description: 'Two vegetarian guests', allergies: false },
+      { description: 'One guest allergic to peanuts', allergies: true },
+    ];
+    sendBookingEmail.mockClear().mockResolvedValueOnce({ id: '<modification-message>' });
+
+    const updated = await change(owner, { slotId: target, partySize: 4, requirements: newRequirements });
+    expect(updated.status).toBe(200);
+    expect(updated.body.confirmationEmail).toEqual({ status: 'sent' });
+    expect(sendBookingEmail).toHaveBeenCalledTimes(1);
+    expect(sendBookingEmail).toHaveBeenCalledWith('updated', 'hiker@hut.test', {
+      name: updated.body.contactName,
+      date: newDate,
+      start_time: '13:00',
+      end_time: '14:00',
+      meal: 'lunch',
+      guests: 4,
+      split: false,
+      booking_id: booking.id,
+      party_requirements: newRequirements,
+    });
+    expect((await owner.get(`/api/bookings/${booking.id}`)).body).toMatchObject({
+      id: booking.id, partySize: 4, slot: { id: target, date: newDate }, requirements: newRequirements,
+    });
+  });
+
   it('does not undo the committed modification if the update email fails', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     let savedAtNotification;
