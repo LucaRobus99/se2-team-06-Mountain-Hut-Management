@@ -85,8 +85,8 @@ describe('emailService - White-Box Tests', () => {
       expect(mockCreateMessage).toHaveBeenCalledWith(
         'hut.org',
         expect.objectContaining({
-          to: ['John <user@example.com>'],
-          template: 'booking confirmation',
+          to: ['user@example.com'],
+          template: 'booking-confirmation',
         })
       );
     });
@@ -99,21 +99,21 @@ describe('emailService - White-Box Tests', () => {
       await service.sendBookingConfirmation({ email: 'email@example.com', name: 'Alice' });
       expect(mockCreateMessage).toHaveBeenCalledWith(
         'hut.org',
-        expect.objectContaining({ to: ['Alice <email@example.com>'] })
+        expect.objectContaining({ to: ['email@example.com'] })
       );
 
       // Case 2: object with 'to'
       await service.sendBookingConfirmation({ to: 'to@example.com', name: 'Bob' });
       expect(mockCreateMessage).toHaveBeenCalledWith(
         'hut.org',
-        expect.objectContaining({ to: ['Bob <to@example.com>'] })
+        expect.objectContaining({ to: ['to@example.com'] })
       );
 
       // Case 3: object with 'recipient'
       await service.sendBookingConfirmation({ recipient: 'recip@example.com' });
       expect(mockCreateMessage).toHaveBeenCalledWith(
         'hut.org',
-        expect.objectContaining({ to: ['Guest <recip@example.com>'] }) // Default name fallback to 'Guest'
+        expect.objectContaining({ to: ['recip@example.com'] }) // Bare address, not a display name
       );
     });
 
@@ -127,7 +127,7 @@ describe('emailService - White-Box Tests', () => {
         'hut.org',
         expect.objectContaining({
           from: 'Mailgun Sandbox <postmaster@hut.org>',
-          to: ['Guest <test@example.com>'],
+          to: ['test@example.com'],
         })
       );
     });

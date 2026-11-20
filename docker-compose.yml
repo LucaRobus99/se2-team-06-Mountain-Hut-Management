@@ -28,16 +28,18 @@ services:
   backend:
     build: ./backend
     image: jenissevereau/mountain-hut-backend:dev
+    # Development secrets, Mailgun credentials and template names come from the
+    # backend's own .env. Explicit `environment` below overrides the database URL
+    # and cookie settings for the Docker network.
+    env_file:
+      - path: ./backend/.env
+        required: false
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-}:${POSTGRES_PASSWORD:-}@db:5432/mountain_hut
       SESSION_SECRET: ${SESSION_SECRET:-dev-only-session-secret-change-me}
       COOKIE_SECURE: "false"
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8081}
       HUT_TIMEZONE: ${HUT_TIMEZONE:-Europe/Rome}
-      MAILGUN_API_KEY: ${MAILGUN_API_KEY:-}
-      MAILGUN_DOMAIN: ${MAILGUN_DOMAIN:-}
-      MAILGUN_FROM: ${MAILGUN_FROM:-}
-      MAILGUN_URL: ${MAILGUN_URL:-}
     depends_on:
       db:
         condition: service_healthy
