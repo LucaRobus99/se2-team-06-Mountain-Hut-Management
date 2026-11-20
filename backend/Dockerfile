@@ -13,6 +13,8 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 # scripts/*.sql are applied by the backend on first start against an empty database.
 COPY src ./src
 COPY scripts ./scripts
+# Mailgun template sources used by `npm run mailgun:templates` (no dashboard needed).
+COPY email-templates ./email-templates
 
 USER node
 EXPOSE 8080

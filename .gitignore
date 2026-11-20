@@ -1,0 +1,12 @@
+# Local environment files contain credentials (Mailgun key, DB password,
+# session secret). Never commit them; the examples stay tracked.
+.env
+.env.*
+!**/.env.example
+
+# Local data and build output
+node_modules/
+coverage/
+dist/
+*.log
+backend/database/
