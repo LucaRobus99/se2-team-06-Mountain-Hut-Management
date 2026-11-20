@@ -4,6 +4,12 @@
  */
 const isProduction = process.env.NODE_ENV === 'production';
 
+/** Trimmed non-empty env value, or the fallback (protects against empty/space values). */
+function envText(name, fallback) {
+  const value = process.env[name];
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+
 if (isProduction && !process.env.SESSION_SECRET) {
   throw new Error('SESSION_SECRET must be set when NODE_ENV=production.');
 }
@@ -26,20 +32,24 @@ export const config = {
   sessionSecret: process.env.SESSION_SECRET ?? 'mountain-hut-dev-secret',
 
   /** Mailgun settings used to send booking confirmation emails. */
-  mailgunApiKey: process.env.MAILGUN_API_KEY || process.env.API_KEY || null,
-  mailgunDomain: process.env.MAILGUN_DOMAIN || null,
-  mailgunFrom: process.env.MAILGUN_FROM || null,
-  mailgunTemplate: process.env.MAILGUN_TEMPLATE ?? 'booking-confirmation',
+  mailgunApiKey: (process.env.MAILGUN_API_KEY || process.env.API_KEY || '').trim() || null,
+  mailgunDomain: envText('MAILGUN_DOMAIN', '').toLowerCase() || null,
+  mailgunFrom: envText('MAILGUN_FROM', null),
+  mailgunTemplate: envText('MAILGUN_TEMPLATE', 'booking-confirmation'),
   /** MH-06 (#41): Mailgun template sent after a hiker changes a booking. */
-  mailgunUpdatedTemplate: process.env.MAILGUN_UPDATED_TEMPLATE ?? 'booking-modification',
+  mailgunUpdatedTemplate: envText('MAILGUN_UPDATED_TEMPLATE', 'booking-modification'),
   /** MH-08 (#41): Mailgun template sent after a hiker cancels a booking. */
-  mailgunCancelledTemplate: process.env.MAILGUN_CANCELLED_TEMPLATE ?? 'booking-cancelled',
+  mailgunCancelledTemplate: envText('MAILGUN_CANCELLED_TEMPLATE', 'booking-cancelled'),
   /** MH-07 (#44): Mailgun template for the password reset link. */
-  mailgunResetTemplate: process.env.MAILGUN_RESET_TEMPLATE ?? 'password reset',
-  mailgunUrl: process.env.MAILGUN_URL ?? null,
+  mailgunResetTemplate: envText('MAILGUN_RESET_TEMPLATE', 'password reset'),
+  /** EU accounts must use https://api.eu.mailgun.net; US accounts may leave it empty. */
+  mailgunUrl: (() => {
+    const value = envText('MAILGUN_URL', '');
+    return value ? value.replace(/\/+$/, '') : null;
+  })(),
 
   /** Public frontend URL used to build password reset links (#44). */
-  appBaseUrl: process.env.APP_BASE_URL ?? 'http://localhost:5173',
+  appBaseUrl: envText('APP_BASE_URL', 'http://localhost:5173'),
 
   isProduction,
 

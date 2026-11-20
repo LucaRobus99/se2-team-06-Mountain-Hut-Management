@@ -19,16 +19,32 @@ export function createEmailService({
   // Keep a safety margin and trim only the email copy of requirements.
   maxVariablesBytes = 12000,
 } = {}) {
-  let client = null;
+  const configuredUrl = url ? String(url).trim().replace(/\/+$/, '') : null;
+  const alternateUrl = configuredUrl?.includes('eu.mailgun.net')
+    ? 'https://api.mailgun.net'
+    : 'https://api.eu.mailgun.net';
+  // Mailgun domains live in one region. A wrong region answers 401; keep both
+  // clients so an EU/US mix-up is corrected automatically.
+  const regionUrls = configuredUrl
+    ? [configuredUrl, alternateUrl]
+    : ['https://api.mailgun.net', alternateUrl];
+
+  let clients = [];
   if (apiKey && domain) {
     try {
       const mailgun = new Mailgun(FormData);
-      client = mailgun.client({ username: 'api', key: apiKey, ...(url ? { url } : {}) });
+      clients = regionUrls.map((regionUrl) => ({
+        url: regionUrl,
+        client: mailgun.client({ username: 'api', key: apiKey, url: regionUrl }),
+      }));
     } catch (err) {
       console.error('Failed to initialise Mailgun client:', err);
-      client = null;
+      clients = [];
     }
   }
+
+  let activeRegion = 0;
+  const activeClient = () => clients[activeRegion] ?? null;
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -83,12 +99,12 @@ export function createEmailService({
     return json;
   }
 
-  async function createMessage(messageData, label) {
+  async function createMessage(mailgunClient, messageData, label) {
     let lastError;
     for (let attempt = 0; attempt < retryDelaysMs.length; attempt += 1) {
       if (attempt > 0) await sleep(retryDelaysMs[attempt]);
       try {
-        return await client.messages.create(domain, messageData);
+        return await mailgunClient.messages.create(domain, messageData);
       } catch (err) {
         lastError = err;
         const hasAnotherAttempt = attempt < retryDelaysMs.length - 1;
@@ -105,7 +121,7 @@ export function createEmailService({
   }
 
   async function deliver({ to, subject, templateName, variables }) {
-    if (!client || !domain || !to) {
+    if (!clients.length || !domain || !to) {
       return { skipped: true };
     }
 
@@ -122,7 +138,39 @@ export function createEmailService({
       'h:X-Mailgun-Variables': variablesHeader(variables),
     };
 
-    return createMessage(messageData, templateName);
+    try {
+      return await createMessage(activeClient().client, messageData, templateName);
+    } catch (err) {
+      const status = Number(err?.status ?? err?.statusCode);
+      // 401 = wrong credentials/region; 404 = domain not found in this region.
+      const regionMismatch = status === 401 || status === 404;
+      if (!regionMismatch || clients.length < 2) throw err;
+
+      const nextRegion = (activeRegion + 1) % clients.length;
+      console.warn('Mailgun rejected this region; trying the other one', {
+        status,
+        from: activeClient().url,
+        to: clients[nextRegion].url,
+        domain,
+      });
+
+      try {
+        const result = await createMessage(clients[nextRegion].client, messageData, templateName);
+        activeRegion = nextRegion;
+        console.warn('Mailgun region switched for this process', { region: clients[nextRegion].url });
+        return result;
+      } catch (fallbackError) {
+        const fallbackStatus = Number(fallbackError?.status ?? fallbackError?.statusCode);
+        if (fallbackStatus === 401 || fallbackStatus === 404) {
+          console.error(
+            'Mailgun failed in both regions. Check MAILGUN_API_KEY/API_KEY, MAILGUN_URL ' +
+            '(EU: https://api.eu.mailgun.net) and that the template exists.',
+            { domain, status: fallbackStatus }
+          );
+        }
+        throw fallbackError;
+      }
+    }
   }
 
   /**
@@ -166,39 +214,58 @@ export function createEmailService({
 
   return {
     isEnabled() {
-      return Boolean(client);
+      return clients.length > 0;
     },
 
     /**
      * Startup check: every configured template must exist on the Mailgun domain
      * with an active version. Runs through the read-only templates API, so it
      * works without dashboard access. Never throws: returns per-template state.
+     * A 401 from the configured region automatically retries the other region.
      */
     async verifyTemplates() {
-      if (!client || !domain) return { enabled: false, templates: [] };
+      if (!clients.length || !domain) return { enabled: false, templates: [] };
 
-      const base = (url && String(url).trim()) || 'https://api.mailgun.net';
       const authorization = 'Basic ' + Buffer.from(`api:${apiKey}`).toString('base64');
       const names = [...new Set([template, updatedTemplate, cancelledTemplate, resetTemplate])];
       const templates = [];
 
       for (const name of names) {
-        try {
-          const response = await fetch(
-            `${base}/v3/${encodeURIComponent(domain)}/templates/${encodeURIComponent(name)}/versions`,
-            { headers: { Authorization: authorization } }
-          );
-          const body = await response.json().catch(() => null);
-          const active = body?.template?.versions?.find((version) => version.active);
-          templates.push({
-            name,
-            ok: response.ok && Boolean(active),
-            active: active?.tag ?? null,
-            status: response.status,
-          });
-        } catch (err) {
-          templates.push({ name, ok: false, active: null, status: null, error: err.message });
+        let result = null;
+
+        for (let offset = 0; offset < clients.length; offset += 1) {
+          const regionIndex = (activeRegion + offset) % clients.length;
+          const base = clients[regionIndex].url;
+
+          try {
+            const response = await fetch(
+              `${base}/v3/${encodeURIComponent(domain)}/templates/${encodeURIComponent(name)}/versions`,
+              { headers: { Authorization: authorization } }
+            );
+            const body = await response.json().catch(() => null);
+
+            if ((response.status === 401 || response.status === 404) && clients.length > 1) {
+              // 401 = wrong credentials/region; 404 = domain not found in this
+              // region. Try the other region before declaring the template missing.
+              result = { name, ok: false, active: null, status: response.status };
+              continue;
+            }
+
+            const activeVersion = body?.template?.versions?.find((version) => version.active);
+            result = {
+              name,
+              ok: response.ok && Boolean(activeVersion),
+              active: activeVersion?.tag ?? null,
+              status: response.status,
+            };
+            if (response.ok) activeRegion = regionIndex;
+            break;
+          } catch (err) {
+            result = { name, ok: false, active: null, status: null, error: err.message };
+          }
         }
+
+        templates.push(result ?? { name, ok: false, active: null, status: null });
       }
 
       return { enabled: true, templates };
