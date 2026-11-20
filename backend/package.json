@@ -10,6 +10,7 @@
     "dev": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env --watch src/server.js",
     "db:seed:slots": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env scripts/populate-slots.mjs",
     "db:reset": "node -e \"const d = require('path').resolve('database/pglite'); require('fs').rmSync(d, {recursive:true, force:true}); console.log('Embedded PostgreSQL data deleted:', d); console.log('It will be recreated on next server start. With Docker use: docker compose down -v');\"",
+    "mailgun:templates": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env scripts/upload-mailgun-templates.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

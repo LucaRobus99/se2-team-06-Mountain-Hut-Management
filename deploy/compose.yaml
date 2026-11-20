@@ -36,9 +36,15 @@ services:
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8081}
       HUT_TIMEZONE: ${HUT_TIMEZONE:-Europe/Rome}
       MAILGUN_API_KEY: ${MAILGUN_API_KEY:-}
+      # The backend also accepts the shorter API_KEY name used by some .env files.
+      API_KEY: ${API_KEY:-}
       MAILGUN_DOMAIN: ${MAILGUN_DOMAIN:-}
       MAILGUN_FROM: ${MAILGUN_FROM:-}
       MAILGUN_URL: ${MAILGUN_URL:-}
+      MAILGUN_TEMPLATE: ${MAILGUN_TEMPLATE:-booking-confirmation}
+      MAILGUN_UPDATED_TEMPLATE: ${MAILGUN_UPDATED_TEMPLATE:-booking-modification}
+      MAILGUN_CANCELLED_TEMPLATE: ${MAILGUN_CANCELLED_TEMPLATE:-booking-cancelled}
+      MAILGUN_RESET_TEMPLATE: ${MAILGUN_RESET_TEMPLATE:-password reset}
     depends_on:
       db:
         condition: service_healthy

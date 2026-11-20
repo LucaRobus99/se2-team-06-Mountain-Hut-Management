@@ -44,7 +44,17 @@ export function createBookingNotifier(emailService) {
         );
         return { status: delivery?.skipped ? 'skipped' : 'sent' };
       } catch (err) {
-        console.error(`Failed to send booking ${kind} email:`, err);
+        // Structured diagnostics without logging the full address (privacy).
+        const recipientDomain = typeof recipient === 'string' && recipient.includes('@')
+          ? recipient.split('@')[1]
+          : null;
+        console.error(`Failed to send booking ${kind} email:`, {
+          bookingId: view?.id ?? null,
+          recipientDomain,
+          status: err?.status ?? err?.statusCode ?? null,
+          code: err?.code ?? null,
+          message: err?.message,
+        });
         return { status: 'failed' };
       }
     },

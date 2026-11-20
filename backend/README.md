@@ -75,7 +75,47 @@ When Mailgun is configured, creating, updating or cancelling a booking attempts 
 - `failed` — the submission failed;
 - `skipped` — no email configuration/recipient was available (also used when a repeated cancellation does not send a second email).
 
-A successfully persisted booking stays confirmed/updated/cancelled regardless of email status; failed email submissions do not roll back an already committed transaction. `GET /api/bookings` and `GET /api/bookings/:bookingId` do not include this notification result because it is not persisted. Configure `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_FROM` (optional), `MAILGUN_TEMPLATE`, `MAILGUN_UPDATED_TEMPLATE`, `MAILGUN_CANCELLED_TEMPLATE`, `MAILGUN_RESET_TEMPLATE` and optional `MAILGUN_URL` in `.env`. A Mailgun sandbox may require authorizing recipient addresses. Ready-to-upload templates live in `email-templates/` (`booking-confirmation.html`, `booking-modification.html`, `booking-cancelled.html`).
+A successfully persisted booking stays confirmed/updated/cancelled regardless of email status; failed email submissions do not roll back an already committed transaction. `GET /api/bookings` and `GET /api/bookings/:bookingId` do not include this notification result because it is not persisted. Configure `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_FROM` (optional), `MAILGUN_TEMPLATE`, `MAILGUN_UPDATED_TEMPLATE`, `MAILGUN_CANCELLED_TEMPLATE`, `MAILGUN_RESET_TEMPLATE` and optional `MAILGUN_URL` in `.env`. A Mailgun sandbox may require authorizing recipient addresses. Ready-to-upload templates live in `email-templates/` (`booking-confirmation.html`, `booking-modification.html`, `booking-cancelled.html`, `password-reset.html`).
+
+### Uploading templates without dashboard access
+
+Templates must exist **on the configured Mailgun domain**, with an **active version** and a name identical to the env value (spaces included). They can be managed with the API key from `.env`, so dashboard access is not required:
+
+```bash
+# read-only: which templates exist and which version is active
+npm run mailgun:templates -- --status
+
+# read-only: recent delivery events (failed/rejected/delivered) without dashboard
+npm run mailgun:templates -- --events
+npm run mailgun:templates -- --events --recipient=name@example.com
+
+# show what would be uploaded, without writing
+npm run mailgun:templates -- --dry-run
+
+# create the missing booking templates and publish a version
+npm run mailgun:templates -- --only=created,updated,cancelled
+
+# render-check every selected template in Mailgun test mode (no email delivered)
+npm run mailgun:templates -- --test --only=created,updated,cancelled
+```
+
+The default is non-destructive: a template that already has an active version is skipped. Use `--force` to upload and activate a new version, e.g. for the reset template in `email-templates/password-reset.html`. The script honours `MAILGUN_URL`, so it works with the EU endpoint (`https://api.eu.mailgun.net`).
+
+Mailgun's templates API rejects template names that contain spaces (it returns a generic `500 Internal Server Error`). The booking templates therefore use hyphenated names (`booking-confirmation`, `booking-modification`, `booking-cancelled`) in both `.env` and the defaults. The existing `password reset` template was created from the dashboard and keeps its name; the script never overwrites an active version unless `--force` is used.
+
+### Delivery reliability
+
+Sending a booking email is not a single best-effort call anymore:
+
+- **Recipients** are sent as a bare address (`to: ["name@example.com"]`). A display name supplied by a user (commas, quotes, angle brackets) can no longer invalidate the header and drop the message.
+- **Transient failures are retried**: network errors, `429` and `5xx` are attempted up to three times (about 4 seconds in total). Permanent `4xx` errors (invalid recipient, missing template, unauthorised domain) fail immediately, because repeating them cannot succeed.
+- **The 16 KB Mailgun limit** on `o:/h:/v:/t:` options is enforced. If an extremely long requirements list would exceed it, only the email copy drops the tail and sets `party_requirements_truncated`; the booking keeps every requirement and the server logs a warning.
+- **Startup verification**: when Mailgun is enabled, the backend checks that every configured template exists with an active version and logs the result (it never blocks startup). The same check is available with `npm run mailgun:templates -- --status`.
+- **Text alternative**: every stored-template message asks Mailgun to generate the `text/plain` part (`t:text=yes`), which improves accessibility and spam scoring.
+- **Diagnostics without the dashboard**: `npm run mailgun:templates -- --events [--recipient=…]` shows recent `failed`, `rejected` and `delivered` events. `sent` in the API means Mailgun accepted the message; Mailgun then retries temporary delivery failures itself.
+
+Remaining hard limits are outside the application: a non-existent or suppressed recipient, a Mailgun outage longer than the retry window, daily plan limits, and spam filtering by the receiving provider. For deliverability, keep SPF and DKIM valid (already verified) and add a DMARC record for the sending domain; a new domain also needs a few days to build reputation.
+
 
 ## Booking history and changes (MH-06)
 
