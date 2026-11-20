@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlpineDatePicker, AlpineMealSelect } from './AlpineBookingFields.jsx';
 import AvailabilitySlotCard from './AvailabilitySlotCard.jsx';
-import { getAvailableSlots, updateBooking, bookingErrorMessage } from '../api/booking.js';
+import { getModificationSlots, updateBooking, bookingErrorMessage } from '../api/booking.js';
 import { validatePartyRequirements } from '../utils/partyRequirements.js';
 import { readableBookingDate, readableMeal } from '../utils/bookingList.js';
-import { buildBookingChanges, canModifyBooking, isValidModificationSlot, originalSlotOption } from '../utils/editBooking.js';
+import { buildBookingChanges, canModifyBooking, originalSlotOption } from '../utils/editBooking.js';
 
 function todayInHut() {
   return new Intl.DateTimeFormat('sv-SE', {
@@ -24,12 +24,13 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
   const [available, setAvailable] = useState({ key: '', slots: [], loading: true, error: '' });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [refresh, setRefresh] = useState(0);
   const numberGuests = Number(guests);
   const validGuests = guests !== '' && Number.isSafeInteger(numberGuests) && numberGuests > 0;
-  const queryKey = `${date}|${meal}|${guests}`;
+  const queryKey = `${date}|${meal}|${guests}|${refresh}`;
   const canEdit = canModifyBooking(booking);
 
-  // Reuse the same public search as Availability. Ignore out-of-date responses.
+  // Use the owner's modification preview; ignore out-of-date responses.
   useEffect(() => {
     let active = true;
     setAvailable({ key: '', slots: [], loading: true, error: '' });
@@ -38,39 +39,31 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
       return () => { active = false; };
     }
     const timer = setTimeout(() => {
-      getAvailableSlots({ date, meal, partySize: numberGuests }).then(result => {
+      getModificationSlots(booking.id, { date, meal, partySize: numberGuests }).then(result => {
         if (!active) return;
-        const slots = result.slots.filter(slot => isValidModificationSlot(date, slot.startTime));
-        setAvailable({ key: queryKey, slots, loading: false, error: '' });
+        setAvailable({ key: queryKey, slots: result.slots, loading: false, error: '' });
       }).catch(err => {
         if (active) setAvailable({ key: queryKey, slots: [], loading: false,
-          error: err.message || 'Could not check available times.' });
+          error: bookingErrorMessage(err, { editing: true }) });
       });
     }, 220);
     return () => { active = false; clearTimeout(timer); };
-  }, [date, meal, numberGuests, validGuests, queryKey]);
+  }, [booking.id, date, meal, numberGuests, validGuests, queryKey]);
 
-  // The public search counts our own booking's seats as occupied. We must keep
-  // its original slot selectable; the PATCH releases/reallocates them atomically.
   const currentOption = originalSlotOption(booking, { date, meal });
   const freshResults = available.key === queryKey;
-  const choices = useMemo(() => {
-    const fromSearch = freshResults ? available.slots : [];
-    const combined = currentOption
-      ? [{ ...currentOption, current: true }, ...fromSearch.filter(slot => slot.id !== currentOption.id)]
-      : fromSearch;
-    return combined.filter(slot => isValidModificationSlot(date, slot.startTime));
-  }, [freshResults, available.slots, currentOption?.id, date, currentOption?.startTime]);
+  const choices = useMemo(() => freshResults
+    ? available.slots.map(slot => ({ ...slot, current: slot.id === booking.slot.id }))
+    : [], [freshResults, available.slots, booking.slot.id]);
 
   const choiceIds = choices.map(slot => slot.id).join(',');
   useEffect(() => {
-    if (!freshResults || available.loading) return;
+    if (!freshResults || available.loading || available.error) return;
     setSelectedSlotId(previous => {
       if (choices.some(slot => slot.id === previous)) return previous;
-      // Never choose a different time automatically when changing date/meal.
-      return currentOption && choices.some(slot => slot.id === currentOption.id) ? currentOption.id : null;
+      return null;
     });
-  }, [freshResults, available.loading, choiceIds, currentOption?.id]);
+  }, [freshResults, available.loading, available.error, choiceIds]);
 
   function changeSearch(setter, value) {
     setter(value);
@@ -93,9 +86,9 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
   const changes = selectedOption && validGuests && !requirementsError
     ? buildBookingChanges(booking, { slotId: selectedOption.id, partySize: numberGuests, requirements }) : {};
   const hasChanges = Object.keys(changes).length > 0;
-  const needsCurrentSeatRecheck = selectedOption?.current && numberGuests !== booking.partySize;
+  const currentUnavailable = currentOption && !choices.some(slot => slot.current);
   const checking = available.loading || !freshResults;
-  const canSave = canEdit && !saving && !checking && Boolean(selectedOption) &&
+  const canSave = canEdit && !saving && !checking && !available.error && Boolean(selectedOption) &&
     validGuests && !requirementsError && hasChanges;
 
   async function save(event) {
@@ -107,7 +100,9 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
       const updated = await updateBooking(booking.id, changes);
       await onSaved(updated);
     } catch (err) {
-      setSaveError(bookingErrorMessage(err));
+      setSaveError(bookingErrorMessage(err, { editing: true }));
+      // A concurrent change may invalidate our preview; refresh without losing the draft.
+      if (err.status === 409) setRefresh(value => value + 1);
     } finally { setSaving(false); }
   }
 
@@ -140,19 +135,20 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
         </div>
         <div className={`eh-edit-availability${available.error ? ' is-warning' : ''}`} role="status" aria-live="polite">
           {checking ? 'Checking availability for your selection…'
-            : available.error && !currentOption ? available.error
+            : available.error ? available.error
             : !choices.length ? 'No times available. Try another date, meal or guest count.'
-            : needsCurrentSeatRecheck ? 'Your current time is kept. The new guest count will be checked when you save.'
             : `Choose one of the available slots for ${numberGuests} ${numberGuests === 1 ? 'guest' : 'guests'}. Final availability is checked when saving.`}
         </div>
-        {available.error && currentOption && !checking &&
-          <p className="eh-edit-small-warning">Other times could not be loaded. You can still request an update to your current time.</p>}
+        {available.error && !checking &&
+          <button type="button" className="eh-edit-add" onClick={() => setRefresh(value => value + 1)} disabled={saving}>Try again</button>}
+        {currentUnavailable && !checking && !available.error &&
+          <p className="eh-edit-small-warning">Your current time is no longer available for this selection. Please choose another slot or change the guest count.</p>}
         {!checking && choices.length > 0 &&
           <div className="eh-slot-cards eh-edit-slot-cards">
             {choices.map((slot, index) => (
               <AvailabilitySlotCard key={slot.id} slot={slot} index={index} partySize={numberGuests}
                 selected={slot.id === selectedSlotId} disabled={saving}
-                availabilityText={slot.current ? 'Current time · seats verified on save' : 'Available for your group'}
+                availabilityText={slot.current ? 'Current time · available' : 'Available for your group'}
                 onClick={() => { setSelectedSlotId(slot.id); setSaveError(''); }} />
             ))}
           </div>}

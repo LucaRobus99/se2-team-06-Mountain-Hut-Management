@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
@@ -21,9 +21,12 @@ const cancelled = { ...coming, id: 3, status: 'cancelled', slot: { ...coming.slo
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-11-19T10:00:00Z'));
   getMyBookings.mockResolvedValue([coming, old, cancelled]);
   getBooking.mockResolvedValue(coming);
 });
+afterEach(() => vi.useRealTimers());
 
 function showPage(initialEntries = ['/my-bookings']) {
   return render(<MemoryRouter initialEntries={initialEntries}><MyBookingsPage /></MemoryRouter>);

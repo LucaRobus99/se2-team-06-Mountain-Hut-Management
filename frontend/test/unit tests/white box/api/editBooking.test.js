@@ -1,9 +1,23 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { updateBooking } from '../../../../src/api/booking.js';
+import { updateBooking, getModificationSlots, bookingErrorMessage } from '../../../../src/api/booking.js';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('MH-06 PATCH booking API', () => {
+  it('searches availability for the owned booking with its ID but no user ID', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-19T10:00:00Z'));
+    const result = { slots: [{ id: 3 }] };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => result }));
+    await expect(getModificationSlots(17, { date: '2027-06-15', meal: 'lunch', partySize: 3 })).resolves.toEqual(result);
+    expect(fetch).toHaveBeenCalledWith('/api/bookings/17/availability?date=2027-06-15&meal=lunch&partySize=3',
+      expect.objectContaining({ credentials: 'include' }));
+  });
+
+  it('uses an editing-specific message for invalid dietary requirements', () => {
+    const error = { code: 'VALIDATION_ERROR', details: [{ field: 'requirements[0].description', message: 'Enter a description.' }] };
+    expect(bookingErrorMessage(error, { editing: true })).toBe('Enter a description.');
+  });
   it('sends a partial update with credentials and no hiker ID', async () => {
     const updated = { id: 17, partySize: 3, confirmationEmail: { status: 'sent' } };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => updated }));
