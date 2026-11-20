@@ -22,7 +22,7 @@ const MAX_TABLE_LABEL_LENGTH = 50;
 
 // Query parameters other than the ones read below are ignored on every GET.
 
-function validateSlotsQuery(query) {
+export function validateSlotsQuery(query) {
   const details = [];
   const q = query || {};
   const date = q.date;

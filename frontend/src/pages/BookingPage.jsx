@@ -212,7 +212,8 @@ export default function BookingPage() {
     return (
       <main className="eh-booking-page">
         <Alert variant="danger" role="alert">{receiptError || 'Unable to load the booking confirmation.'}</Alert>
-        <Link to="/availability" className="eh-button eh-button--green">Check availability</Link>
+        <Link to="/my-bookings" className="eh-button eh-button--green">← Back to My Bookings</Link>
+        <Link to="/availability" className="eh-button eh-button--outline">Check availability</Link>
       </main>
     );
   }
@@ -246,18 +247,19 @@ export default function BookingPage() {
 
   if (booking) {
     const savedRequirements = Array.isArray(booking.requirements) ? booking.requirements : [];
+    const cancelled = booking.status === 'cancelled';
     return (
       <main className="eh-booking-page">
         <section className="eh-login-scene eh-booking-scene" style={{ backgroundImage: `url(${bookingBackground})` }}>
           <div className="eh-login-card eh-booking-card eh-booking-card--confirmed">
             <header className="eh-confirmation-heading">
-              <div className="eh-booking-success-mark" role="status" aria-label="Booking successfully confirmed">
+              <div className={`eh-booking-success-mark${cancelled ? ' eh-booking-cancelled-mark' : ''}`} role="status" aria-label={cancelled ? 'Booking cancelled' : 'Booking successfully confirmed'}>
                 <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m12 24 9 9 16-18" />
+                  <path d={cancelled ? 'M15 15l18 18m0-18L15 33' : 'm12 24 9 9 16-18'} />
                 </svg>
               </div>
-              <p className="eh-confirmation-eyebrow">Reservation confirmed</p>
-              <h1>Your table is booked!</h1>
+              <p className="eh-confirmation-eyebrow">{cancelled ? 'Reservation cancelled' : 'Reservation confirmed'}</p>
+              <h1>{cancelled ? 'Your booking was cancelled' : 'Your table is booked!'}</h1>
               <p className="eh-confirmation-subtitle">Edelweiss Hut · Reservation #{booking.id}</p>
             </header>
 
@@ -273,10 +275,10 @@ export default function BookingPage() {
                   <dd>{shownTime}{shownEnd ? ` – ${shownEnd}` : ''}</dd>
                 </div>
               </dl>
-              <dl className="eh-confirmation-facts">
+              <dl className={`eh-confirmation-facts${cancelled ? ' eh-confirmation-facts--cancelled' : ''}`}>
                 <div><dt>Meal</dt><dd>{mealLabel}</dd></div>
                 <div><dt>Guests</dt><dd>{shownGuests} {shownGuests === 1 ? 'person' : 'people'}</dd></div>
-                <div><dt>Seating</dt><dd>{groupIsSplit ? 'Across multiple tables' : 'Together at one table'}</dd></div>
+                {!cancelled && <div><dt>Seating</dt><dd>{groupIsSplit ? 'Across multiple tables' : 'Together at one table'}</dd></div>}
               </dl>
             </section>
 
@@ -297,18 +299,21 @@ export default function BookingPage() {
               </section>
             )}
 
-            <div className={`eh-booking-email-notice eh-booking-email-notice--${confirmationEmailStatus || 'unknown'} eh-confirmation-email`} role="status">
+            {cancelled ? <div className="eh-booking-email-notice eh-booking-email-notice--unknown eh-confirmation-email" role="status">
+              <strong>Reservation cancelled</strong><span>This reservation has been retained in your history. No seats are reserved.</span>
+            </div> : <div className={`eh-booking-email-notice eh-booking-email-notice--${confirmationEmailStatus || 'unknown'} eh-confirmation-email`} role="status">
               {confirmationEmailStatus === 'sent' ? (
-                <><strong>Confirmation email sent</strong><span>{confirmationAddress ? `Sent to ${confirmationAddress}.` : 'Check your inbox.'}</span></>
+                <><strong>Confirmation email queued</strong><span>{confirmationAddress ? `Submitted for delivery to ${confirmationAddress}.` : 'Submitted for delivery.'} Check your inbox and spam folder. Delivery may take a moment.</span></>
               ) : confirmationEmailStatus === 'failed' ? (
                 <><strong>Email could not be sent</strong><span>Your reservation is confirmed. Keep your booking reference.</span></>
               ) : (
                 <><strong>Reservation saved</strong><span>Keep your booking reference in case the email is unavailable.</span></>
               )}
-            </div>
+            </div>}
 
             <div className="eh-booking-actions">
-              <Link to="/book" className="eh-button eh-button--green">Book another table</Link>
+              <Link to={`/my-bookings${cancelled ? '?tab=cancelled' : location.state?.bookingListFilter ? `?tab=${location.state.bookingListFilter}` : ""}`} className="eh-button eh-button--green">← Back to My Bookings</Link>
+              <Link to="/book" className="eh-button eh-button--outline">Book another table</Link>
               <Link to="/" className="eh-button eh-button--outline">Back to home</Link>
             </div>
           </div>

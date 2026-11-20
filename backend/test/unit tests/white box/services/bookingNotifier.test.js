@@ -74,3 +74,30 @@ describe('bookingNotifier - White-Box Tests', () => {
   });
 
 });
+import { describe, expect, it, vi } from 'vitest';
+import { createBookingNotifier } from '../../../../src/services/bookingNotifier.js';
+
+const booking = {
+  id: 42, partySize: 2, split: false, requirements: [],
+  slot: { date: '2027-06-15', startTime: '12:00', endTime: '13:00', meal: 'lunch' },
+};
+
+describe('Booking email acknowledgement', () => {
+  it('reports provider acceptance and logs its message ID without exposing the recipient', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    try {
+      const notifier = createBookingNotifier({ sendBookingEmail: vi.fn().mockResolvedValue({ id: '<message-42>' }) });
+      expect(await notifier.notify('created', booking, 'guest@example.test')).toEqual({ status: 'sent' });
+      expect(info).toHaveBeenCalledWith('[booking-email] kind=created booking=42 accepted messageId=<message-42>');
+    } finally { info.mockRestore(); }
+  });
+
+  it('does not claim acceptance when the provider returns no message ID', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const notifier = createBookingNotifier({ sendBookingEmail: vi.fn().mockResolvedValue({}) });
+      expect(await notifier.notify('updated', booking, 'guest@example.test')).toEqual({ status: 'failed' });
+      expect(warn).toHaveBeenCalledWith('[booking-email] kind=updated booking=42 no provider message ID');
+    } finally { warn.mockRestore(); }
+  });
+});

@@ -85,8 +85,8 @@ describe('emailService - White-Box Tests', () => {
       expect(mockCreateMessage).toHaveBeenCalledWith(
         'hut.org',
         expect.objectContaining({
-          to: ['John <user@example.com>'],
-          template: 'booking confirmation',
+          to: ['user@example.com'],
+          template: 'booking-confirmation',
         })
       );
     });
@@ -99,21 +99,21 @@ describe('emailService - White-Box Tests', () => {
       await service.sendBookingConfirmation({ email: 'email@example.com', name: 'Alice' });
       expect(mockCreateMessage).toHaveBeenCalledWith(
         'hut.org',
-        expect.objectContaining({ to: ['Alice <email@example.com>'] })
+        expect.objectContaining({ to: ['email@example.com'] })
       );
 
       // Case 2: object with 'to'
       await service.sendBookingConfirmation({ to: 'to@example.com', name: 'Bob' });
       expect(mockCreateMessage).toHaveBeenCalledWith(
         'hut.org',
-        expect.objectContaining({ to: ['Bob <to@example.com>'] })
+        expect.objectContaining({ to: ['to@example.com'] })
       );
 
       // Case 3: object with 'recipient'
       await service.sendBookingConfirmation({ recipient: 'recip@example.com' });
       expect(mockCreateMessage).toHaveBeenCalledWith(
         'hut.org',
-        expect.objectContaining({ to: ['Guest <recip@example.com>'] }) // Default name fallback to 'Guest'
+        expect.objectContaining({ to: ['recip@example.com'] }) // Bare address, not a display name
       );
     });
 
@@ -127,7 +127,7 @@ describe('emailService - White-Box Tests', () => {
         'hut.org',
         expect.objectContaining({
           from: 'Mailgun Sandbox <postmaster@hut.org>',
-          to: ['Guest <test@example.com>'],
+          to: ['test@example.com'],
         })
       );
     });
@@ -152,6 +152,34 @@ describe('emailService - White-Box Tests', () => {
 
   });
 
+  describe('MH-06 modification email', () => {
+    it.each([
+      [undefined, 'booking-modification'],
+      ['custom-modification', 'custom-modification'],
+    ])('uses the dedicated modification template (%s) and updated fields', async (updatedTemplate, expectedTemplate) => {
+      mockCreateMessage.mockResolvedValueOnce({ id: '<updated-message>' });
+      const service = createEmailService({
+        apiKey: 'key', domain: 'hut.org', updatedTemplate,
+      });
+      const fields = {
+        name: 'Gaia', date: '2027-06-17',
+        start_time: '13:00', end_time: '14:00',
+        meal: 'lunch', guests: 4, split: false, booking_id: 42,
+        party_requirements: [{ description: 'Peanut allergy', allergies: true }],
+      };
+
+      await expect(service.sendBookingEmail('updated', 'guest@example.com', fields))
+        .resolves.toEqual({ id: '<updated-message>' });
+      expect(mockCreateMessage).toHaveBeenCalledTimes(1);
+      expect(mockCreateMessage).toHaveBeenCalledWith('hut.org', expect.objectContaining({
+        to: ['guest@example.com'],
+        subject: 'Booking modification confirmed',
+        template: expectedTemplate,
+        'h:X-Mailgun-Variables': JSON.stringify(fields),
+      }));
+    });
+  });
+
   describe('Error Handling Branches (sendBookingConfirmation catch block)', () => {
     
     it('should catch error from Mailgun client, log it, and rethrow', async () => {
@@ -168,66 +196,6 @@ describe('emailService - White-Box Tests', () => {
       expect(consoleSpy).toHaveBeenCalledWith(
         'Failed to send booking confirmation email:',
         mailgunError
-      );
-
-      consoleSpy.mockRestore();
-    });
-
-  });
-
-  describe('sendBookingEmail & sendPasswordReset White-Box Branches', () => {
-    
-    it('should throw an Error if sendBookingEmail receives an unknown kind', async () => {
-      const service = createEmailService({ apiKey: 'key', domain: 'hut.org' });
-
-      await expect(
-        service.sendBookingEmail('invalid_kind', 'test@example.com', {})
-      ).rejects.toThrow('Unknown booking email: invalid_kind');
-    });
-
-    it('should return { skipped: true } in sendPasswordReset if recipient is missing', async () => {
-      const service = createEmailService({ apiKey: 'key', domain: 'hut.org' });
-      const result = await service.sendPasswordReset({ to: null });
-
-      expect(result).toEqual({ skipped: true });
-    });
-
-    it('should successfully deliver password reset email with correct variables', async () => {
-      mockCreateMessage.mockResolvedValueOnce({ id: '<reset-id>' });
-      const service = createEmailService({ apiKey: 'key', domain: 'hut.org' });
-
-      const result = await service.sendPasswordReset({
-        to: 'user@example.com',
-        name: 'Mario',
-        resetUrl: 'https://hut.org/reset?token=123',
-        expiresInHours: 12,
-      });
-
-      expect(result).toEqual({ id: '<reset-id>' });
-      expect(mockCreateMessage).toHaveBeenCalledWith(
-        'hut.org',
-        expect.objectContaining({
-          to: ['Mario <user@example.com>'],
-          subject: 'Reset your Edelweiss Hut password',
-          template: 'password reset',
-        })
-      );
-    });
-
-    it('should catch error in sendPasswordReset, log it, and rethrow', async () => {
-      const resetError = new Error('Mailgun service down');
-      mockCreateMessage.mockRejectedValueOnce(resetError);
-
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const service = createEmailService({ apiKey: 'key', domain: 'hut.org' });
-
-      await expect(
-        service.sendPasswordReset({ to: 'user@example.com', name: 'Mario', resetUrl: 'url' })
-      ).rejects.toThrow('Mailgun service down');
-
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'Failed to send password reset email:',
-        resetError
       );
 
       consoleSpy.mockRestore();

@@ -58,4 +58,28 @@ Releases without a schema change keep all data.
 - **"port is already allocated":** change `APP_PORT` (and `APP_BASE_URL`) in `.env`.
 - **The backend keeps restarting:** run `docker compose logs backend`. If it mentions a missing
   column or table after an upgrade, the release changed the schema: run `docker compose down -v`.
-- **No emails arrive:** emails are only sent when the `MAILGUN_*` values are set.
+- **No emails arrive:** emails are only sent when the `MAILGUN_*` values are set in `.env`.
+  Check that the configured templates exist on the Mailgun domain with an active version,
+  and inspect delivery events, without the dashboard:
+  ```bash
+  docker compose exec backend npm run mailgun:templates -- --status
+  docker compose exec backend npm run mailgun:templates -- --events
+  ```
+  Upload/update the templates shipped in the image when needed:
+  ```bash
+  docker compose exec backend npm run mailgun:templates -- --only=created,updated,cancelled
+  ```
+  The backend also verifies the templates at startup: `docker compose logs backend` shows
+  `Mailgun templates verified: …` or the missing names. After changing `.env`, recreate the
+  backend so the new values are loaded: `docker compose up -d --force-recreate backend`.
+- **Emails fail with 401 Unauthorized:** Mailgun authentication, not booking logic. Check that
+  `MAILGUN_API_KEY` is a **Private API key** (not a sending key/public key), that it has not been
+  rotated, and that the region matches: EU domains need `MAILGUN_URL=https://api.eu.mailgun.net`,
+  US domains can leave it empty. The backend automatically retries the other region once on a 401;
+  if both fail, the key is invalid. From the deploy folder:
+  ```bash
+  docker compose exec backend npm run mailgun:templates -- --status
+  ```
+  A 401 here confirms the key/region problem. After fixing `.env`, recreate the backend.
+
+

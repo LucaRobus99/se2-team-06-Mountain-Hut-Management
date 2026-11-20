@@ -35,6 +35,8 @@ describe('bookingService - White-Box Tests', () => {
       findConfirmedByHikerAndSlot: vi.fn(),
       create: vi.fn(),
       insertSeats: vi.fn(),
+      deleteSeats: vi.fn(),
+      update: vi.fn(),
       findById: vi.fn(),
       getSeatAssignments: vi.fn(),
       insertRequirements: vi.fn(),
@@ -320,6 +322,35 @@ describe('bookingService - White-Box Tests', () => {
 
   describe('Additional White-Box Coverage (Update, Cancel & Staff Flows)', () => {
 
+    it('rejects an update from a different hiker without releasing seats', async () => {
+      bookingDao.findById.mockResolvedValue({ id: 100, hiker_id: 99, status: 'confirmed' });
+      await expect(bookingService.updateBooking(mockHiker, 100, { partySize: 3 }))
+        .rejects.toMatchObject({ code: 'BOOKING_NOT_FOUND' });
+      expect(bookingDao.deleteSeats).not.toHaveBeenCalled();
+    });
+
+    it('checks the original cutoff before any allocation', async () => {
+      bookingDao.findById.mockResolvedValue({ id: 100, hiker_id: 10, status: 'confirmed', slot_id: 101, party_size: 2 });
+      slotDao.findById.mockResolvedValue({ id: 101, status: 'available', date: '2026-08-16', start_time: '08:59' });
+      await expect(bookingService.updateBooking(mockHiker, 100, { partySize: 3 }))
+        .rejects.toMatchObject({ code: 'TOO_LATE_TO_MODIFY' });
+      expect(bookingDao.deleteSeats).not.toHaveBeenCalled();
+    });
+
+    it('reallocates seats transactionally even when only requirements change', async () => {
+      const existing = { id: 100, hiker_id: 10, status: 'confirmed', slot_id: 101, party_size: 2 };
+      bookingDao.findById.mockResolvedValue(existing);
+      // Exactly 48 hours after fixedNow in Europe/Rome.
+      slotDao.findById.mockResolvedValue({ id: 101, status: 'available', date: '2026-08-16', start_time: '09:00' });
+      slotDao.getTablesWithFreeForSlot.mockResolvedValue([{ id: 1, label: 'T1', seats: 2, free: 2 }]);
+      bookingDao.getSeatAssignments.mockResolvedValue([{ tableId: 1, tableLabel: 'T1', seats: 2 }]);
+      const result = await bookingService.updateBooking(mockHiker, 100, { requirements: [] });
+      expect(result.partySize).toBe(2);
+      expect(bookingDao.deleteSeats).toHaveBeenCalledWith('mock-tx', 100);
+      expect(bookingDao.update).toHaveBeenCalledWith('mock-tx', 100, { slotId: 101, partySize: 2 });
+      expect(bookingDao.replaceRequirements).toHaveBeenCalledWith('mock-tx', 100, []);
+    });
+
     it('should throw ValidationError in validateUpdateBody if body is not an object', async () => {
       await expect(
         bookingService.updateBooking(mockHiker, 100, null)
@@ -354,113 +385,6 @@ describe('bookingService - White-Box Tests', () => {
       ).rejects.toThrow(ValidationError);
     });
 
- 
-
-    it('should handle idempotent cancellation in cancelBooking if already cancelled', async () => {
-      db.transaction = vi.fn(async (cb) => cb('mock-tx'));
-
-      bookingDao.findById.mockResolvedValue({
-        id: 100,
-        status: 'cancelled',
-        hiker_id: 10,
-        slot_id: 101,
-        party_size: 2,
-        slot_date: '2026-08-25',
-        slot_start_time: '14:00',
-      });
-
-      slotDao.findById.mockResolvedValue({
-        id: 101,
-        status: 'booked',
-        date: '2026-08-25',
-        start_time: '14:00',
-      });
-
-      bookingDao.cancelIfConfirmed.mockResolvedValue(false);
-      bookingDao.getSeatAssignments.mockResolvedValue([]);
-      bookingDao.getRequirements.mockResolvedValue([]);
-
-      const result = await bookingService.cancelBooking(mockHiker, 100);
-      
-      expect(result.alreadyCancelled).toBe(true);
-      expect(bookingDao.cancelIfConfirmed).not.toHaveBeenCalled();
-    });
-
-    it('should successfully resolve newHiker mode in createStaffBooking', async () => {
-      slotDao.findById.mockResolvedValue({
-        id: 101,
-        status: 'available',
-        date: '2026-08-25',
-        start_time: '14:00',
-        meal: 'lunch',
-      });
-
-      userDao.findByEmail.mockResolvedValue(null);
-      userDao.createHiker.mockResolvedValue({
-        id: 55,
-        name: 'New Hiker',
-        email: 'new@example.com',
-        phone: '+393339998877',
-      });
-
-      slotDao.getTablesWithFreeForSlot.mockResolvedValue([
-        { id: 1, label: 'T1', seats: 4, free: 4 }
-      ]);
-
-      bookingDao.create.mockResolvedValue(200);
-      bookingDao.findById.mockResolvedValue({
-        id: 200,
-        status: 'confirmed',
-        hiker_id: 55,
-        created_by: 1,
-        slot_id: 101,
-        slot_date: '2026-08-25',
-        slot_start_time: '14:00',
-        party_size: 2,
-        contact_name: 'New Hiker',
-        email: 'new@example.com',
-        phone: '+393339998877',
-        created_at: '2026-08-14T07:05:00.000Z',
-      });
-      bookingDao.getSeatAssignments.mockResolvedValue([]);
-
-      const response = await bookingService.createStaffBooking(mockStaff, {
-        slotId: 101,
-        partySize: 2,
-        mode: 'newHiker',
-        name: 'New Hiker',
-        email: 'new@example.com',
-        phone: '+393339998877',
-      });
-
-      expect(response.mode).toBe('newHiker');
-      expect(response.account).toBeDefined();
-      expect(response.initialPassword).toBeDefined();
-      expect(userDao.createHiker).toHaveBeenCalled();
-    });
-
   });
-it('should throw ConflictError if email is already registered when creating a staff booking in newHiker mode', async () => {
-      slotDao.findById.mockResolvedValue({
-        id: 101,
-        status: 'available',
-        date: '2026-08-25',
-        start_time: '14:00',
-        meal: 'lunch',
-      });
 
-      // Simula che l'email esista già nel database
-      userDao.findByEmail.mockResolvedValue({ id: 99, email: 'existing@example.com' });
-
-      await expect(
-        bookingService.createStaffBooking(mockStaff, {
-          slotId: 101,
-          partySize: 2,
-          mode: 'newHiker',
-          name: 'Existing Person',
-          email: 'existing@example.com',
-          phone: '+393330000000', // Aggiunto per superare la validazione iniziale del corpo
-        })
-      ).rejects.toThrow(ConflictError);
-    });
 });

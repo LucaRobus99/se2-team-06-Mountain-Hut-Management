@@ -17,11 +17,12 @@ A web application for managing meals, table availability and reservations at a s
 - **MH-03 — Receive confirmation:** booking confirmation is displayed immediately; a confirmation email is attempted when Mailgun is configured. Email delivery failures do not cancel confirmed bookings.
 - **MH-04 — Check availability:** public search by date, meal and number of guests; eligible time slots show their availability.
 - **MH-05 — Provide party requirements:** hikers can enter separate dietary/allergy requirements, including the number of affected guests, when confirming a booking. The confirmation page shows the saved information.
-- **My Bookings (team extension):** authenticated hikers can review their upcoming, past and cancelled reservations and open booking details. Viewing a booking does not currently provide editing or cancellation actions.
+- **MH-06 — Change a booking:** authenticated hikers can review upcoming, past and cancelled bookings. Eligible confirmed bookings can be edited (date, meal/time slot, party size and dietary requirements) at least 48 hours before both the original and new slot. The edit form checks availability for the current reservation; the backend validates and reallocates seats transactionally on save.
+- **MH-08 — Cancel a booking:** hikers can cancel their own confirmed reservations at any time from My Bookings, after explicit confirmation in a blocking dialog. Seats are released, cancelled reservations remain in history, and a cancellation email is attempted after the database transaction.
 - **My Account (team extension):** hikers can update their name, phone, optional notes and emergency contact, change their password by supplying the current password, and upload/change/remove a profile photo. Changes persist in the database. The email address is shown read-only.
 - **Authentication:** hiker registration and login/logout; access to staff and hiker endpoints is protected by the backend. A hiker cannot create a second confirmed booking for the same slot.
 
-The staff **Reservations** page remains a placeholder. Other Mountain Hut stories, including full booking change/cancellation workflows, are not claimed as implemented here.
+The staff **Reservations** page remains a placeholder. MH-07 has backend endpoints but its user-facing workflow is not yet complete. Story completion requires passing tests, review and verification against the team Definition of Done.
 
 ## Start locally
 
@@ -126,7 +127,7 @@ npx vitest run
 npm run build
 ```
 
-On 12 November 2026, the backend suite ran successfully with **377 tests across 52 files**, and the frontend production build completed. Rerun these checks after applying new changes; those results do not replace testing the current branch.
+Run these checks on the branch you intend to merge. See [frontend/README.md](frontend/README.md) for the isolated MH-06 Cypress scenario. It uses a disposable in-memory PostgreSQL database and does not modify personal or demo reservations.
 
 ## Project structure
 

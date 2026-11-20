@@ -102,18 +102,67 @@ export async function getBooking(bookingId) {
   return apiRequest(`/api/bookings/${bookingId}`);
 }
 
-export function bookingErrorMessage(error) {
+// MH-08: the authenticated hiker can cancel an owned booking at any time.
+export async function cancelBooking(bookingId) {
+  if (!positiveInteger(bookingId)) throw new Error('Invalid booking reference.');
+  return apiRequest(`/api/bookings/${bookingId}`, { method: 'DELETE' });
+}
+
+// The owner-only preview excludes the current reservation's own seats.
+export async function getModificationSlots(bookingId, { date, meal, partySize }) {
+  if (!positiveInteger(bookingId)) throw new Error('Invalid booking reference.');
+  const validationError = validateSearch({ date, meal, partySize });
+  if (validationError) throw new Error(validationError);
+  const params = new URLSearchParams({ date, meal, partySize: String(partySize) });
+  return apiRequest(`/api/bookings/${bookingId}/availability?${params}`);
+}
+
+// MH-06 / MHM-116: update only changed fields; the server rechecks seat allocation
+// and the 48-hour rule transactionally. Never send a client-controlled hiker ID.
+export async function updateBooking(bookingId, changes) {
+  if (!positiveInteger(bookingId)) throw new Error('Invalid booking reference.');
+  if (!changes || typeof changes !== 'object' || Array.isArray(changes) ||
+      !Object.keys(changes).length ||
+      !Object.keys(changes).some(key => ['slotId', 'partySize', 'requirements'].includes(key)) ||
+      Object.keys(changes).some(key => !['slotId', 'partySize', 'requirements', 'expectedSeating'].includes(key))) {
+    throw new Error('Please make a change before saving.');
+  }
+  if ('slotId' in changes && !positiveInteger(changes.slotId)) throw new Error('Invalid time slot.');
+  if ('partySize' in changes && !positiveInteger(changes.partySize)) throw new Error('Invalid guest count.');
+  if ('expectedSeating' in changes && !['single_table', 'split'].includes(changes.expectedSeating)) throw new Error('Invalid seating preference.');
+  if ('requirements' in changes) {
+    const message = validatePartyRequirements(changes.requirements);
+    if (message) throw new Error(message);
+  }
+  return apiRequest(`/api/bookings/${bookingId}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ...changes,
+      ...('requirements' in changes ? { requirements: serializePartyRequirements(changes.requirements) } : {}),
+    }),
+  });
+}
+
+export function bookingErrorMessage(error, { editing = false } = {}) {
   switch (error?.code) {
     case 'UNAUTHENTICATED': return 'Your session has expired. Please log in to continue.';
     case 'FORBIDDEN': return 'Only Hiker accounts can make online bookings.';
     case 'INVALID_CREDENTIALS': return 'Incorrect email or password.';
     case 'BOOKING_ALREADY_EXISTS': return 'You already have a booking for this time. You cannot book the same slot twice.';
-    case 'INSUFFICIENT_CAPACITY': return 'The remaining seats have just been booked. Please choose another available time.';
+    case 'INSUFFICIENT_CAPACITY': return editing
+      ? 'The group no longer fits in this time slot. Your original booking has not changed. Please choose another available time.'
+      : 'The remaining seats have just been booked. Please choose another available time.';
     case 'SLOT_NOT_AVAILABLE': return 'This time is no longer open for booking. Please choose another.';
     case 'SLOT_TOO_LATE': return 'Bookings close two hours before the selected time. Please choose another.';
     case 'SLOT_NOT_FOUND': return 'This time is no longer available. Please search again.';
+    case 'TOO_LATE_TO_MODIFY': return 'Changes close 48 hours before the original or new booking time.';
+    case 'BOOKING_NOT_CONFIRMED': return 'Only confirmed bookings can be changed.';
+    case 'SEATING_CHANGED': return 'Seating has changed. Your original booking is unchanged. Review the new arrangement before saving.';
+    case 'BOOKING_NOT_FOUND': return 'This reservation is no longer available for your account.';
     case 'VALIDATION_ERROR':
       if (error?.details?.some((detail) => String(detail.field || '').startsWith('requirements'))) {
+        if (editing) return error.details.find(detail => String(detail.field || '').startsWith('requirements'))?.message ||
+          'Please check the dietary requirements. Your original booking has not changed.';
         return 'The server did not accept the dietary requirements. No booking was created. Please contact the team to enable this feature.';
       }
       return error?.details?.[0]?.message || 'Please check the information entered.';

@@ -122,6 +122,25 @@ describe('BookingPage Component Integration Tests', () => {
     expect(getBooking).toHaveBeenCalledTimes(2);
   });
 
+  it('shows a cancelled receipt without a successful booking or email confirmation', async () => {
+    useAuth.mockReturnValue({ user: { id: 1, role: 'hiker' }, loadingAuth: false });
+    getBooking.mockResolvedValueOnce({
+      id: 281, status: 'cancelled', partySize: 2, split: false,
+      slot: { date: '2026-11-15', meal: 'lunch', startTime: '12:30', endTime: '14:00' },
+    });
+    render(<MemoryRouter initialEntries={['/book/confirmation/281']}>
+      <Routes><Route path="/book/confirmation/:bookingId" element={<BookingPage />} /></Routes>
+    </MemoryRouter>);
+    expect(await screen.findByRole('heading', { name: 'Your booking was cancelled' })).toBeInTheDocument();
+    expect(screen.queryByText('Your table is booked!')).not.toBeInTheDocument();
+    expect(screen.queryByText('Confirmation email queued')).not.toBeInTheDocument();
+    expect(screen.queryByText('Seating', { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByText('2 people')).toBeInTheDocument();
+    const actions = screen.getByRole('link', { name: /Back to My Bookings/i }).parentElement;
+    expect(Array.from(actions.children, link => link.textContent.trim())).toEqual(['← Back to My Bookings', 'Book another table', 'Back to home']);
+    expect(screen.getByRole('link', { name: /Back to My Bookings/i })).toHaveAttribute('href', '/my-bookings?tab=cancelled');
+  });
+
   it('Back returns to availability and discards the previous booking draft', async () => {
     useAuth.mockReturnValue({ user: { id: 1, role: 'hiker' }, loadingAuth: false });
     savePendingBooking(mockDraft);

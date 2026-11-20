@@ -28,6 +28,10 @@ services:
 
   backend:
     image: jenissevereau/mountain-hut-backend:${MOUNTAIN_HUT_VERSION:-latest}
+    # Mailgun credentials, sender and template names come from the same .env
+    # used for the compose variables, so nothing has to be duplicated here.
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/mountain_hut
       SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env}
@@ -35,10 +39,6 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8081}
       HUT_TIMEZONE: ${HUT_TIMEZONE:-Europe/Rome}
-      MAILGUN_API_KEY: ${MAILGUN_API_KEY:-}
-      MAILGUN_DOMAIN: ${MAILGUN_DOMAIN:-}
-      MAILGUN_FROM: ${MAILGUN_FROM:-}
-      MAILGUN_URL: ${MAILGUN_URL:-}
     depends_on:
       db:
         condition: service_healthy

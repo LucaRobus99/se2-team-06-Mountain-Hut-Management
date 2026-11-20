@@ -18,6 +18,9 @@ import {
   unknown,
 } from '../utils/validation.js';
 import { parseRequirements } from './requirements.js';
+import { validateSlotsQuery } from './slotService.js';
+import { computeSeating } from './seating.js';
+import { isTooLateToModify } from '../utils/hutTime.js';
 
 const CONTACT_FIELDS = ['contactName', 'email', 'contactNumber'];
 
@@ -109,7 +112,7 @@ function validateUpdateBody(body) {
   const details = [];
 
   for (const key of Object.keys(body)) {
-    if (!['slotId', 'partySize', 'requirements'].includes(key)) {
+    if (!['slotId', 'partySize', 'requirements', 'expectedSeating'].includes(key)) {
       details.push(unknown(key));
     }
   }
@@ -119,6 +122,10 @@ function validateUpdateBody(body) {
   // `requirements: []` is a change (clears them); an absent field is not.
   const requirements = parseRequirements(body.requirements, details);
   const hasRequirements = requirements !== null;
+  const expectedSeating = body.expectedSeating;
+  if ('expectedSeating' in body && !['single_table', 'split'].includes(expectedSeating)) {
+    details.push({ field: 'expectedSeating', rule: 'invalid', message: 'Expected single_table or split.' });
+  }
 
   let slotId = null;
 
@@ -152,7 +159,7 @@ function validateUpdateBody(body) {
     throw invalidFields(details);
   }
 
-  return { slotId, partySize, requirements: requirements ?? [], hasRequirements };
+  return { slotId, partySize, requirements: requirements ?? [], hasRequirements, expectedSeating };
 }
 
 /**
@@ -435,13 +442,50 @@ export function createBookingService({
       return toBookingResponse(booking, assignments, requirements);
     },
 
+    /** MH-06: read-only availability preview for the current hiker's booking. */
+    async listModificationSlots(user, bookingIdRaw, query) {
+      if (!user?.id) throw new UnauthorizedError('Authentication required.', 'UNAUTHENTICATED');
+      const bookingId = parsePositiveInt(bookingIdRaw);
+      const { date, meal, partySize } = validateSlotsQuery(query);
+      return runInTransaction(db, async (tx) => {
+        const booking = await core.loadOwnedBooking(tx, bookingId, user);
+        core.assertConfirmed(booking);
+        core.assertChangeAllowed(await core.loadSlot(tx, booking.slot_id));
+
+        const currentTime = now();
+        const slots = (await slotDao.listByDate(tx, date)).filter(slot =>
+          slot.status === 'available' && slot.meal === meal &&
+          !isTooLateToModify(slot, { timeZone, now: currentTime })
+        );
+        // Only this owner's booking is excluded from occupied seats.
+        // This preview never releases seats or reserves a new slot.
+        const tables = await slotDao.getTablesWithFreeForSlots(tx, slots.map(slot => slot.id), booking.id);
+        const result = [];
+        for (const slot of slots) {
+          const existing = await bookingDao.findConfirmedByHikerAndSlot(tx, user.id, slot.id);
+          if (existing && existing.id !== booking.id) continue;
+          const slotTables = tables.filter(table => table.slot_id === slot.id);
+          const seating = computeSeating(partySize, slotTables);
+          if (!seating) continue;
+          result.push({
+            id: slot.id,
+            startTime: slot.start_time,
+            endTime: slot.end_time,
+            meal: slot.meal,
+            fit: seating.fit,
+            // Same capacity input as public Availability, without table IDs/labels.
+            tables: slotTables.map(table => ({ freeSeats: Number(table.free) })),
+            // Expose party sizes only, not the hut's table identities.
+            seatAssignments: seating.assignments.map(({ seats }) => ({ seats })),
+          });
+        }
+        return { date, meal, partySize, slots: result };
+      });
+    },
+
     /**
-     * MH-06: update slot, party size and requirements of a booking owned by
-     * the current hiker.
-     *
-     * The 48-hour rule is checked on both the original and target slot (#43).
-     * Seat reallocation and requirement changes are performed transactionally:
-     * if anything fails the booking stays as it was (#38).
+     * MH-06: check the original and target cutoff (#43), update slot, size,
+     * requirements and seats atomically (#38), then notify after commit (#41).
      */
     async updateBooking(user, bookingIdRaw, body) {
       if (!user || !user.id) {
@@ -469,20 +513,19 @@ export function createBookingService({
 
         if (slotChanged) {
           targetSlot = await core.loadSlot(tx, targetSlotId);
-
-          if (targetSlot.status !== 'available') {
-            throw new ConflictError('Slot is not available.', 'SLOT_NOT_AVAILABLE');
-          }
-
+        }
+        if (targetSlot.status !== 'available') {
+          throw new ConflictError('Slot is not available.', 'SLOT_NOT_AVAILABLE');
+        }
+        if (slotChanged) {
           core.assertChangeAllowed(targetSlot);
           await core.assertNoDuplicate(tx, user.id, targetSlot.id, { exceptBookingId: booking.id });
         }
 
         const targetPartySize = data.partySize ?? booking.party_size;
 
-        if (slotChanged || targetPartySize !== booking.party_size) {
-          await core.reseat(tx, booking, { slot: targetSlot, partySize: targetPartySize });
-        }
+        // Every accepted update follows MH-01 allocation, including requirements-only changes.
+        await core.reseat(tx, booking, { slot: targetSlot, partySize: targetPartySize, expectedSeating: data.expectedSeating });
 
         if (data.hasRequirements) {
           await bookingDao.replaceRequirements(tx, booking.id, data.requirements);

@@ -5,45 +5,172 @@ export function createEmailService({
   apiKey = null,
   domain = null,
   from = null,
-  template = 'booking confirmation',
+  template = 'booking-confirmation',
   // MH-06 (#41): dedicated template for a hiker's booking change.
-  updatedTemplate = 'booking modification',
+  updatedTemplate = 'booking-modification',
   // MH-08 (#41): cancellation notice.
-  cancelledTemplate = 'booking cancelled',
+  cancelledTemplate = 'booking-cancelled',
   resetTemplate = 'password reset',
   url = null,
+  // Retry only transient failures (network, 429, 5xx). Permanent 4xx errors
+  // (invalid recipient, missing template, ...) fail immediately.
+  retryDelaysMs = [0, 1000, 3000],
+  // Mailgun counts o:/h:/v:/t: options together and rejects more than 16KB.
+  // Keep a safety margin and trim only the email copy of requirements.
+  maxVariablesBytes = 12000,
 } = {}) {
-  let client = null;
+  const configuredUrl = url ? String(url).trim().replace(/\/+$/, '') : null;
+  const alternateUrl = configuredUrl?.includes('eu.mailgun.net')
+    ? 'https://api.mailgun.net'
+    : 'https://api.eu.mailgun.net';
+  // Mailgun domains live in one region. A wrong region answers 401; keep both
+  // clients so an EU/US mix-up is corrected automatically.
+  const regionUrls = configuredUrl
+    ? [configuredUrl, alternateUrl]
+    : ['https://api.mailgun.net', alternateUrl];
+
+  let clients = [];
   if (apiKey && domain) {
     try {
       const mailgun = new Mailgun(FormData);
-      client = mailgun.client({ username: 'api', key: apiKey, ...(url ? { url } : {}) });
+      clients = regionUrls.map((regionUrl) => ({
+        url: regionUrl,
+        client: mailgun.client({ username: 'api', key: apiKey, url: regionUrl }),
+      }));
     } catch (err) {
       console.error('Failed to initialise Mailgun client:', err);
-      client = null;
+      clients = [];
     }
   }
 
+  let activeRegion = 0;
+  const activeClient = () => clients[activeRegion] ?? null;
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  /** Only errors that can succeed on a later attempt should be retried. */
+  function isTransient(err) {
+    const status = Number(err?.status ?? err?.statusCode);
+    if (status === 429 || (status >= 500 && status <= 599)) return true;
+    const networkCodes = [
+      'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EAI_AGAIN', 'ENOTFOUND',
+      'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT',
+      'UND_ERR_BODY_TIMEOUT',
+    ];
+    if (networkCodes.includes(err?.code)) return true;
+    return err?.name === 'AbortError' || err?.name === 'TimeoutError';
+  }
+
   /**
-   * Shared delivery helper. Returns `{ skipped: true }` when Mailgun is not
-   * configured, so callers can treat email as best-effort (MH-03 pattern).
-   * Secrets (initial password, reset link) are never logged here.
+   * Keep the Mailgun options payload below the documented 16KB limit. The
+   * booking keeps every requirement; only the email copy drops the tail (and
+   * says so through `party_requirements_truncated`).
    */
-  async function deliver({ to, subject, templateName, variables, senderName = 'Guest' }) {
-    if (!client || !domain || !to) {
+  function variablesHeader(variables) {
+    const payload = { ...variables };
+    let json = JSON.stringify(payload);
+    let size = Buffer.byteLength(json, 'utf8');
+    const originalSize = size;
+
+    if (Array.isArray(payload.party_requirements)) {
+      const list = [...payload.party_requirements];
+      while (size > maxVariablesBytes && list.length > 0) {
+        list.pop();
+        payload.party_requirements = list;
+        payload.party_requirements_truncated = true;
+        json = JSON.stringify(payload);
+        size = Buffer.byteLength(json, 'utf8');
+      }
+      if (size > maxVariablesBytes) {
+        payload.party_requirements = null;
+        json = JSON.stringify(payload);
+        size = Buffer.byteLength(json, 'utf8');
+      }
+    }
+
+    if (payload.party_requirements_truncated) {
+      console.warn('Mailgun variables trimmed for delivery', {
+        bookingId: payload.booking_id ?? null,
+        originalSize,
+        size,
+        limit: maxVariablesBytes,
+      });
+    }
+    return json;
+  }
+
+  async function createMessage(mailgunClient, messageData, label) {
+    let lastError;
+    for (let attempt = 0; attempt < retryDelaysMs.length; attempt += 1) {
+      if (attempt > 0) await sleep(retryDelaysMs[attempt]);
+      try {
+        return await mailgunClient.messages.create(domain, messageData);
+      } catch (err) {
+        lastError = err;
+        const hasAnotherAttempt = attempt < retryDelaysMs.length - 1;
+        if (!isTransient(err) || !hasAnotherAttempt) break;
+        console.warn(`Mailgun ${label} attempt ${attempt + 1} failed; retrying`, {
+          status: err?.status ?? null,
+          code: err?.code ?? null,
+          message: err?.message,
+          delayMs: retryDelaysMs[attempt + 1],
+        });
+      }
+    }
+    throw lastError;
+  }
+
+  async function deliver({ to, subject, templateName, variables }) {
+    if (!clients.length || !domain || !to) {
       return { skipped: true };
     }
 
     const messageData = {
       from: from || `Mailgun Sandbox <postmaster@${domain}>`,
-      to: [`${senderName} <${to}>`],
+      // Send the bare address: a user-controlled display name with commas or
+      // angle brackets can make the header invalid and drop the message.
+      to: [to],
       subject,
       template: templateName,
-      'h:X-Mailgun-Variables': JSON.stringify(variables),
+      // Ask Mailgun to generate a text/plain alternative from the template:
+      // better accessibility and a lower spam score.
+      't:text': 'yes',
+      'h:X-Mailgun-Variables': variablesHeader(variables),
     };
 
-    const result = await client.messages.create(domain, messageData);
-    return result;
+    try {
+      return await createMessage(activeClient().client, messageData, templateName);
+    } catch (err) {
+      const status = Number(err?.status ?? err?.statusCode);
+      // 401 = wrong credentials/region; 404 = domain not found in this region.
+      const regionMismatch = status === 401 || status === 404;
+      if (!regionMismatch || clients.length < 2) throw err;
+
+      const nextRegion = (activeRegion + 1) % clients.length;
+      console.warn('Mailgun rejected this region; trying the other one', {
+        status,
+        from: activeClient().url,
+        to: clients[nextRegion].url,
+        domain,
+      });
+
+      try {
+        const result = await createMessage(clients[nextRegion].client, messageData, templateName);
+        activeRegion = nextRegion;
+        console.warn('Mailgun region switched for this process', { region: clients[nextRegion].url });
+        return result;
+      } catch (fallbackError) {
+        const fallbackStatus = Number(fallbackError?.status ?? fallbackError?.statusCode);
+        if (fallbackStatus === 401 || fallbackStatus === 404) {
+          console.error(
+            'Mailgun failed in both regions. Check MAILGUN_API_KEY/API_KEY, MAILGUN_URL ' +
+            '(EU: https://api.eu.mailgun.net) and that the template exists.',
+            { domain, status: fallbackStatus }
+          );
+        }
+        throw fallbackError;
+      }
+    }
   }
 
   /**
@@ -70,7 +197,6 @@ export function createEmailService({
       to,
       subject: email.subject,
       templateName: email.template,
-      senderName: (typeof data.name === 'string' && data.name.trim()) || 'Guest',
       variables: {
         name: data.name ?? null,
         date: data.date ?? null,
@@ -88,7 +214,61 @@ export function createEmailService({
 
   return {
     isEnabled() {
-      return Boolean(client);
+      return clients.length > 0;
+    },
+
+    /**
+     * Startup check: every configured template must exist on the Mailgun domain
+     * with an active version. Runs through the read-only templates API, so it
+     * works without dashboard access. Never throws: returns per-template state.
+     * A 401 from the configured region automatically retries the other region.
+     */
+    async verifyTemplates() {
+      if (!clients.length || !domain) return { enabled: false, templates: [] };
+
+      const authorization = 'Basic ' + Buffer.from(`api:${apiKey}`).toString('base64');
+      const names = [...new Set([template, updatedTemplate, cancelledTemplate, resetTemplate])];
+      const templates = [];
+
+      for (const name of names) {
+        let result = null;
+
+        for (let offset = 0; offset < clients.length; offset += 1) {
+          const regionIndex = (activeRegion + offset) % clients.length;
+          const base = clients[regionIndex].url;
+
+          try {
+            const response = await fetch(
+              `${base}/v3/${encodeURIComponent(domain)}/templates/${encodeURIComponent(name)}/versions`,
+              { headers: { Authorization: authorization } }
+            );
+            const body = await response.json().catch(() => null);
+
+            if ((response.status === 401 || response.status === 404) && clients.length > 1) {
+              // 401 = wrong credentials/region; 404 = domain not found in this
+              // region. Try the other region before declaring the template missing.
+              result = { name, ok: false, active: null, status: response.status };
+              continue;
+            }
+
+            const activeVersion = body?.template?.versions?.find((version) => version.active);
+            result = {
+              name,
+              ok: response.ok && Boolean(activeVersion),
+              active: activeVersion?.tag ?? null,
+              status: response.status,
+            };
+            if (response.ok) activeRegion = regionIndex;
+            break;
+          } catch (err) {
+            result = { name, ok: false, active: null, status: null, error: err.message };
+          }
+        }
+
+        templates.push(result ?? { name, ok: false, active: null, status: null });
+      }
+
+      return { enabled: true, templates };
     },
 
     /** MH-03: kept for existing callers; same as sendBookingEmail('created', …). */
@@ -126,7 +306,6 @@ export function createEmailService({
           to,
           subject: 'Reset your Edelweiss Hut password',
           templateName: resetTemplate,
-          senderName: name || 'Guest',
           variables: {
             name: name ?? null,
             reset_url: resetUrl ?? null,
@@ -140,3 +319,18 @@ export function createEmailService({
     },
   };
 }
+
+/** Build the email service from the app config (shared by app.js and server.js). */
+export function createEmailServiceFromConfig(config) {
+  return createEmailService({
+    apiKey: config.mailgunApiKey,
+    domain: config.mailgunDomain,
+    from: config.mailgunFrom,
+    template: config.mailgunTemplate,
+    updatedTemplate: config.mailgunUpdatedTemplate,
+    cancelledTemplate: config.mailgunCancelledTemplate,
+    resetTemplate: config.mailgunResetTemplate,
+    url: config.mailgunUrl,
+  });
+}
+

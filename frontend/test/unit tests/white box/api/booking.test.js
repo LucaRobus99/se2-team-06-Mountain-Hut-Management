@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { getAvailableSlots, getSlotSeating, createBooking, getBooking, getMyBookings, bookingErrorMessage, checkSlotBooking } from '../../../../src/api/booking.js';
 
 describe('Booking API - White-Box Unit Tests (Complete Coverage)', () => {
@@ -9,6 +9,14 @@ describe('Booking API - White-Box Unit Tests (Complete Coverage)', () => {
   });
 
   describe('getAvailableSlots', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-11-12T10:00:00Z'));
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    });
     it('should throw a validation error if partySize is not a positive integer', async () => {
       await expect(getAvailableSlots({ date: '2026-11-15', meal: 'lunch', partySize: 0 }))
         .rejects.toThrow('Please enter a positive whole number of guests.');

@@ -720,6 +720,7 @@
   overflow-wrap: anywhere;
 }
 .eh-booking-email-notice--failed,
+.eh-booking-email-notice--sent,
 .eh-booking-email-notice--skipped,
 .eh-booking-email-notice--unknown {
   background: #fff8e8;
@@ -826,9 +827,10 @@
   box-shadow: none;
 }
 .eh-confirmation-heading .eh-booking-success-mark svg { width: 32px; height: 32px; }
+.eh-confirmation-heading .eh-booking-cancelled-mark { background:#94432f; }
 .eh-confirmation-eyebrow {
   margin: 0 0 .45rem;
-  color: #49714f;
+  color: #80583d;
   font: 700 .76rem/1.3 Georgia, 'Palatino Linotype', serif;
   text-transform: uppercase;
   letter-spacing: .16em;
@@ -854,7 +856,7 @@
 .eh-confirmation-dietary h2 {
   margin: 0 0 1rem;
   font: 700 1.35rem/1.3 Georgia, 'Palatino Linotype', serif;
-  color: #203d2c;
+  color: #765034;
 }
 .eh-confirmation-visit {
   display: grid;
@@ -888,15 +890,16 @@
 .eh-confirmation-facts > div + div { border-left: 1px solid #e3e5dc; padding-left: 1.1rem; }
 .eh-confirmation-facts dd {
   margin: 0;
-  color: #254130;
+  color: #242424;
   font: 700 1rem/1.45 Georgia, 'Palatino Linotype', serif;
   overflow-wrap: anywhere;
 }
+.eh-confirmation-facts.eh-confirmation-facts--cancelled { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .eh-confirmation-dietary {
   margin-top: 1.05rem;
   padding: clamp(1.1rem, 2.5vw, 1.65rem);
-  background: #eef4ec;
-  border: 1px solid #d0dfcf;
+  background: #fffefa;
+  border: 1px solid #e4dbcd;
   border-radius: .95rem;
 }
 .eh-confirmation-dietary-heading {
@@ -909,7 +912,7 @@
 }
 .eh-confirmation-dietary-heading h2 { margin: 0; }
 .eh-confirmation-dietary-heading > span {
-  color: #66816b;
+  color: #80583d;
   font: 600 .86rem/1.35 Georgia, 'Palatino Linotype', serif;
 }
 .eh-confirmation-dietary ul {
@@ -921,7 +924,7 @@
   padding: .95rem 0;
   overflow-wrap: anywhere;
 }
-.eh-confirmation-dietary li + li { border-top: 1px solid #d6e2d4; }
+.eh-confirmation-dietary li + li { border-top: 1px solid #e5dbce; }
 .eh-confirmation-dietary-description {
   display: block;
   color: #263f30;

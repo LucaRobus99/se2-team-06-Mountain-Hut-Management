@@ -173,11 +173,15 @@ export function createBookingCore({ bookingDao, slotDao, timeZone, now = () => n
      * rolls back: the booking keeps its previous seats.
      * @returns the new seat assignments
      */
-    async reseat(tx, booking, { slot, partySize }) {
+    async reseat(tx, booking, { slot, partySize, expectedSeating }) {
       await bookingDao.deleteSeats(tx, booking.id);
 
       const tables = await slotDao.getTablesWithFreeForSlot(tx, slot.id);
       const seating = seatOrFail(partySize, tables);
+
+      if (expectedSeating === 'single_table' && seating.fit === 'split') {
+        throw new ConflictError('Seating has changed. Please review the split arrangement before saving.', 'SEATING_CHANGED');
+      }
 
       await bookingDao.update(tx, booking.id, { slotId: slot.id, partySize });
       await bookingDao.insertSeats(tx, booking.id, seating.assignments);

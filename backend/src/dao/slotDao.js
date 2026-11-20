@@ -5,9 +5,10 @@ import { createExecutorOf } from './executor.js';
  * Methods take an optional executor first (see executor.js).
  */
 /** The one free-seats query, shared by the single-slot and multi-slot lookups. */
-async function tablesWithFree(exec, slotIds) {
+async function tablesWithFree(exec, slotIds, exceptBookingId = null) {
   if (slotIds.length === 0) return [];
   const placeholders = slotIds.map((_, i) => `$${i + 1}`).join(', ');
+  const excludeBooking = exceptBookingId === null ? '' : `AND b.id <> $${slotIds.length + 1}`;
   const { rows } = await exec.query(
     `SELECT st.slot_id,
             dt.id,
@@ -20,12 +21,13 @@ async function tablesWithFree(exec, slotIds) {
               WHERE bs.table_id = dt.id
                 AND b.slot_id = st.slot_id
                 AND b.status = 'confirmed'
+                ${excludeBooking}
             ), 0) AS free
      FROM slot_tables st
      JOIN dining_tables dt ON dt.id = st.table_id
      WHERE st.slot_id IN (${placeholders})
      ORDER BY st.slot_id, dt.id`,
-    slotIds
+    exceptBookingId === null ? slotIds : [...slotIds, exceptBookingId]
   );
   return rows;
 }
@@ -85,7 +87,7 @@ export function createSlotDao(db) {
     /** Same rows for several slots in one query (slot lists), ordered by slot then table. */
     async getTablesWithFreeForSlots(...args) {
       const { db: exec, args: a } = executorOf(args);
-      return tablesWithFree(exec, a[0]);
+      return tablesWithFree(exec, a[0], a[1]);
     },
 
     /** The table set of a slot as { tableId, seats }, used to copy it to a new slot. */

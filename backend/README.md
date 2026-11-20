@@ -42,6 +42,7 @@ The connection layer is `src/db/postgres.js`: `query(sql, params)` returns `{ ro
 | GET | `/api/bookings/slot-status?slotId=…` | Hiker | Check whether the hiker already booked the selected slot |
 | GET | `/api/bookings/:bookingId` | Owner or staff | Booking details |
 | PATCH | `/api/bookings/:bookingId` | Owner (Hiker) | Change slot, party size or requirements (MH-06) |
+| GET | `/api/bookings/:bookingId/availability` | Owner (Hiker) | Available modification slots, excluding the current booking's occupied seats (MH-06) |
 | DELETE | `/api/bookings/:bookingId` | Owner (Hiker) | Cancel a booking; idempotent and with no time limit (MH-08) |
 | GET | `/api/staff/hikers?query=…` | Employee/Warden | Search hikers by name, email or phone (MH-07) |
 | GET | `/api/staff/availability` | Employee/Warden | Availability including slots that start within two hours |
@@ -70,11 +71,54 @@ The backend enforces table capacity and seating transactionally, even when the U
 
 When Mailgun is configured, creating, updating or cancelling a booking attempts an email. Successful **POST** and **PATCH** responses include `confirmationEmail.status`; **DELETE** returns the same information as `cancellationEmail.status`:
 
-- `sent` — Mailgun accepted the request;
+- `sent` — Mailgun accepted the request and returned a message ID; this is not confirmation of inbox delivery;
 - `failed` — the submission failed;
 - `skipped` — no email configuration/recipient was available (also used when a repeated cancellation does not send a second email).
 
-A successfully persisted booking stays confirmed/updated/cancelled regardless of email status; failed email submissions do not roll back an already committed transaction. `GET /api/bookings` and `GET /api/bookings/:bookingId` do not include this notification result because it is not persisted. Configure `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_FROM` (optional), `MAILGUN_TEMPLATE`, `MAILGUN_UPDATED_TEMPLATE`, `MAILGUN_CANCELLED_TEMPLATE`, `MAILGUN_RESET_TEMPLATE` and optional `MAILGUN_URL` in `.env`. A Mailgun sandbox may require authorizing recipient addresses. Ready-to-upload templates live in `email-templates/` (`booking-confirmation.html`, `booking-modification.html`, `booking-cancelled.html`).
+A successfully persisted booking stays confirmed/updated/cancelled regardless of email status; failed email submissions do not roll back an already committed transaction. `GET /api/bookings` and `GET /api/bookings/:bookingId` do not include this notification result because it is not persisted. Configure `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_FROM` (optional), `MAILGUN_TEMPLATE`, `MAILGUN_UPDATED_TEMPLATE`, `MAILGUN_CANCELLED_TEMPLATE`, `MAILGUN_RESET_TEMPLATE` and optional `MAILGUN_URL` in `.env`. A Mailgun sandbox may require authorizing recipient addresses. Ready-to-upload templates live in `email-templates/` (`booking-confirmation.html`, `booking-modification.html`, `booking-cancelled.html`, `password-reset.html`).
+
+### Uploading templates without dashboard access
+
+Templates must exist **on the configured Mailgun domain**, with an **active version** and a name identical to the env value (spaces included). They can be managed with the API key from `.env`, so dashboard access is not required:
+
+```bash
+# read-only: which templates exist and which version is active
+npm run mailgun:templates -- --status
+
+# read-only: recent delivery events (failed/rejected/delivered) without dashboard
+npm run mailgun:templates -- --events
+npm run mailgun:templates -- --events --recipient=name@example.com
+
+# show what would be uploaded, without writing
+npm run mailgun:templates -- --dry-run
+
+# create the missing booking templates and publish a version
+npm run mailgun:templates -- --only=created,updated,cancelled
+
+# render-check every selected template in Mailgun test mode (no email delivered)
+npm run mailgun:templates -- --test --only=created,updated,cancelled
+```
+
+The default is non-destructive: a template that already has an active version is skipped. Use `--force` to upload and activate a new version, e.g. for the reset template in `email-templates/password-reset.html`. The script honours `MAILGUN_URL`, so it works with the EU endpoint (`https://api.eu.mailgun.net`).
+
+Mailgun's templates API rejects template names that contain spaces (it returns a generic `500 Internal Server Error`). The booking templates therefore use hyphenated names (`booking-confirmation`, `booking-modification`, `booking-cancelled`) in both `.env` and the defaults. The existing `password reset` template was created from the dashboard and keeps its name; the script never overwrites an active version unless `--force` is used.
+
+### Delivery reliability
+
+Sending a booking email is not a single best-effort call anymore:
+
+- **Recipients** are sent as a bare address (`to: ["name@example.com"]`). A display name supplied by a user (commas, quotes, angle brackets) can no longer invalidate the header and drop the message.
+- **Transient failures are retried**: network errors, `429` and `5xx` are attempted up to three times (about 4 seconds in total). Permanent `4xx` errors (invalid recipient, missing template, unauthorised domain) fail immediately, because repeating them cannot succeed.
+- **The 16 KB Mailgun limit** on `o:/h:/v:/t:` options is enforced. If an extremely long requirements list would exceed it, only the email copy drops the tail and sets `party_requirements_truncated`; the booking keeps every requirement and the server logs a warning.
+- **Startup verification**: when Mailgun is enabled, the backend checks that every configured template exists with an active version and logs the result (it never blocks startup). The same check is available with `npm run mailgun:templates -- --status`.
+- **Text alternative**: every stored-template message asks Mailgun to generate the `text/plain` part (`t:text=yes`), which improves accessibility and spam scoring.
+- **Diagnostics without the dashboard**: `npm run mailgun:templates -- --events [--recipient=…]` shows recent `failed`, `rejected` and `delivered` events. `sent` in the API means Mailgun accepted the message; Mailgun then retries temporary delivery failures itself.
+- **401/404 authentication or region**: a Mailgun domain lives in one region (US or EU). The backend retries the **other region automatically** on a 401 or a “domain not found” 404 and remembers the working one. If both regions fail, the key is invalid, revoked, or is not a Private API key (do not use a sending key or the public validation key). Verify `MAILGUN_URL` (`https://api.eu.mailgun.net` for EU) and run `npm run mailgun:templates -- --status`; empty/space-padded values are trimmed by the config.
+
+Remaining hard limits are outside the application: a non-existent or suppressed recipient, a Mailgun outage longer than the retry window, daily plan limits, and spam filtering by the receiving provider. For deliverability, keep SPF and DKIM valid (already verified) and add a DMARC record for the sending domain; a new domain also needs a few days to build reputation.
+
+
+To diagnose missing emails, look for `[booking-email]` in the backend terminal. An accepted message logs its provider message ID, booking reference and operation. Search that ID in Mailgun Logs to distinguish accepted, delivered and failed events. Logs omit the recipient address and credentials.
 
 ## Booking history and changes (MH-06)
 
@@ -99,6 +143,8 @@ A successfully persisted booking stays confirmed/updated/cancelled regardless of
 
 Every item has the same shape as `GET /api/bookings/:bookingId`, including past and cancelled bookings: the client decides how to group them. The route is Hiker-only, so an Employee or Warden receives `403 FORBIDDEN`.
 
+`GET /api/bookings/:bookingId/availability?date=YYYY-MM-DD&meal=lunch&partySize=2` returns `{ date, meal, partySize, slots }`, with each slot containing `id`, `startTime`, `endTime`, `meal`, `fit` (`single_table` or `split`), `tables` (only `freeSeats` per table, for the Availability cards) and `seatAssignments` (only the guest count per allocated table). It checks ownership, confirmed status, the original and target 48-hour cutoffs, open slots, capacity and duplicate reservations. Only the current booking's seats are excluded from occupied seats. The preview does not change or reserve seats, and does not expose table identifiers. PATCH still checks availability inside its transaction.
+
 `PATCH /api/bookings/:bookingId` changes a booking owned by the authenticated Hiker. The body accepts any subset of these fields:
 
 | Field | Rule |
@@ -106,14 +152,15 @@ Every item has the same shape as `GET /api/bookings/:bookingId`, including past 
 | `slotId` | Positive integer, existing slot with status `available` |
 | `partySize` | Positive integer |
 | `requirements` | Array of objects `{ "description": string, "allergies": boolean }` |
+| `expectedSeating` | Optional preview fit (`single_table` or `split`); prevents an unexpected split during the final allocation |
 
-At least one field is required and unknown fields are rejected with `400 VALIDATION_ERROR`. Omitted fields keep their current value; an empty `requirements` array **clears** the saved requirements instead of leaving them unchanged.
+At least one of slotId, partySize or requirements is required and unknown fields are rejected with `400 VALIDATION_ERROR`. Omitted fields keep their current value; an empty `requirements` array **clears** the saved requirements instead of leaving them unchanged.
 
 The rules below are enforced inside a single serialized transaction:
 
 1. **Ownership** — an unknown ID and another hiker's booking both return `404 BOOKING_NOT_FOUND`, so booking IDs cannot be enumerated.
 2. **48-hour rule** — at least 48 hours must remain before the *original* slot begins; when the slot changes, the check is repeated on the *new* slot. Comparison uses `HUT_TIMEZONE`, never the server's local clock.
-3. **Seat reallocation** — when the slot or party size changes, the current seats are released and tables are allocated again under MH-01. If the new party does not fit, the request fails with `409 INSUFFICIENT_CAPACITY` and the whole transaction rolls back.
+3. **Seat reallocation** — on each accepted modification (including requirements-only changes), the current seats are released and tables are allocated again under MH-01. If the new party does not fit, the request fails with `409 INSUFFICIENT_CAPACITY` and the whole transaction rolls back.
 4. **One booking per slot** — moving to a slot where the hiker already holds a confirmed booking returns `409 BOOKING_ALREADY_EXISTS`.
 5. **Requirements** — stored requirements are replaced, or deleted when the submitted array is empty, inside the transaction.
 6. **Confirmation email** — attempted after the commit and never blocks the booking change.
@@ -130,6 +177,7 @@ The rules below are enforced inside a single serialized transaction:
 | 409 | `BOOKING_ALREADY_EXISTS` | The hiker already has a confirmed booking in the target slot |
 | 409 | `INSUFFICIENT_CAPACITY` | The new party size does not fit in the target slot |
 | 409 | `BOOKING_NOT_CONFIRMED` | The booking is no longer confirmed |
+| 409 | `SEATING_CHANGED` | The preview offered a single table but the final allocation would split the group; review the updated preview |
 
 A successful change returns the updated booking in the same shape as a list item, plus `confirmationEmail`. There is no `Location` header because the resource address does not change.
 
@@ -229,4 +277,4 @@ npm run test:watch  # interactive
 
 Tests use an in-memory embedded PostgreSQL (PGlite): no Docker or database server needed. `test/globalSetup.js` builds one seeded template; each test file starts from it and every `createTestDb()` resets the data to the seed (`test/helpers/testDb.js`). Suites are organized under `test/unit tests/black box`, `test/unit tests/white box` and `test/integration tests`.
 
-On 12 November 2026 the account branch passed **377 tests in 52 files** before merging the newer work from `main`. Run the full suite again after resolving the merge: these earlier results do not validate the combined branch. MH-06 currently has integration coverage for `GET /api/bookings`; `PATCH /api/bookings/:bookingId` and `updateBooking()` still need dedicated unit/route-level coverage before the story is considered Done.
+Run the full suite on the current branch. MH-06 integration tests cover booking history, modification availability, ownership, the 48-hour boundary, seat reallocation, rollback and notification failure. Live Mailgun delivery requires separate configuration and validation.

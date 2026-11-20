@@ -7,7 +7,7 @@ import { createBookingDao } from './dao/bookingDao.js';
 import { createPasswordResetDao } from './dao/passwordResetDao.js';
 import { createSlotService } from './services/slotService.js';
 import { createBookingService } from './services/bookingService.js';
-import { createEmailService } from './services/emailService.js';
+import { createEmailServiceFromConfig } from './services/emailService.js';
 import { createAuthRouter } from './routes/authRoutes.js';
 import { createRegistrationService } from './services/registrationService.js';
 import { createAccountService } from './services/accountService.js';
@@ -22,7 +22,7 @@ import { createRequireAuth } from './middleware/requireAuth.js';
 import { createRequirePasswordChange } from './middleware/requirePasswordChange.js';
 import { config } from './config/config.js';
 
-export function createApp({ db, timeZone = config.hutTimeZone, now = () => new Date() }) {
+export function createApp({ db, timeZone = config.hutTimeZone, now = () => new Date(), emailService: injectedEmailService = null }) {
   const app = express();
 
   // In Docker the frontend's nginx forwards /api from the private network.
@@ -51,16 +51,7 @@ export function createApp({ db, timeZone = config.hutTimeZone, now = () => new D
 
   const requireAuth = createRequireAuth({ now: () => now().getTime() });
 
-  const emailService = createEmailService({
-    apiKey: config.mailgunApiKey,
-    domain: config.mailgunDomain,
-    from: config.mailgunFrom,
-    template: config.mailgunTemplate,
-    updatedTemplate: config.mailgunUpdatedTemplate,
-    cancelledTemplate: config.mailgunCancelledTemplate,
-    resetTemplate: config.mailgunResetTemplate,
-    url: config.mailgunUrl,
-  });
+  const emailService = injectedEmailService ?? createEmailServiceFromConfig(config);
 
   const slotService = createSlotService({ slotDao, db, timeZone, now });
   const bookingService = createBookingService({
