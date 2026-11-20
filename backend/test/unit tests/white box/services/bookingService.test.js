@@ -34,6 +34,8 @@ describe('bookingService - White-Box Tests', () => {
       findConfirmedByHikerAndSlot: vi.fn(),
       create: vi.fn(),
       insertSeats: vi.fn(),
+      deleteSeats: vi.fn(),
+      update: vi.fn(),
       findById: vi.fn(),
       getSeatAssignments: vi.fn(),
       insertRequirements: vi.fn(),
@@ -316,6 +318,35 @@ describe('bookingService - White-Box Tests', () => {
   });
 
   describe('Additional White-Box Coverage (Update & Staff Booking Validation)', () => {
+
+    it('rejects an update from a different hiker without releasing seats', async () => {
+      bookingDao.findById.mockResolvedValue({ id: 100, hiker_id: 99, status: 'confirmed' });
+      await expect(bookingService.updateBooking(mockHiker, 100, { partySize: 3 }))
+        .rejects.toMatchObject({ code: 'BOOKING_NOT_FOUND' });
+      expect(bookingDao.deleteSeats).not.toHaveBeenCalled();
+    });
+
+    it('checks the original cutoff before any allocation', async () => {
+      bookingDao.findById.mockResolvedValue({ id: 100, hiker_id: 10, status: 'confirmed', slot_id: 101, party_size: 2 });
+      slotDao.findById.mockResolvedValue({ id: 101, status: 'available', date: '2026-08-16', start_time: '08:59' });
+      await expect(bookingService.updateBooking(mockHiker, 100, { partySize: 3 }))
+        .rejects.toMatchObject({ code: 'TOO_LATE_TO_MODIFY' });
+      expect(bookingDao.deleteSeats).not.toHaveBeenCalled();
+    });
+
+    it('reallocates seats transactionally even when only requirements change', async () => {
+      const existing = { id: 100, hiker_id: 10, status: 'confirmed', slot_id: 101, party_size: 2 };
+      bookingDao.findById.mockResolvedValue(existing);
+      // Exactly 48 hours after fixedNow in Europe/Rome.
+      slotDao.findById.mockResolvedValue({ id: 101, status: 'available', date: '2026-08-16', start_time: '09:00' });
+      slotDao.getTablesWithFreeForSlot.mockResolvedValue([{ id: 1, label: 'T1', seats: 2, free: 2 }]);
+      bookingDao.getSeatAssignments.mockResolvedValue([{ tableId: 1, tableLabel: 'T1', seats: 2 }]);
+      const result = await bookingService.updateBooking(mockHiker, 100, { requirements: [] });
+      expect(result.partySize).toBe(2);
+      expect(bookingDao.deleteSeats).toHaveBeenCalledWith('mock-tx', 100);
+      expect(bookingDao.update).toHaveBeenCalledWith('mock-tx', 100, { slotId: 101, partySize: 2 });
+      expect(bookingDao.replaceRequirements).toHaveBeenCalledWith('mock-tx', 100, []);
+    });
 
     it('should throw ValidationError in validateUpdateBody if body is not an object', async () => {
       await expect(

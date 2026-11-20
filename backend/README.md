@@ -42,6 +42,7 @@ The connection layer is `src/db/postgres.js`: `query(sql, params)` returns `{ ro
 | GET | `/api/bookings/slot-status?slotId=…` | Hiker | Check whether the hiker already booked the selected slot |
 | GET | `/api/bookings/:bookingId` | Owner or staff | Booking details |
 | PATCH | `/api/bookings/:bookingId` | Owner (Hiker) | Change slot, party size or requirements (MH-06) |
+| GET | `/api/bookings/:bookingId/availability` | Owner (Hiker) | Available modification slots, excluding the current booking's occupied seats (MH-06) |
 | DELETE | `/api/bookings/:bookingId` | Owner (Hiker) | Cancel a booking; idempotent and with no time limit (MH-08) |
 | GET | `/api/staff/hikers?query=…` | Employee/Warden | Search hikers by name, email or phone (MH-07) |
 | GET | `/api/staff/availability` | Employee/Warden | Availability including slots that start within two hours |
@@ -99,6 +100,8 @@ A successfully persisted booking stays confirmed/updated/cancelled regardless of
 
 Every item has the same shape as `GET /api/bookings/:bookingId`, including past and cancelled bookings: the client decides how to group them. The route is Hiker-only, so an Employee or Warden receives `403 FORBIDDEN`.
 
+`GET /api/bookings/:bookingId/availability?date=YYYY-MM-DD&meal=lunch&partySize=2` returns `{ date, meal, partySize, slots }`, with each slot containing `id`, `startTime`, `endTime` and `meal`. It checks ownership, confirmed status, the original and target 48-hour cutoffs, open slots, capacity and duplicate reservations. Only the current booking's seats are excluded from occupied seats. The preview does not change or reserve seats, and does not expose table identifiers. PATCH still checks availability inside its transaction.
+
 `PATCH /api/bookings/:bookingId` changes a booking owned by the authenticated Hiker. The body accepts any subset of these fields:
 
 | Field | Rule |
@@ -113,7 +116,7 @@ The rules below are enforced inside a single serialized transaction:
 
 1. **Ownership** — an unknown ID and another hiker's booking both return `404 BOOKING_NOT_FOUND`, so booking IDs cannot be enumerated.
 2. **48-hour rule** — at least 48 hours must remain before the *original* slot begins; when the slot changes, the check is repeated on the *new* slot. Comparison uses `HUT_TIMEZONE`, never the server's local clock.
-3. **Seat reallocation** — when the slot or party size changes, the current seats are released and tables are allocated again under MH-01. If the new party does not fit, the request fails with `409 INSUFFICIENT_CAPACITY` and the whole transaction rolls back.
+3. **Seat reallocation** — on each accepted modification (including requirements-only changes), the current seats are released and tables are allocated again under MH-01. If the new party does not fit, the request fails with `409 INSUFFICIENT_CAPACITY` and the whole transaction rolls back.
 4. **One booking per slot** — moving to a slot where the hiker already holds a confirmed booking returns `409 BOOKING_ALREADY_EXISTS`.
 5. **Requirements** — stored requirements are replaced, or deleted when the submitted array is empty, inside the transaction.
 6. **Confirmation email** — attempted after the commit and never blocks the booking change.
@@ -229,4 +232,4 @@ npm run test:watch  # interactive
 
 Tests use an in-memory embedded PostgreSQL (PGlite): no Docker or database server needed. `test/globalSetup.js` builds one seeded template; each test file starts from it and every `createTestDb()` resets the data to the seed (`test/helpers/testDb.js`). Suites are organized under `test/unit tests/black box`, `test/unit tests/white box` and `test/integration tests`.
 
-On 12 November 2026 the account branch passed **377 tests in 52 files** before merging the newer work from `main`. Run the full suite again after resolving the merge: these earlier results do not validate the combined branch. MH-06 currently has integration coverage for `GET /api/bookings`; `PATCH /api/bookings/:bookingId` and `updateBooking()` still need dedicated unit/route-level coverage before the story is considered Done.
+Run the full suite on the current branch. MH-06 integration tests cover booking history, modification availability, ownership, the 48-hour boundary, seat reallocation, rollback and notification failure. Live Mailgun delivery requires separate configuration and validation.

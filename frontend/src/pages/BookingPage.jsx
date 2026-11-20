@@ -212,7 +212,8 @@ export default function BookingPage() {
     return (
       <main className="eh-booking-page">
         <Alert variant="danger" role="alert">{receiptError || 'Unable to load the booking confirmation.'}</Alert>
-        <Link to="/availability" className="eh-button eh-button--green">Check availability</Link>
+        <Link to="/my-bookings" className="eh-button eh-button--green">← Back to My Bookings</Link>
+        <Link to="/availability" className="eh-button eh-button--outline">Check availability</Link>
       </main>
     );
   }
@@ -309,6 +310,7 @@ export default function BookingPage() {
 
             <div className="eh-booking-actions">
               <Link to="/book" className="eh-button eh-button--green">Book another table</Link>
+              <Link to={`/my-bookings${location.state?.bookingListFilter ? `?tab=${location.state.bookingListFilter}` : ""}`} className="eh-button eh-button--outline">← Back to My Bookings</Link>
               <Link to="/" className="eh-button eh-button--outline">Back to home</Link>
             </div>
           </div>

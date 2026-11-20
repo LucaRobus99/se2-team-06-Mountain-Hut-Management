@@ -50,7 +50,9 @@ On successful submission, the confirmation page shows the booking reference, tim
 
 ## My Bookings
 
-`src/pages/MyBookingsPage.jsx` loads the authenticated hiker's data using `GET /api/bookings`, groups the reservations into **upcoming**, **past** and **cancelled**, and provides a details link where applicable. Booking changes and cancellation are not implemented on this page yet.
+`src/pages/MyBookingsPage.jsx` loads the authenticated hiker's reservations using `GET /api/bookings` and groups them into **upcoming**, **past** and **cancelled**. No reservation is selected initially. The arrow on each card toggles a detail panel without showing table identifiers. On smaller screens the detail/edit panel replaces the list and a Back button restores it. Full details include a link back to My Bookings.
+
+For eligible upcoming reservations, **Change booking** opens `EditBookingForm.jsx` (MHM-116). Date, meal and guest count refresh the owner-only modification availability endpoint; the existing photographic slot cards show only eligible times for the group. The original time remains selectable only while it fits, and an unavailable selection must be changed before saving. A failed lookup prevents saving and can be retried. The backend rechecks/reallocates seats transactionally on `PATCH /api/bookings/:bookingId`. Multiple dietary/allergy requirements can be edited. The 48-hour cutoff is displayed in the UI and enforced by the backend. Past/cancelled bookings remain accessible as history; hiker cancellation (MH-08) is not yet available in the UI.
 
 ## My Account
 
@@ -87,4 +89,14 @@ Run Cypress E2E tests against an actively running backend/frontend when validati
 
 ## Known scope limits
 
-The staff Reservations page, hiker booking edit/cancel flows and production email delivery setup are outside the currently completed UI. Mailgun keys must remain in the backend `.env` and must never be included in frontend code.
+The staff Reservations page, hiker booking cancellation (MH-08) and production email delivery setup are outside the currently completed UI. Mailgun keys must remain in the backend `.env` and must never be included in frontend code.
+
+### MH-06 end-to-end test (isolated database)
+
+Stop the regular backend first. From `backend/`, run `node scripts/start-mh06-e2e.mjs` instead of `npm start`. This starts an in-memory PostgreSQL instance on port 8080, with no Mailgun delivery and no access to the local database. From `frontend/`, run `npm run dev`, then in a third terminal (also in `frontend/`):
+
+```bash
+npx cypress run --spec cypress/e2e/change-booking.cy.js
+```
+
+The scenario verifies the mobile booking-change flow against the real API and checks the persisted booking after a failed capacity update. Restart the isolated backend before rerunning the spec. Do not run the older SQLite-based Cypress reset task against a personal database. Stop the isolated server and restart the regular backend when finished.

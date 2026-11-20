@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
@@ -38,10 +38,14 @@ describe('MyBookingsPage Component Integration Tests', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-19T10:00:00Z'));
   });
+  afterEach(() => vi.useRealTimers());
 
   it('renders loading state initially and then displays bookings grouped by filters', async () => {
     getMyBookings.mockResolvedValueOnce(mockBookingsList);
+    const user = userEvent.setup();
 
     render(
       <MemoryRouter>
@@ -63,15 +67,12 @@ describe('MyBookingsPage Component Integration Tests', () => {
     expect(screen.getByRole('button', { name: /cancelled/i })).toHaveTextContent('Cancelled');
 
     // Default filter is 'upcoming', verify card details
-    expect(screen.getByText('Booking #101')).toBeInTheDocument();
-    expect(screen.getByText('Lunch')).toBeInTheDocument();
-    
-    // Verify split text match across multiple element nodes safely
-    expect(screen.getByText((content, node) => {
-      return node.tagName.toLowerCase() === 'span' && node.textContent.includes('2') && node.textContent.includes('guests');
-    })).toBeInTheDocument();
-
-    expect(screen.getByRole('link', { name: /view details/i })).toHaveAttribute('href', '/book/confirmation/101');
+    const card = await screen.findByRole('button', { name: /open booking #101/i });
+    expect(screen.getByText('Lunch · 12:00')).toBeInTheDocument();
+    expect(screen.getByText('2 guests · Booking #101')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /view full details/i })).not.toBeInTheDocument();
+    await user.click(card);
+    expect(screen.getByRole('link', { name: /view full details/i })).toHaveAttribute('href', '/book/confirmation/101');
   });
 
   it('allows switching between filters and displays empty state when no bookings exist in a category', async () => {
@@ -86,7 +87,7 @@ describe('MyBookingsPage Component Integration Tests', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Booking #101')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /open booking #101/i })).toBeInTheDocument();
     });
 
     // Switch to 'Cancelled' filter which is empty
@@ -122,7 +123,7 @@ describe('MyBookingsPage Component Integration Tests', () => {
 
     // Verify it recovers and displays bookings successfully
     await waitFor(() => {
-      expect(screen.getByText('Booking #101')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /open booking #101/i })).toBeInTheDocument();
     });
     expect(getMyBookings).toHaveBeenCalledTimes(2);
   });

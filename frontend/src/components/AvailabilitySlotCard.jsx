@@ -84,7 +84,7 @@ export function getTableAvailability(slot, partySize) {
   return { label: 'Multiple-table seating available', tone: 'orange' };
 }
 
-export default function AvailabilitySlotCard({ slot, index, partySize, selected, disabled, onClick }) {
+export default function AvailabilitySlotCard({ slot, index, partySize, selected, disabled, onClick, availabilityText }) {
   const { label, tone } = getTableAvailability(slot, partySize);
   return (
     <button
@@ -100,8 +100,8 @@ export default function AvailabilitySlotCard({ slot, index, partySize, selected,
           <span className="eh-slot-tile-kicker">Time slot</span>
           <strong>{slot.startTime}</strong>
           <span className="eh-slot-availability">
-            {tone && <span className={`eh-status-dot eh-status-dot--${tone}`} aria-hidden="true" />}
-            {label}
+            {!availabilityText && tone && <span className={`eh-status-dot eh-status-dot--${tone}`} aria-hidden="true" />}
+            {availabilityText ?? label}
           </span>
         </span>
         <svg className="eh-slot-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg>

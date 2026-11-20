@@ -7,6 +7,7 @@ import heroImage from '../assets/edelweiss-my-account.jpg';
 import avatarImage from '../assets/edelweiss-terrace.jpg';
 import '../styles/account-bookings.css';
 import '../styles/my-account.css';
+import '../styles/account-email-fix.css';
 
 function unavailableMessage(error, operation) {
   if (error?.status === 404 || error?.status === 405) {

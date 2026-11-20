@@ -33,6 +33,15 @@ export function createBookingRouter(bookingService, requireAuth) {
     }
   });
 
+  // MH-06: capacity preview for an owned booking (its own seats count as free).
+  router.get('/:bookingId/availability', requireAuth(['hiker']), async (req, res, next) => {
+    try {
+      res.json(await bookingService.listModificationSlots(req.user, req.params.bookingId, req.query));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get('/:bookingId', requireAuth(), async (req, res, next) => {
     try {
       const result = await bookingService.getBooking(req.params.bookingId, req.user);
