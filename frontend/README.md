@@ -46,13 +46,17 @@ Visitors search by **date, meal and guest count** on the availability page. Sele
 
 The review page shows the selected time, party size and seating proposal. Hikers can add multiple **dietary requirements/allergies** with the affected number of guests. Before opening the review, the application checks whether this user already has a confirmed booking in the selected slot; the backend also rejects duplicates when the booking is actually submitted.
 
-On successful submission, the confirmation page shows the booking reference, time, seating, any stored dietary requirements and the email outcome. It states that an email was sent **only if** the backend reports `confirmationEmail.status === 'sent'`. Email failure never makes a confirmed booking disappear.
+On successful submission, the confirmation page shows the booking reference, time, seating, any stored dietary requirements and the email outcome. It reports an email as queued when the backend reports `confirmationEmail.status === 'sent'` (provider accepted, not inbox delivery). Email failure never makes a confirmed booking disappear.
 
 ## My Bookings
 
 `src/pages/MyBookingsPage.jsx` loads the authenticated hiker's reservations using `GET /api/bookings` and groups them into **upcoming**, **past** and **cancelled**. No reservation is selected initially. The arrow on each card toggles a detail panel without showing table identifiers. On smaller screens the detail/edit panel replaces the list and a Back button restores it. Full details include a link back to My Bookings.
 
-For eligible upcoming reservations, **Change booking** opens `EditBookingForm.jsx` (MHM-116). Date, meal and guest count refresh the owner-only modification availability endpoint; the existing photographic slot cards show only eligible times for the group. The original time remains selectable only while it fits, and an unavailable selection must be changed before saving. A failed lookup prevents saving and can be retried. The backend rechecks/reallocates seats transactionally on `PATCH /api/bookings/:bookingId`. Multiple dietary/allergy requirements can be edited. The 48-hour cutoff is displayed in the UI and enforced by the backend. Past/cancelled bookings remain accessible as history; hiker cancellation (MH-08) is not yet available in the UI.
+For eligible upcoming reservations, **Change booking** opens `EditBookingForm.jsx` (MHM-116). Date, meal and guest count refresh the owner-only modification availability endpoint; the existing photographic slot cards show only eligible times for the group. The original time remains selectable only while it fits, and an unavailable selection must be changed before saving. A failed lookup prevents saving and can be retried. The backend rechecks/reallocates seats transactionally on `PATCH /api/bookings/:bookingId`. Multiple dietary/allergy requirements can be edited. The 48-hour cutoff is displayed in the UI and enforced by the backend. Past/cancelled bookings remain accessible as history.
+
+The edit form shares the public Availability cards and their table counts and status colours. Selecting a split slot opens the same seating confirmation modal as a new booking; if a guest-count change makes the existing selected slot split, saving also requires confirmation. The booking is updated only by saving. If a single-table allocation becomes split before saving, the server rejects the update and the form refreshes availability.
+
+**Cancel booking** (MHM-124 / MH-08) is available for every confirmed reservation, including past reservations. A centered modal blocks interaction with the page until the hiker keeps the booking or confirms cancellation. Explicit confirmation calls `DELETE /api/bookings/:bookingId`; on success the reservation moves to Cancelled, preserving its details. Cancelled receipts omit seating because no seats remain reserved. The interface reports the cancellation email outcome and never changes the displayed status before server success.
 
 ## My Account
 
@@ -89,7 +93,7 @@ Run Cypress E2E tests against an actively running backend/frontend when validati
 
 ## Known scope limits
 
-The staff Reservations page, hiker booking cancellation (MH-08) and production email delivery setup are outside the currently completed UI. Mailgun keys must remain in the backend `.env` and must never be included in frontend code.
+The staff Reservations page and production email delivery setup are outside the currently completed UI. Mailgun keys must remain in the backend `.env` and must never be included in frontend code.
 
 ### MH-06 end-to-end test (isolated database)
 
@@ -100,3 +104,13 @@ npx cypress run --spec cypress/e2e/change-booking.cy.js
 ```
 
 The scenario verifies the mobile booking-change flow against the real API and checks the persisted booking after a failed capacity update. Restart the isolated backend before rerunning the spec. Do not run the older SQLite-based Cypress reset task against a personal database. Stop the isolated server and restart the regular backend when finished.
+
+### MH-08 end-to-end test (same isolated database)
+
+Using the same isolated backend and Vite setup, run:
+
+```bash
+npx cypress run --spec cypress/e2e/cancel-booking.cy.js
+```
+
+This verifies confirmation, keeping the booking, cancellation, history after reload, and released capacity. Real email delivery must be checked separately with the configured Mailgun cancellation template.

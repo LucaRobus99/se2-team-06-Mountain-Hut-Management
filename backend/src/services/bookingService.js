@@ -19,7 +19,7 @@ import {
 } from '../utils/validation.js';
 import { parseRequirements } from './requirements.js';
 import { validateSlotsQuery } from './slotService.js';
-import { canSeat } from './seating.js';
+import { computeSeating } from './seating.js';
 import { isTooLateToModify } from '../utils/hutTime.js';
 
 const CONTACT_FIELDS = ['contactName', 'email', 'contactNumber'];
@@ -112,7 +112,7 @@ function validateUpdateBody(body) {
   const details = [];
 
   for (const key of Object.keys(body)) {
-    if (!['slotId', 'partySize', 'requirements'].includes(key)) {
+    if (!['slotId', 'partySize', 'requirements', 'expectedSeating'].includes(key)) {
       details.push(unknown(key));
     }
   }
@@ -122,6 +122,10 @@ function validateUpdateBody(body) {
   // `requirements: []` is a change (clears them); an absent field is not.
   const requirements = parseRequirements(body.requirements, details);
   const hasRequirements = requirements !== null;
+  const expectedSeating = body.expectedSeating;
+  if ('expectedSeating' in body && !['single_table', 'split'].includes(expectedSeating)) {
+    details.push({ field: 'expectedSeating', rule: 'invalid', message: 'Expected single_table or split.' });
+  }
 
   let slotId = null;
 
@@ -155,7 +159,7 @@ function validateUpdateBody(body) {
     throw invalidFields(details);
   }
 
-  return { slotId, partySize, requirements: requirements ?? [], hasRequirements };
+  return { slotId, partySize, requirements: requirements ?? [], hasRequirements, expectedSeating };
 }
 
 /**
@@ -461,12 +465,18 @@ export function createBookingService({
           const existing = await bookingDao.findConfirmedByHikerAndSlot(tx, user.id, slot.id);
           if (existing && existing.id !== booking.id) continue;
           const slotTables = tables.filter(table => table.slot_id === slot.id);
-          if (!canSeat(partySize, slotTables)) continue;
+          const seating = computeSeating(partySize, slotTables);
+          if (!seating) continue;
           result.push({
             id: slot.id,
             startTime: slot.start_time,
             endTime: slot.end_time,
             meal: slot.meal,
+            fit: seating.fit,
+            // Same capacity input as public Availability, without table IDs/labels.
+            tables: slotTables.map(table => ({ freeSeats: Number(table.free) })),
+            // Expose party sizes only, not the hut's table identities.
+            seatAssignments: seating.assignments.map(({ seats }) => ({ seats })),
           });
         }
         return { date, meal, partySize, slots: result };
@@ -515,7 +525,7 @@ export function createBookingService({
         const targetPartySize = data.partySize ?? booking.party_size;
 
         // Every accepted update follows MH-01 allocation, including requirements-only changes.
-        await core.reseat(tx, booking, { slot: targetSlot, partySize: targetPartySize });
+        await core.reseat(tx, booking, { slot: targetSlot, partySize: targetPartySize, expectedSeating: data.expectedSeating });
 
         if (data.hasRequirements) {
           await bookingDao.replaceRequirements(tx, booking.id, data.requirements);

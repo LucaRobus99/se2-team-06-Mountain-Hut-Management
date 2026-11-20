@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlpineDatePicker, AlpineMealSelect } from './AlpineBookingFields.jsx';
 import AvailabilitySlotCard from './AvailabilitySlotCard.jsx';
+import SplitSeatingModal from './SplitSeatingModal.jsx';
 import { getModificationSlots, updateBooking, bookingErrorMessage } from '../api/booking.js';
 import { validatePartyRequirements } from '../utils/partyRequirements.js';
 import { readableBookingDate, readableMeal } from '../utils/bookingList.js';
@@ -23,6 +24,8 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
   const nextRequirementId = useRef(requirements.length);
   const [available, setAvailable] = useState({ key: '', slots: [], loading: true, error: '' });
   const [saving, setSaving] = useState(false);
+  const [pendingSplit, setPendingSplit] = useState(null);
+  const [acceptedSplit, setAcceptedSplit] = useState(null);
   const [saveError, setSaveError] = useState('');
   const [refresh, setRefresh] = useState(0);
   const numberGuests = Number(guests);
@@ -67,6 +70,8 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
 
   function changeSearch(setter, value) {
     setter(value);
+    setPendingSplit(null);
+    setAcceptedSplit(null);
     setSaveError('');
     if (setter === setDate && value !== date) setSelectedSlotId(null);
     if (setter === setMeal && value !== meal) setSelectedSlotId(null);
@@ -90,20 +95,56 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
   const checking = available.loading || !freshResults;
   const canSave = canEdit && !saving && !checking && !available.error && Boolean(selectedOption) &&
     validGuests && !requirementsError && hasChanges;
+  const splitKey = slot => `${queryKey}|${slot.id}`;
+
+  function selectSlot(slot) {
+    setSaveError('');
+    if (slot.fit === 'split') {
+      setPendingSplit({ slot, saveAfterConfirm: false });
+    } else {
+      setSelectedSlotId(slot.id);
+      setAcceptedSplit(null);
+    }
+  }
 
   async function save(event) {
     event.preventDefault();
     if (!canSave) return;
+    if (selectedOption.fit === 'split' && acceptedSplit !== splitKey(selectedOption)) {
+      setPendingSplit({ slot: selectedOption, saveAfterConfirm: true });
+      return;
+    }
+    await persistChanges();
+  }
+
+  async function persistChanges() {
+    if (!canSave) return;
+    setPendingSplit(null);
     setSaving(true);
     setSaveError('');
     try {
-      const updated = await updateBooking(booking.id, changes);
+      const updated = await updateBooking(booking.id, {
+        ...changes,
+        ...(selectedOption.fit ? { expectedSeating: selectedOption.fit } : {}),
+      });
       await onSaved(updated);
     } catch (err) {
       setSaveError(bookingErrorMessage(err, { editing: true }));
       // A concurrent change may invalidate our preview; refresh without losing the draft.
-      if (err.status === 409) setRefresh(value => value + 1);
+      if (err.status === 409) {
+        setAcceptedSplit(null);
+        setRefresh(value => value + 1);
+      }
     } finally { setSaving(false); }
+  }
+
+  function acceptSplit() {
+    if (!pendingSplit || checking) return;
+    const { slot, saveAfterConfirm } = pendingSplit;
+    setAcceptedSplit(splitKey(slot));
+    setPendingSplit(null);
+    if (saveAfterConfirm) void persistChanges();
+    else setSelectedSlotId(slot.id);
   }
 
   return (
@@ -148,8 +189,7 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
             {choices.map((slot, index) => (
               <AvailabilitySlotCard key={slot.id} slot={slot} index={index} partySize={numberGuests}
                 selected={slot.id === selectedSlotId} disabled={saving}
-                availabilityText={slot.current ? 'Current time · available' : 'Available for your group'}
-                onClick={() => { setSelectedSlotId(slot.id); setSaveError(''); }} />
+                onClick={() => selectSlot(slot)} />
             ))}
           </div>}
       </section>
@@ -178,6 +218,8 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
         <button className="eh-edit-cancel" type="button" onClick={onCancel} disabled={saving}>Discard changes</button>
         <button className="eh-button eh-button--green" type="submit" disabled={!canSave}>{saving ? 'Saving…' : 'Save changes'} <span aria-hidden="true">→</span></button>
       </div>
+      <SplitSeatingModal show={Boolean(pendingSplit)} seating={pendingSplit?.slot}
+        onCancel={() => setPendingSplit(null)} onContinue={acceptSplit} busy={saving} />
     </form>
   );
 }

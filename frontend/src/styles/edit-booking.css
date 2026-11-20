@@ -27,8 +27,8 @@
 .eh-edit-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.9rem 1rem; }
 .eh-edit-field { min-width:0; }
 .eh-edit-field > label { display:block; margin-bottom:.4rem; font:700 .72rem system-ui,sans-serif; letter-spacing:.12em; text-transform:uppercase; color:#80573a; }
-.eh-edit-field > input,.eh-edit-field > select { width:100%; height:48px; border:1px solid #c6d2c5; border-radius:.65rem; padding:.7rem .85rem; background:#fffefa; color:#314b38; font:400 .94rem system-ui,sans-serif; }
-.eh-edit-field .ea-control { min-height:48px; background:#fffefa; border-color:#c6d2c5; }
+.eh-edit-field > input,.eh-edit-field > select { width:100%; height:58px; box-sizing:border-box; border:1px solid #c6d2c5; border-radius:.68rem; padding:0 .7rem; background:#fffefa; color:#1e3428; font:500 .96rem/1.25 Georgia,serif; }
+.eh-edit-field .ea-control { height:58px; min-height:58px; background:#fffefa; border-color:#c6d2c5; }
 .eh-edit-field :is(input,select,button):focus-visible { outline:2px solid #4c7c56; outline-offset:2px; }
 .eh-edit-availability { margin:1rem 0 1.2rem; background:#eaf3e8; color:#2f6640; border:1px solid #d5e5d0; padding:.73rem .9rem; border-radius:.68rem; font:.87rem/1.5 system-ui,sans-serif; }
 .eh-edit-small-warning { color:#80573a; font-size:.82rem; margin:-.65rem 0 1rem; }
@@ -54,6 +54,42 @@
 .eh-edit-cancel { display:inline-flex; justify-content:center; align-items:center; padding:.75rem 1rem; color:#315a3f; background:#fffefa; border:1px solid #315a3f; border-radius:.65rem; text-decoration:none; font:700 .87rem system-ui,sans-serif; }
 .eh-edit-cancel:hover { background:#eff5eb; color:#315a3f; }
 .eh-edit-actions .eh-button:disabled { opacity:.5; cursor:not-allowed; }
+.eh-edit-status--cancelled { background:#f9ebe5; border-color:#e7c6b9; color:#94432f; }
+.eh-cancel-booking-button { padding:.75rem 1rem; border:1px solid #f0e8dc; border-radius:.65rem; background:#f0e8dc; color:#785238; font:700 .87rem system-ui,sans-serif; }
+.eh-cancel-booking-button:hover { background:#e7dbcb; border-color:#e7dbcb; }
+.eh-cancel-booking-button:disabled,.eh-cancel-modal button:disabled { opacity:.55; cursor:not-allowed; }
+.eh-cancel-backdrop.show { opacity:.56; background:#19231d; }
+.eh-cancel-modal { max-width:500px; }
+.eh-cancel-modal .modal-content { background:#fffefa; border:0; border-radius:1rem; box-shadow:0 24px 65px #101b1b70; overflow:hidden; color:#302d28; }
+.eh-cancel-modal .eh-cancel-modal-header { display:flex; align-items:flex-start; justify-content:space-between; padding:1.25rem 1.5rem; background:#304737; color:#fffefa; border:0; gap:.8rem; }
+.eh-cancel-modal-eyebrow { color:#e5d7b9; letter-spacing:.12em; font:700 .68rem system-ui,sans-serif; text-transform:uppercase; margin:0 0 .35rem; }
+.eh-cancel-modal-header .modal-title { font:700 clamp(1.35rem,3.8vw,1.8rem)/1.15 Georgia,serif; color:#fffefa; margin:0; }
+.eh-cancel-modal-close { display:grid; place-items:center; flex:none; width:32px; height:32px; background:transparent; color:#eee9df; border:0; border-radius:.35rem; padding:4px; }
+.eh-cancel-modal-close svg { width:20px; height:20px; }
+.eh-cancel-modal-close:hover { background:#ffffff22; }
+.eh-cancel-modal .eh-cancel-modal-body { padding:1.35rem 1.5rem 1.5rem; color:#666159; font:.9rem/1.55 system-ui,sans-serif; }
+.eh-cancel-modal-body > p { margin:0; }
+.eh-cancel-modal-summary { margin:1rem 0; border-radius:.65rem; background:#f2eee5; padding:.85rem 1rem; display:grid; gap:.35rem; overflow-wrap:anywhere; }
+.eh-cancel-modal-summary span { font:700 .68rem system-ui,sans-serif; text-transform:uppercase; color:#80583d; letter-spacing:.09em; }
+.eh-cancel-modal-summary strong { font:700 1.3rem Georgia,serif; color:#393126; }
+.eh-cancel-modal-summary p { color:#686354; margin:0; font-size:.87rem; }
+.eh-cancel-modal-message strong { display:block; color:#423b32; }
+.eh-cancel-confirm-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:.65rem; margin-top:1.2rem; }
+.eh-cancel-keep,.eh-cancel-confirm { min-height:44px; padding:.7rem 1rem; border-radius:.5rem; font:700 .85rem system-ui,sans-serif; }
+.eh-cancel-keep { background:#fffefa; border:1px solid #c6bfb3; color:#48463e; }
+.eh-cancel-keep:hover { background:#f0ebe2; }
+.eh-cancel-confirm { background:#3b3027; border:1px solid #3b3027; color:#fff; }
+.eh-cancel-confirm:hover { background:#514337; }
+.eh-cancel-modal button:focus-visible,.eh-cancel-booking-button:focus-visible { outline:2px solid #9e7958; outline-offset:3px; }
+.eh-cancel-modal-body .eh-cancel-error { margin-top:.85rem; padding:.65rem; color:#94432f; background:#f9ebe5; border-radius:.4rem; }
+@media(max-width:575px) {
+  .eh-cancel-modal { margin:.75rem; }
+  .eh-cancel-modal .eh-cancel-modal-header,.eh-cancel-modal .eh-cancel-modal-body { padding:1rem; }
+  .eh-cancel-confirm-actions > button { flex:1 1 auto; }
+}
+@media(max-width:360px) {
+  .eh-cancel-confirm-actions > button { flex:1 1 100%; }
+}
 .eh-manage-details { min-height:390px; }
 .eh-manage-detail-list { margin:1rem 0; }
 .eh-manage-detail-list > div { display:grid; grid-template-columns:minmax(120px,35%) minmax(0,1fr); gap:.5rem; padding:.76rem .2rem; border-bottom:1px solid #e7e8df; font:.93rem/1.5 system-ui,sans-serif; }
@@ -83,7 +119,8 @@
 .eh-manage-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.8rem; margin-block:.85rem 1.15rem; }
 .eh-manage-facts > div { display:grid; gap:.35rem; padding:1rem; border:1px solid #e4e6dc; border-radius:.7rem; background:#fafaf6; }
 .eh-manage-facts span { color:#806248; font:700 .72rem/1.3 system-ui,sans-serif; letter-spacing:.08em; text-transform:uppercase; }
-.eh-manage-facts strong { color:#294b34; font:600 .98rem/1.45 system-ui,sans-serif; }
+.eh-manage-facts strong { color:#242424; font:600 .98rem/1.45 system-ui,sans-serif; }
+.eh-manage-facts > :only-child { grid-column:1 / -1; }
 .eh-manage-dietary { padding:1rem 0 .2rem; border-top:1px solid #e8e6db; }
 .eh-manage-dietary h4 { color:#765034; margin:0 0 .8rem; font:700 1.16rem Georgia,serif; }
 .eh-manage-none { margin:0; color:#707a70; font:.91rem system-ui,sans-serif; }
@@ -91,7 +128,7 @@
 .eh-manage-diet-list li { display:flex; align-items:center; min-height:3.1rem; padding:.8rem 1rem; background:#f9faf6; border:1px solid #e6e7dd; border-left:3px solid #77937b; border-radius:.65rem; color:#345441; }
 .eh-manage-diet-list li.has-allergy { background:#fff8f3; border-color:#f0dacc; border-left-color:#b4442f; }
 .eh-manage-diet-list li > span:last-child { display:grid; gap:.2rem; min-width:0; overflow-wrap:anywhere; }
-.eh-manage-diet-list strong { font:600 .88rem/1.4 system-ui,sans-serif; }
+.eh-manage-diet-list strong {   color: #252525; font:600 .88rem/1.4 system-ui,sans-serif; }
 .eh-manage-diet-list small { color:#965c3f; font:.78rem system-ui,sans-serif; }
 
 /* Editing uses exactly the search controls and photographic slot cards of Availability. */
@@ -110,7 +147,8 @@
 .eh-edit-slot-cards .eh-slot-tile img { height:95px; }
 .eh-edit-slot-cards .eh-slot-tile-body { min-height:95px; padding:.7rem .8rem; }
 .eh-edit-slot-cards .eh-slot-tile-info strong { font-size:1.5rem; }
-.eh-edit-slot-cards .eh-slot-availability { font:600 .81rem/1.35 system-ui,sans-serif; }
+.eh-edit-slot-cards .eh-slot-availability { font-size:.9rem; }
+.eh-edit-slot-current { display:block; color:#315b3d; font:600 .7rem/1.35 system-ui,sans-serif; letter-spacing:normal; text-transform:none; }
 .eh-edit-slot-cards .eh-slot-tile-kicker { font-size:.61rem; }
 
 @media(max-width:1150px) {
@@ -145,6 +183,9 @@
   .eh-edit-requirement { padding:.75rem; }
   .eh-edit-actions { position:sticky; bottom:0; z-index:4; background:#fffefa; padding:.85rem .2rem; box-shadow:0 -6px 14px #2635280b; gap:.5rem; }
   .eh-edit-actions .eh-button,.eh-edit-actions .eh-edit-cancel { flex:1; min-height:45px; text-align:center; font-size:.84rem; }
+  .eh-manage-details .eh-edit-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .eh-manage-details .eh-edit-actions > :is(.eh-edit-cancel,.eh-cancel-booking-button,.eh-button) { min-width:0; width:100%; min-height:44px; white-space:normal; padding:.65rem .45rem; text-align:center; font-size:.84rem; }
+  .eh-manage-details .eh-edit-actions > .eh-button,.eh-manage-details .eh-edit-actions > :only-child { grid-column:1 / -1; }
 }
 @media(max-width:370px) {
   .eh-manage-facts { grid-template-columns:minmax(0,1fr); }

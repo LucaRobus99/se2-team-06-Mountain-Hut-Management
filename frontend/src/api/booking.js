@@ -102,6 +102,12 @@ export async function getBooking(bookingId) {
   return apiRequest(`/api/bookings/${bookingId}`);
 }
 
+// MH-08: the authenticated hiker can cancel an owned booking at any time.
+export async function cancelBooking(bookingId) {
+  if (!positiveInteger(bookingId)) throw new Error('Invalid booking reference.');
+  return apiRequest(`/api/bookings/${bookingId}`, { method: 'DELETE' });
+}
+
 // The owner-only preview excludes the current reservation's own seats.
 export async function getModificationSlots(bookingId, { date, meal, partySize }) {
   if (!positiveInteger(bookingId)) throw new Error('Invalid booking reference.');
@@ -117,11 +123,13 @@ export async function updateBooking(bookingId, changes) {
   if (!positiveInteger(bookingId)) throw new Error('Invalid booking reference.');
   if (!changes || typeof changes !== 'object' || Array.isArray(changes) ||
       !Object.keys(changes).length ||
-      Object.keys(changes).some(key => !['slotId', 'partySize', 'requirements'].includes(key))) {
+      !Object.keys(changes).some(key => ['slotId', 'partySize', 'requirements'].includes(key)) ||
+      Object.keys(changes).some(key => !['slotId', 'partySize', 'requirements', 'expectedSeating'].includes(key))) {
     throw new Error('Please make a change before saving.');
   }
   if ('slotId' in changes && !positiveInteger(changes.slotId)) throw new Error('Invalid time slot.');
   if ('partySize' in changes && !positiveInteger(changes.partySize)) throw new Error('Invalid guest count.');
+  if ('expectedSeating' in changes && !['single_table', 'split'].includes(changes.expectedSeating)) throw new Error('Invalid seating preference.');
   if ('requirements' in changes) {
     const message = validatePartyRequirements(changes.requirements);
     if (message) throw new Error(message);
@@ -149,6 +157,7 @@ export function bookingErrorMessage(error, { editing = false } = {}) {
     case 'SLOT_NOT_FOUND': return 'This time is no longer available. Please search again.';
     case 'TOO_LATE_TO_MODIFY': return 'Changes close 48 hours before the original or new booking time.';
     case 'BOOKING_NOT_CONFIRMED': return 'Only confirmed bookings can be changed.';
+    case 'SEATING_CHANGED': return 'Seating has changed. Your original booking is unchanged. Review the new arrangement before saving.';
     case 'BOOKING_NOT_FOUND': return 'This reservation is no longer available for your account.';
     case 'VALIDATION_ERROR':
       if (error?.details?.some((detail) => String(detail.field || '').startsWith('requirements'))) {
