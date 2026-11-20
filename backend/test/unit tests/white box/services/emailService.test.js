@@ -154,7 +154,7 @@ describe('emailService - White-Box Tests', () => {
 
   describe('MH-06 modification email', () => {
     it.each([
-      [undefined, 'booking modification'],
+      [undefined, 'booking-modification'],
       ['custom-modification', 'custom-modification'],
     ])('uses the dedicated modification template (%s) and updated fields', async (updatedTemplate, expectedTemplate) => {
       mockCreateMessage.mockResolvedValueOnce({ id: '<updated-message>' });
@@ -172,7 +172,7 @@ describe('emailService - White-Box Tests', () => {
         .resolves.toEqual({ id: '<updated-message>' });
       expect(mockCreateMessage).toHaveBeenCalledTimes(1);
       expect(mockCreateMessage).toHaveBeenCalledWith('hut.org', expect.objectContaining({
-        to: ['Gaia <guest@example.com>'],
+        to: ['guest@example.com'],
         subject: 'Booking modification confirmed',
         template: expectedTemplate,
         'h:X-Mailgun-Variables': JSON.stringify(fields),

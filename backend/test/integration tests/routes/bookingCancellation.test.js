@@ -3,10 +3,7 @@ import request from 'supertest';
 import { createApp } from '../../../src/app.js';
 import { createTestDb } from '../helpers/dbHelper.js';
 
-const { sendBookingEmail } = vi.hoisted(() => ({ sendBookingEmail: vi.fn() }));
-vi.mock('../../../src/services/emailService.js', () => ({
-  createEmailService: () => ({ sendBookingEmail }),
-}));
+const sendBookingEmail = vi.fn();
 
 describe('MH-08 — cancellation', () => {
   let db, app, owner, other, staff, booking, slotId, now;
@@ -19,7 +16,7 @@ describe('MH-08 — cancellation', () => {
     now = new Date('2027-06-14T08:00:00Z');
     sendBookingEmail.mockReset().mockResolvedValue({ id: 'test-mail' });
     db = createTestDb();
-    app = createApp({ db, timeZone: 'Europe/Rome', now: () => now });
+    app = createApp({ db, timeZone: 'Europe/Rome', now: () => now, emailService: { sendBookingEmail } });
     owner = request.agent(app);
     other = request.agent(app);
     staff = request.agent(app);

@@ -7,10 +7,7 @@ import { createTestDb } from '../helpers/dbHelper.js';
 const NOW = new Date('2027-06-12T10:00:00Z'); // 12:00 in Europe/Rome
 const DATE = '2027-06-15';
 const requirements = [{ description: 'One vegetarian guest', allergies: false }];
-const { sendBookingEmail } = vi.hoisted(() => ({ sendBookingEmail: vi.fn() }));
-vi.mock('../../../src/services/emailService.js', () => ({
-  createEmailService: () => ({ sendBookingEmail }),
-}));
+const sendBookingEmail = vi.fn();
 
 describe('MH-06 — modification availability and transactional updates', () => {
   let db, app, owner, other, original, alternative, booking;
@@ -39,7 +36,7 @@ describe('MH-06 — modification availability and transactional updates', () => 
   beforeEach(async () => {
     sendBookingEmail.mockReset().mockResolvedValue({ skipped: true });
     db = createTestDb();
-    app = createApp({ db, timeZone: 'Europe/Rome', now: () => NOW });
+    app = createApp({ db, timeZone: 'Europe/Rome', now: () => NOW, emailService: { sendBookingEmail } });
     owner = request.agent(app);
     other = request.agent(app);
     expect((await owner.post('/api/auth/login').send({ email: 'hiker@hut.test', password: 'password' })).status).toBe(200);
