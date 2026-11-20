@@ -720,6 +720,7 @@
   overflow-wrap: anywhere;
 }
 .eh-booking-email-notice--failed,
+.eh-booking-email-notice--sent,
 .eh-booking-email-notice--skipped,
 .eh-booking-email-notice--unknown {
   background: #fff8e8;
@@ -826,6 +827,7 @@
   box-shadow: none;
 }
 .eh-confirmation-heading .eh-booking-success-mark svg { width: 32px; height: 32px; }
+.eh-confirmation-heading .eh-booking-cancelled-mark { background:#94432f; }
 .eh-confirmation-eyebrow {
   margin: 0 0 .45rem;
   color: #80583d;
@@ -888,10 +890,11 @@
 .eh-confirmation-facts > div + div { border-left: 1px solid #e3e5dc; padding-left: 1.1rem; }
 .eh-confirmation-facts dd {
   margin: 0;
-  color: #254130;
+  color: #242424;
   font: 700 1rem/1.45 Georgia, 'Palatino Linotype', serif;
   overflow-wrap: anywhere;
 }
+.eh-confirmation-facts.eh-confirmation-facts--cancelled { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .eh-confirmation-dietary {
   margin-top: 1.05rem;
   padding: clamp(1.1rem, 2.5vw, 1.65rem);

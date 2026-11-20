@@ -30,7 +30,11 @@ export default function LoginPage() {
   // The booking flow goes directly from Availability to Login, without
   // passing through ProtectedRoute. Show the same notice for both entry paths.
   const loginNotice = (location.state?.from === '/book' || location.state?.bookingDraft)
-    ? 'To book a table, please log in or create an account. Your selection will be kept.'
+    ?  <>
+        To book a table, please log in or create an account.
+        <br />
+        Your selection will be kept.
+      </>
     : location.state?.notice;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

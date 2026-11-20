@@ -61,7 +61,7 @@ describe('MH-06 — modification availability and transactional updates', () => 
     const available = await preview(owner, 2);
     expect(available.status).toBe(200);
     expect(available.body.slots.map(s => s.id)).toEqual([original, alternative]);
-    expect(available.body.slots[0]).not.toHaveProperty('tables');
+    expect(available.body.slots[0].tables).toEqual([{ freeSeats: 2 }]);
     expect((await preview(owner, 3)).body.slots.map(s => s.id)).toEqual([alternative]);
     expect((await owner.get(`/api/bookings/${booking.id}`)).body).toEqual(before);
     expect((await request(app).get('/api/availability').query({ date: DATE, meal: 'lunch', partySize: 2 })).body).toEqual(publicSearch.body);
@@ -114,6 +114,31 @@ describe('MH-06 — modification availability and transactional updates', () => 
     const publicSearch = await request(app).get('/api/availability').query({ date: DATE, meal: 'lunch', partySize: 1 });
     expect(publicSearch.body.slots.find(s => s.id === original).availableSeats).toBe(2);
     expect(publicSearch.body.slots.find(s => s.id === alternative).availableSeats).toBe(1);
+  });
+
+  it('previews split seating without table identifiers and rejects an unacknowledged new split', async () => {
+    const first = await preview(owner, 4);
+    expect(first.body.slots.find(s => s.id === alternative)).toMatchObject({
+      fit: 'single_table', seatAssignments: [{ seats: 4 }],
+    });
+    await create(other, alternative, 5);
+    await db.query('INSERT INTO slot_tables (slot_id, table_id, seats) VALUES ($1, 2, 3)', [alternative]);
+    const next = await preview(owner, 4);
+    const split = next.body.slots.find(s => s.id === alternative);
+    expect(split.fit).toBe('split');
+    expect(split.tables).toHaveLength(2);
+    expect(split.tables).toEqual(expect.arrayContaining([{ freeSeats: 1 }, { freeSeats: 3 }]));
+    expect(split.seatAssignments).toHaveLength(2);
+    expect(split.seatAssignments.reduce((sum, s) => sum + s.seats, 0)).toBe(4);
+    expect(split.seatAssignments.every(s => Object.keys(s).length === 1)).toBe(true);
+    const before = (await owner.get(`/api/bookings/${booking.id}`)).body;
+    const rejected = await change(owner, { slotId: alternative, partySize: 4, expectedSeating: 'single_table' });
+    expect(rejected.status).toBe(409);
+    expect(rejected.body.error.code).toBe('SEATING_CHANGED');
+    expect((await owner.get(`/api/bookings/${booking.id}`)).body).toEqual(before);
+    const accepted = await change(owner, { slotId: alternative, partySize: 4, expectedSeating: 'split' });
+    expect(accepted.status).toBe(200);
+    expect(accepted.body.split).toBe(true);
   });
 
   it('saves a valid move atomically and keeps past and cancelled bookings in the history', async () => {

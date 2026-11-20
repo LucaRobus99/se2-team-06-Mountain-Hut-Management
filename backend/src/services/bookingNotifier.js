@@ -42,9 +42,23 @@ export function createBookingNotifier(emailService) {
           recipient,
           bookingEmailFields(view, fallbackName)
         );
-        return { status: delivery?.skipped ? 'skipped' : 'sent' };
+        if (delivery?.skipped) {
+          console.info(`[booking-email] kind=${kind} booking=${view.id} skipped`);
+          return { status: 'skipped' };
+        }
+        // Mailgun's API acknowledgement is not proof of delivery to a mailbox.
+        if (typeof delivery?.id !== 'string' || !delivery.id.trim()) {
+          console.warn(`[booking-email] kind=${kind} booking=${view.id} no provider message ID`);
+          return { status: 'failed' };
+        }
+        console.info(`[booking-email] kind=${kind} booking=${view.id} accepted messageId=${delivery.id}`);
+        return { status: 'sent' };
       } catch (err) {
-        console.error(`Failed to send booking ${kind} email:`, err);
+        // Do not print provider request bodies, credentials or guest data.
+        console.error(`[booking-email] kind=${kind} booking=${view.id} failed`, {
+          status: err?.status ?? err?.statusCode ?? null,
+          code: err?.code ?? null,
+        });
         return { status: 'failed' };
       }
     },

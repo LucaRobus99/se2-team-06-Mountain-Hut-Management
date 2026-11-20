@@ -71,11 +71,13 @@ The backend enforces table capacity and seating transactionally, even when the U
 
 When Mailgun is configured, creating, updating or cancelling a booking attempts an email. Successful **POST** and **PATCH** responses include `confirmationEmail.status`; **DELETE** returns the same information as `cancellationEmail.status`:
 
-- `sent` — Mailgun accepted the request;
+- `sent` — Mailgun accepted the request and returned a message ID; this is not confirmation of inbox delivery;
 - `failed` — the submission failed;
 - `skipped` — no email configuration/recipient was available (also used when a repeated cancellation does not send a second email).
 
 A successfully persisted booking stays confirmed/updated/cancelled regardless of email status; failed email submissions do not roll back an already committed transaction. `GET /api/bookings` and `GET /api/bookings/:bookingId` do not include this notification result because it is not persisted. Configure `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_FROM` (optional), `MAILGUN_TEMPLATE`, `MAILGUN_UPDATED_TEMPLATE`, `MAILGUN_CANCELLED_TEMPLATE`, `MAILGUN_RESET_TEMPLATE` and optional `MAILGUN_URL` in `.env`. A Mailgun sandbox may require authorizing recipient addresses. Ready-to-upload templates live in `email-templates/` (`booking-confirmation.html`, `booking-modification.html`, `booking-cancelled.html`).
+
+To diagnose missing emails, look for `[booking-email]` in the backend terminal. An accepted message logs its provider message ID, booking reference and operation. Search that ID in Mailgun Logs to distinguish accepted, delivered and failed events. Logs omit the recipient address and credentials.
 
 ## Booking history and changes (MH-06)
 
@@ -100,7 +102,7 @@ A successfully persisted booking stays confirmed/updated/cancelled regardless of
 
 Every item has the same shape as `GET /api/bookings/:bookingId`, including past and cancelled bookings: the client decides how to group them. The route is Hiker-only, so an Employee or Warden receives `403 FORBIDDEN`.
 
-`GET /api/bookings/:bookingId/availability?date=YYYY-MM-DD&meal=lunch&partySize=2` returns `{ date, meal, partySize, slots }`, with each slot containing `id`, `startTime`, `endTime` and `meal`. It checks ownership, confirmed status, the original and target 48-hour cutoffs, open slots, capacity and duplicate reservations. Only the current booking's seats are excluded from occupied seats. The preview does not change or reserve seats, and does not expose table identifiers. PATCH still checks availability inside its transaction.
+`GET /api/bookings/:bookingId/availability?date=YYYY-MM-DD&meal=lunch&partySize=2` returns `{ date, meal, partySize, slots }`, with each slot containing `id`, `startTime`, `endTime`, `meal`, `fit` (`single_table` or `split`), `tables` (only `freeSeats` per table, for the Availability cards) and `seatAssignments` (only the guest count per allocated table). It checks ownership, confirmed status, the original and target 48-hour cutoffs, open slots, capacity and duplicate reservations. Only the current booking's seats are excluded from occupied seats. The preview does not change or reserve seats, and does not expose table identifiers. PATCH still checks availability inside its transaction.
 
 `PATCH /api/bookings/:bookingId` changes a booking owned by the authenticated Hiker. The body accepts any subset of these fields:
 
@@ -109,8 +111,9 @@ Every item has the same shape as `GET /api/bookings/:bookingId`, including past 
 | `slotId` | Positive integer, existing slot with status `available` |
 | `partySize` | Positive integer |
 | `requirements` | Array of objects `{ "description": string, "allergies": boolean }` |
+| `expectedSeating` | Optional preview fit (`single_table` or `split`); prevents an unexpected split during the final allocation |
 
-At least one field is required and unknown fields are rejected with `400 VALIDATION_ERROR`. Omitted fields keep their current value; an empty `requirements` array **clears** the saved requirements instead of leaving them unchanged.
+At least one of slotId, partySize or requirements is required and unknown fields are rejected with `400 VALIDATION_ERROR`. Omitted fields keep their current value; an empty `requirements` array **clears** the saved requirements instead of leaving them unchanged.
 
 The rules below are enforced inside a single serialized transaction:
 
@@ -133,6 +136,7 @@ The rules below are enforced inside a single serialized transaction:
 | 409 | `BOOKING_ALREADY_EXISTS` | The hiker already has a confirmed booking in the target slot |
 | 409 | `INSUFFICIENT_CAPACITY` | The new party size does not fit in the target slot |
 | 409 | `BOOKING_NOT_CONFIRMED` | The booking is no longer confirmed |
+| 409 | `SEATING_CHANGED` | The preview offered a single table but the final allocation would split the group; review the updated preview |
 
 A successful change returns the updated booking in the same shape as a list item, plus `confirmationEmail`. There is no `Location` header because the resource address does not change.
 

@@ -18,10 +18,11 @@ A web application for managing meals, table availability and reservations at a s
 - **MH-04 — Check availability:** public search by date, meal and number of guests; eligible time slots show their availability.
 - **MH-05 — Provide party requirements:** hikers can enter separate dietary/allergy requirements, including the number of affected guests, when confirming a booking. The confirmation page shows the saved information.
 - **MH-06 — Change a booking:** authenticated hikers can review upcoming, past and cancelled bookings. Eligible confirmed bookings can be edited (date, meal/time slot, party size and dietary requirements) at least 48 hours before both the original and new slot. The edit form checks availability for the current reservation; the backend validates and reallocates seats transactionally on save.
+- **MH-08 — Cancel a booking:** hikers can cancel their own confirmed reservations at any time from My Bookings, after explicit confirmation in a blocking dialog. Seats are released, cancelled reservations remain in history, and a cancellation email is attempted after the database transaction.
 - **My Account (team extension):** hikers can update their name, phone, optional notes and emergency contact, change their password by supplying the current password, and upload/change/remove a profile photo. Changes persist in the database. The email address is shown read-only.
 - **Authentication:** hiker registration and login/logout; access to staff and hiker endpoints is protected by the backend. A hiker cannot create a second confirmed booking for the same slot.
 
-The staff **Reservations** page remains a placeholder. MH-07 and MH-08 have backend endpoints but their user-facing workflows are not yet complete. MH-06 has automated unit and integration coverage; review and end-to-end verification are required before marking the story Done.
+The staff **Reservations** page remains a placeholder. MH-07 has backend endpoints but its user-facing workflow is not yet complete. Story completion requires passing tests, review and verification against the team Definition of Done.
 
 ## Start locally
 

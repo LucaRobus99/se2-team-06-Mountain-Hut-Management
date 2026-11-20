@@ -12,7 +12,8 @@ describe('SlotRoutes - Integration Tests', () => {
     // Initialize a clean test database (PostgreSQL) with schema and seed data
     db = createTestDb();
     // Create the Express app injecting the test database
-    app = createApp({ db });
+    // A fixed clock keeps the fixture date/time valid regardless of when tests run.
+    app = createApp({ db, timeZone: 'Europe/Rome', now: () => new Date('2026-11-20T08:00:00Z') });
     // Create a Supertest agent to maintain session cookies across requests
     agent = request.agent(app);
   });
@@ -53,14 +54,6 @@ describe('SlotRoutes - Integration Tests', () => {
     });
 
     it('should allow staff to create a new slot and return 201 with Location header', async () => {
-      const newSlotPayload = {
-        date: '2026-11-20',
-        meal: 'lunch',
-        startTime: '12:00',
-        startTime: '12:00', // (nota: assicurati di usare startTime e endTime distinti!)
-        endTime: '14:00'
-      };
-
       const response = await agent
         .post('/api/slots')
         .send({

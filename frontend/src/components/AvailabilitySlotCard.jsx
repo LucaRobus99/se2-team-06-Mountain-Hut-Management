@@ -97,7 +97,7 @@ export default function AvailabilitySlotCard({ slot, index, partySize, selected,
       <img src={photoForSlot(slot, index)} alt="" loading="lazy" />
       <span className="eh-slot-tile-body">
         <span className="eh-slot-tile-info">
-          <span className="eh-slot-tile-kicker">Time slot</span>
+          <span className="eh-slot-tile-kicker">Time slot{slot.current && <small className="eh-edit-slot-current">Current time</small>}</span>
           <strong>{slot.startTime}</strong>
           <span className="eh-slot-availability">
             {!availabilityText && tone && <span className={`eh-status-dot eh-status-dot--${tone}`} aria-hidden="true" />}
