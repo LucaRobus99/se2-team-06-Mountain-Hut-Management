@@ -10,7 +10,7 @@ export function createEmailService({
   updatedTemplate = 'booking-modification',
   // MH-08 (#41): cancellation notice.
   cancelledTemplate = 'booking-cancelled',
-  resetTemplate = 'password reset',
+  resetTemplate = 'password-reset',
   url = null,
   // Retry only transient failures (network, 429, 5xx). Permanent 4xx errors
   // (invalid recipient, missing template, ...) fail immediately.

@@ -105,7 +105,7 @@ npm run mailgun:templates -- --test --only=created,updated,cancelled
 
 The default is non-destructive: a template that already has an active version is skipped. Use `--force` to upload and activate a new version, e.g. for the reset template in `email-templates/password-reset.html`. The script honours `MAILGUN_URL`, so it works with the EU endpoint (`https://api.eu.mailgun.net`).
 
-Mailgun's templates API rejects template names that contain spaces (it returns a generic `500 Internal Server Error`). The booking templates therefore use hyphenated names (`booking-confirmation`, `booking-modification`, `booking-cancelled`) in both `.env` and the defaults. The existing `password reset` template was created from the dashboard and keeps its name; the script never overwrites an active version unless `--force` is used.
+Mailgun's templates API rejects template names that contain spaces (it returns a generic `500 Internal Server Error`). All templates therefore use hyphenated names (`booking-confirmation`, `booking-modification`, `booking-cancelled`, `password-reset`) in both `.env` and the defaults. The script never overwrites an active version unless `--force` is used.
 
 ### Delivery reliability
 
