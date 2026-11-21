@@ -71,7 +71,7 @@ All profile, password and photo endpoints enforce authentication; changing a hik
 
 ## Booking and confirmation behavior
 
-The backend enforces table capacity and seating transactionally, even when the UI has already shown an availability preview. A hiker cannot create a second confirmed booking in the same slot. Party requirements (MH-05) include separate dietary/allergy entries and affected guest counts; they are stored with the reservation and returned in booking details.
+The backend enforces table capacity and seating transactionally, even when the UI has already shown an availability preview. A hiker cannot create a second confirmed booking in the same slot. Party requirements (MH-05) are a list of entries, each with a `description` (up to 500 characters) and an `allergies` boolean; they are stored with the reservation and returned in booking details.
 
 When Mailgun is configured, creating, updating or cancelling a booking attempts an email. Successful **POST** and **PATCH** responses include `confirmationEmail.status`; **DELETE** returns the same information as `cancellationEmail.status`:
 
