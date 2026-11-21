@@ -1,5 +1,4 @@
-const host = 'http://localhost:5173';
-const api = (path, options = {}) => cy.request({ url: `${host}/api${path}`, ...options, retryOnNetworkFailure: !options.method || options.method === 'GET' });
+const api = (path, options = {}) => cy.request({ url: `/api${path}`, ...options, retryOnNetworkFailure: !options.method || options.method === 'GET' });
 function freeDate(offset = 7) {
   if (offset > 60) throw new Error('No empty date for staff booking fixtures.');
   const date = new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
@@ -8,7 +7,7 @@ function freeDate(offset = 7) {
 
 describe('MH-07 — staff-assisted reservations', () => {
   it('books for all three guest types and enforces a password change at first login', () => {
-    api('/mh06-e2e').its('body').should('deep.equal', { isolated: true });
+    api('/e2e').its('body').should('deep.equal', { isolated: true });
     const unique = Date.now();
     const existingEmail = `mh07-existing-${unique}@hut.test`;
     const newEmail = `mh07-new-${unique}@hut.test`;
@@ -20,7 +19,7 @@ describe('MH-07 — staff-assisted reservations', () => {
       date = day;
       return api('/slots', { method: 'POST', body: { date, meal: 'lunch', startTime: '12:00', endTime: '13:00', tables: [{ tableIdentifier: 'E2E staff table', seats: 12 }] } });
     });
-    cy.visit(`${host}/staff/reservations`);
+    cy.visit('/staff/reservations');
     function chooseSlot() {
       cy.get('#sr-date').click();
       cy.then(() => {
@@ -62,7 +61,7 @@ describe('MH-07 — staff-assisted reservations', () => {
     cy.contains('button', 'Show password').click();
     cy.get('.sr-password-row code').invoke('text').then(value => { temporaryPassword = value; });
     api('/auth/logout', { method: 'POST' });
-    cy.visit(`${host}/login`);
+    cy.visit('/login');
     cy.get('#login-email').type(newEmail);
     cy.then(() => cy.get('#login-password').type(temporaryPassword, { log: false }));
     cy.contains('button', /^Log in$/).click();

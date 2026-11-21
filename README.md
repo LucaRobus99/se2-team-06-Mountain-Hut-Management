@@ -128,7 +128,7 @@ npx vitest run
 npm run build
 ```
 
-Run these checks on the branch you intend to merge. See [frontend/README.md](frontend/README.md) for the isolated MH-06 Cypress scenario. It uses a disposable in-memory PostgreSQL database and does not modify personal or demo reservations.
+Run these checks on the branch you intend to merge. For the Cypress end-to-end tests run `npm run e2e` from `frontend/`; it starts its own disposable backend and frontend on separate ports and never modifies personal or demo reservations (see [frontend/README.md](frontend/README.md#end-to-end-tests-cypress)).
 
 ## Project structure
 

@@ -1,6 +1,5 @@
-const host = 'http://localhost:5173';
 const api = (path, options = {}) => cy.request({
-  url: `${host}/api${path}`,
+  url: `/api${path}`,
   // Do not repeat a write if its HTTP response is interrupted.
   retryOnNetworkFailure: !options.method || options.method === 'GET',
   ...options,
@@ -20,7 +19,7 @@ function findFreeDate(daysAhead = 7) {
 describe('MH-06 — change a booking', () => {
   it('updates a booking, rechecks available times and preserves it when capacity is insufficient', () => {
     // Refuse to run against anyone's regular database.
-    api('/mh06-e2e').its('body').should('deep.equal', { isolated: true });
+    api('/e2e').its('body').should('deep.equal', { isolated: true });
     cy.viewport(390, 844);
     let date;
     const tables = [{ tableIdentifier: 'E2E table', seats: 2 }];
@@ -41,7 +40,7 @@ describe('MH-06 — change a booking', () => {
           } });
           api('/bookings', { method: 'POST', body: { slotId: original, partySize: 2 } })
             .its('body.id').then(id => {
-              cy.visit(`${host}/my-bookings`);
+              cy.visit('/my-bookings');
               cy.get('[aria-label="Reservation details"]').should('not.exist');
               cy.get(`button[aria-label^="Open booking #${id}:"]`).click();
               cy.contains('button', 'Change booking').click();

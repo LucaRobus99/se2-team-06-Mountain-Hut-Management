@@ -92,38 +92,30 @@ npx vitest run
 npm run build
 ```
 
-Run Cypress E2E tests against an actively running backend/frontend when validating the full flow; the existing scenarios are in `cypress/e2e/`. The production build was verified on 12 November 2026, but every new change should be tested again.
+End-to-end tests: run `npm run e2e` (see [End-to-end tests](#end-to-end-tests-cypress)). The production build was verified on 12 November 2026, but every new change should be tested again.
 
 ## Known scope limits
 
 Staff Reservations uses an explicit first availability search, live updates after changes, and explicit slot selection. Split seating is confirmed once per selection. The confirmation page shows an initial password only for a new hiker, never persisted in browser storage. Mailgun keys must remain in the backend `.env` and must never be included in frontend code.
 
-### MH-07 end-to-end test (isolated database)
+### End-to-end tests (Cypress)
 
-Use the same isolated backend and Vite setup described below, then run:
-
-```bash
-npx cypress run --spec cypress/e2e/staff-booking.cy.js
-```
-
-This tests all three staff booking modes and the mandatory first-login password change. The actual email delivery and reset link must also be checked manually with Docker and valid Mailgun configuration.
-
-### MH-06 end-to-end test (isolated database)
-
-Stop the regular backend first. From `backend/`, run `node scripts/start-mh06-e2e.mjs` instead of `npm start`. This starts an in-memory PostgreSQL instance on port 8080, with no Mailgun delivery and no access to the local database. From `frontend/`, run `npm run dev`, then in a third terminal (also in `frontend/`):
+From `frontend/`, one command runs every spec in `cypress/e2e/`:
 
 ```bash
-npx cypress run --spec cypress/e2e/change-booking.cy.js
+npm run e2e        # headless, all specs
+npm run e2e:open   # interactive Cypress window
 ```
 
-The scenario verifies the mobile booking-change flow against the real API and checks the persisted booking after a failed capacity update. Restart the isolated backend before rerunning the spec. Do not run the older SQLite-based Cypress reset task against a personal database. Stop the isolated server and restart the regular backend when finished.
+It starts a throwaway backend (`backend/scripts/start-e2e-server.mjs`, fresh in-memory PostgreSQL with the seed data, no Mailgun) on port **8090** and a Vite server in `e2e` mode on port **5174** that forwards `/api` to it, waits until both answer, runs Cypress, then stops both. Your regular backend (8080) and `npm run dev` (5173) can keep running and are never touched; every run starts from a clean database, so no restart or reset is needed. To run a single spec, use `npm run e2e:open` and pick it in the Cypress window.
 
-### MH-08 end-to-end test (same isolated database)
+Each spec first calls `/api/e2e` and stops unless the isolated server answers, then creates its own slots on a free future date (helpers in `cypress/support/hutFixtures.js`).
 
-Using the same isolated backend and Vite setup, run:
+| Spec | Covers |
+|---|---|
+| `smoke`, `login`, `availability`, `booking`, `booking-auth` | MH-01/03/04: search, booking as guest → login, booking and confirmation, split seating |
+| `change-booking` | MH-06: mobile change flow, refused capacity change keeps the booking |
+| `cancel-booking` | MH-08: confirmation dialog, history after reload, released capacity |
+| `staff-booking` | MH-07: all three staff booking modes and the forced first-login password change |
 
-```bash
-npx cypress run --spec cypress/e2e/cancel-booking.cy.js
-```
-
-This verifies confirmation, keeping the booking, cancellation, history after reload, and released capacity. Real email delivery must be checked separately with the configured Mailgun cancellation template.
+Real email delivery (confirmation, change, cancellation, password reset link) must still be checked manually with Docker and a valid Mailgun configuration.

@@ -1,6 +1,5 @@
-const host = 'http://localhost:5173';
 const api = (path, options = {}) => cy.request({
-  url: `${host}/api${path}`,
+  url: `/api${path}`,
   retryOnNetworkFailure: !options.method || options.method === 'GET',
   ...options,
 });
@@ -14,7 +13,7 @@ function findFreeDate(days = 7) {
 
 describe('MH-08 — cancel a booking', () => {
   it('confirms cancellation, preserves history and restores public availability', () => {
-    api('/mh06-e2e').its('body').should('deep.equal', { isolated: true });
+    api('/e2e').its('body').should('deep.equal', { isolated: true });
     cy.viewport(390, 844);
     const email = `mh08-${Date.now()}@hut.test`;
     api('/auth/login', { method: 'POST', body: { email: 'warden@hut.test', password: 'password' } });
@@ -28,7 +27,7 @@ describe('MH-08 — cancel a booking', () => {
         } });
         api('/bookings', { method: 'POST', body: { slotId, partySize: 2 } }).its('body.id').then(id => {
           search().its('body.slots').should('be.empty');
-          cy.visit(`${host}/my-bookings`);
+          cy.visit('/my-bookings');
           cy.get(`button[aria-label^="Open booking #${id}:"]`).click();
           cy.contains('button', 'Cancel booking').click();
           cy.get('[role="dialog"]').should('be.visible').and('have.attr', 'aria-modal', 'true');

@@ -2,7 +2,7 @@ describe('Mountain Hut - Login Flow', () => {
   
   it('should allow a user to log in with valid credentials and redirect to the dashboard', () => {
     // 1. Visit the login page
-    cy.visit('http://localhost:5173/login');
+    cy.visit('/login');
 
     // 2. Fill in email and password using the real seed credentials
     cy.get('input[type="email"], input#email').type('hiker@hut.test');
