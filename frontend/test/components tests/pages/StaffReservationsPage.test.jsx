@@ -20,7 +20,9 @@ beforeEach(() => {
   createStaffBooking.mockResolvedValue({ id: 3, contactName: 'Guest', slot, partySize: 2, requirements: [], split: true, confirmationEmail: { status: 'skipped' } });
 });
 
-describe('MH-07 staff reservations', () => {
+// These flows type many fields with userEvent; under a full parallel run they
+// exceed Vitest's 5 s default, and a timed-out test then breaks the next one.
+describe('MH-07 staff reservations', { timeout: 20_000 }, () => {
   it('searches only on first click, then refreshes live with no selected slot; confirms a split only once', async () => {
     const user = userEvent.setup();
     render(<StaffReservationsPage />);

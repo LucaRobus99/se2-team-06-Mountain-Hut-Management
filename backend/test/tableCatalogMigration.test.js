@@ -5,6 +5,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+// Each test opens an on-disk PGlite three times (~15 s alone); leave headroom
+// for the full suite, where many test files start PGlite in parallel.
+const MIGRATION_TIMEOUT_MS = 60_000;
+
 async function legacyDatabase(inconsistent, verify) {
   const directory = await mkdtemp(path.join(tmpdir(), 'hut-table-catalog-'));
   let legacy, migrated;
@@ -44,11 +48,11 @@ describe('MH-02 #47 migration', () => {
       expect((await db.query('SELECT seats FROM dining_tables')).rows).toEqual([{ seats: 4 }]);
       await expect(db.query('INSERT INTO slot_tables VALUES(3,1,6)')).rejects.toThrow();
     });
-  }, 15000);
+  }, MIGRATION_TIMEOUT_MS);
 
   it('refuses ambiguous legacy capacities without altering historical assignments', async () => {
     await legacyDatabase(true, async db => {
       await expect(db.ready()).rejects.toThrow(/Legacy table capacities are inconsistent/);
     });
-  }, 15000);
+  }, MIGRATION_TIMEOUT_MS);
 });
