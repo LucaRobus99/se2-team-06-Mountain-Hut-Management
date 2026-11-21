@@ -168,4 +168,43 @@ describe('AlpineBookingFields Component Tests', () => {
 
   });
 
+  it('should close the date picker popover when clicking outside', async () => {
+      const user = userEvent.setup();
+      render(
+        <div>
+          <button data-testid="outside">Outside Element</button>
+          <AlpineDatePicker id="date-picker" value="2026-11-15" onChange={() => {}} />
+        </div>
+      );
+
+      // Open the date picker popover
+      await user.click(screen.getByRole('button', { name: /date:/i }));
+      expect(screen.getByRole('dialog', { name: /choose a date/i })).toBeInTheDocument();
+
+      // Click outside on another element
+      await user.click(screen.getByTestId('outside'));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('should handle Home and End keys for navigating meal options', async () => {
+      const user = userEvent.setup();
+      render(<AlpineMealSelect id="meal-select" value="breakfast" onChange={() => {}} />);
+
+      const trigger = screen.getByRole('button', { name: /meal:/i });
+      
+      // Open the listbox and focus first option using Home/End simulation via keydown on trigger
+      await user.click(trigger);
+      const options = screen.getAllByRole('option');
+      
+      // Focus an option and test Home/End keydown behavior
+      options[1].focus();
+      expect(options[1]).toHaveFocus();
+
+      fireEvent.keyDown(options[1], { key: 'Home' });
+      expect(options[0]).toHaveFocus();
+
+      fireEvent.keyDown(options[0], { key: 'End' });
+      expect(options[options.length - 1]).toHaveFocus();
+    });
+
 });

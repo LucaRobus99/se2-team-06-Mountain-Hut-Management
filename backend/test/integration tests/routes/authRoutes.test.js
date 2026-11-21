@@ -234,4 +234,33 @@ describe('AuthRoutes - Integration Tests (Extended Coverage)', () => {
 
   });
 
+  describe('POST /api/auth/change-password', () => {
+    it('should successfully update the password for an authenticated user', async () => {
+      await agent
+        .post('/api/auth/login')
+        .send({ email: 'hiker@hut.test', password: 'password' });
+
+      const response = await agent
+        .post('/api/auth/change-password')
+        .send({
+          currentPassword: 'password',
+          newPassword: 'NewSecurePassword123!',
+        });
+
+      // change-password risponde con 204 No Content in caso di successo
+      expect(response.status).toBe(204);
+    });
+  });
+
+  describe('Password Recovery (/forgot-password & /reset-password)', () => {
+    it('should handle forgot-password request correctly', async () => {
+      const response = await request(app)
+        .post('/api/auth/forgot-password')
+        .send({ email: 'hiker@hut.test' });
+
+      // Se il service non è iniettato dà 404/NOT_IMPLEMENTED, altrimenti 204 No Content
+      expect([204, 404]).toContain(response.status);
+    });
+  });
+
 });

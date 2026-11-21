@@ -1,36 +1,191 @@
-import { describe, expect, it, vi } from 'vitest';
-import { bookingEmailFields, createBookingNotifier } from '../../../../src/services/bookingNotifier.js';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  createBookingNotifier,
+  bookingEmailFields,
+} from '../../../../src/services/bookingNotifier.js';
 
-const booking = {
-  id: 42, partySize: 2, split: false, requirements: [],
-  slot: { date: '2027-06-15', startTime: '12:00', endTime: '13:00', meal: 'lunch' },
+const baseBooking = {
+  id: 42,
+  contactName: 'Mario Rossi',
+  partySize: 2,
+  split: false,
+  requirements: [{ description: 'Vegetarian', allergies: false }],
+  slot: {
+    date: '2027-06-15',
+    startTime: '12:00',
+    endTime: '13:00',
+    meal: 'lunch',
+  },
 };
 
-describe('Booking email acknowledgement', () => {
-  it('formats the reservation exactly as in the booking receipt, retaining raw values', () => {
-    const fields = bookingEmailFields({ ...booking, partySize: 1, slot: { ...booking.slot, meal: 'aperitivo' } });
-    expect(fields).toMatchObject({
-      date: '2027-06-15', display_date: '15 June 2027',
-      meal: 'aperitivo', display_meal: 'Aperitif',
-      guests: 1, guest_label: '1 person',
-    });
-    expect(bookingEmailFields(booking).guest_label).toBe('2 people');
-  });
-  it('reports provider acceptance and logs its message ID without exposing the recipient', async () => {
-    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
-    try {
-      const notifier = createBookingNotifier({ sendBookingEmail: vi.fn().mockResolvedValue({ id: '<message-42>' }) });
-      expect(await notifier.notify('created', booking, 'guest@example.test')).toEqual({ status: 'sent' });
-      expect(info).toHaveBeenCalledWith('[booking-email] kind=created booking=42 accepted messageId=<message-42>');
-    } finally { info.mockRestore(); }
+describe('bookingNotifier - White-Box Tests', () => {
+  let consoleErrorSpy;
+  let consoleInfoSpy;
+  let consoleWarnSpy;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
-  it('does not claim acceptance when the provider returns no message ID', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const notifier = createBookingNotifier({ sendBookingEmail: vi.fn().mockResolvedValue({}) });
-      expect(await notifier.notify('updated', booking, 'guest@example.test')).toEqual({ status: 'failed' });
-      expect(warn).toHaveBeenCalledWith('[booking-email] kind=updated booking=42 no provider message ID');
-    } finally { warn.mockRestore(); }
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+    consoleInfoSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
+  });
+
+  describe('Missing or invalid emailService handling', () => {
+    it('should return status skipped if emailService is null, undefined, or lacks sendBookingEmail', async () => {
+      const notifierNull = createBookingNotifier(null);
+      const notifierUndefined = createBookingNotifier(undefined);
+      const notifierEmpty = createBookingNotifier({});
+
+      await expect(
+        notifierNull.notify('created', baseBooking, 'test@example.com')
+      ).resolves.toEqual({ status: 'skipped' });
+      await expect(
+        notifierUndefined.notify('created', baseBooking, 'test@example.com')
+      ).resolves.toEqual({ status: 'skipped' });
+      await expect(
+        notifierEmpty.notify('created', baseBooking, 'test@example.com')
+      ).resolves.toEqual({ status: 'skipped' });
+    });
+  });
+
+  describe('Delivery response status branches', () => {
+    it('should return status skipped and log skipped when delivery indicates skipped', async () => {
+      const emailService = {
+        sendBookingEmail: vi.fn().mockResolvedValue({ skipped: true }),
+      };
+      const notifier = createBookingNotifier(emailService);
+
+      const result = await notifier.notify('updated', baseBooking, 'test@example.com');
+
+      expect(result).toEqual({ status: 'skipped' });
+      expect(consoleInfoSpy).toHaveBeenCalledWith(
+        '[booking-email] kind=updated booking=42 skipped'
+      );
+    });
+
+    it('should report provider acceptance and log messageId when delivery.id is non-empty', async () => {
+      const emailService = {
+        sendBookingEmail: vi.fn().mockResolvedValue({ id: '<message-42>' }),
+      };
+      const notifier = createBookingNotifier(emailService);
+
+      const result = await notifier.notify('created', baseBooking, 'guest@example.test');
+
+      expect(result).toEqual({ status: 'sent' });
+      expect(consoleInfoSpy).toHaveBeenCalledWith(
+        '[booking-email] kind=created booking=42 accepted messageId=<message-42>'
+      );
+    });
+
+    it('should return failed and warn when delivery lacks a non-empty message id', async () => {
+      const emailService = {
+        sendBookingEmail: vi
+          .fn()
+          .mockResolvedValueOnce({})
+          .mockResolvedValueOnce({ id: '   ' }),
+      };
+      const notifier = createBookingNotifier(emailService);
+
+      await expect(
+        notifier.notify('updated', baseBooking, 'guest@example.test')
+      ).resolves.toEqual({ status: 'failed' });
+      await expect(
+        notifier.notify('cancelled', baseBooking, 'guest@example.test')
+      ).resolves.toEqual({ status: 'failed' });
+
+      expect(consoleWarnSpy).toHaveBeenCalledTimes(2);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[booking-email] kind=updated booking=42 no provider message ID'
+      );
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[booking-email] kind=cancelled booking=42 no provider message ID'
+      );
+    });
+  });
+
+  describe('Error resilience and catch branch', () => {
+    it('should catch errors, log status/code metadata, and return failed without throwing', async () => {
+      const emailService = {
+        sendBookingEmail: vi
+          .fn()
+          .mockRejectedValueOnce(Object.assign(new Error('Rate limited'), { status: 429, code: 'RATE_LIMIT' }))
+          .mockRejectedValueOnce(Object.assign(new Error('Gateway error'), { statusCode: 502 }))
+          .mockRejectedValueOnce(new Error('Plain failure')),
+      };
+      const notifier = createBookingNotifier(emailService);
+
+      await expect(notifier.notify('created', baseBooking, 'a@example.com')).resolves.toEqual({
+        status: 'failed',
+      });
+      await expect(notifier.notify('updated', baseBooking, 'b@example.com')).resolves.toEqual({
+        status: 'failed',
+      });
+      await expect(notifier.notify('cancelled', baseBooking, 'c@example.com')).resolves.toEqual({
+        status: 'failed',
+      });
+
+      expect(consoleErrorSpy).toHaveBeenNthCalledWith(
+        1,
+        '[booking-email] kind=created booking=42 failed',
+        { status: 429, code: 'RATE_LIMIT' }
+      );
+      expect(consoleErrorSpy).toHaveBeenNthCalledWith(
+        2,
+        '[booking-email] kind=updated booking=42 failed',
+        { status: 502, code: null }
+      );
+      expect(consoleErrorSpy).toHaveBeenNthCalledWith(
+        3,
+        '[booking-email] kind=cancelled booking=42 failed',
+        { status: null, code: null }
+      );
+    });
+  });
+
+  describe('bookingEmailFields mapping & fallback cascades', () => {
+    it('should map all fields and fallback from contactName to fallbackName to null', () => {
+      expect(bookingEmailFields(baseBooking, 'Fallback')).toEqual({
+        name: 'Mario Rossi',
+        date: '2027-06-15',
+        display_date: '15 June 2027',
+        start_time: '12:00',
+        end_time: '13:00',
+        meal: 'lunch',
+        display_meal: 'Lunch',
+        guests: 2,
+        guest_label: '2 people',
+        split: false,
+        booking_id: 42,
+        party_requirements: [{ description: 'Vegetarian', allergies: false }],
+      });
+
+      const withoutContact = {
+        ...baseBooking,
+        contactName: null,
+        slot: { date: '2027-06-15', startTime: '12:00' },
+      };
+
+      expect(bookingEmailFields(withoutContact, 'Staff Fallback')).toMatchObject({
+        name: 'Staff Fallback',
+        end_time: undefined,
+        meal: undefined,
+      });
+      expect(bookingEmailFields(withoutContact, null).name).toBeNull();
+    });
+
+    it('formats the date, meal and party size exactly as in the booking receipt, retaining raw values', () => {
+      const fields = bookingEmailFields({ ...baseBooking, partySize: 1, slot: { ...baseBooking.slot, meal: 'aperitivo' } });
+      expect(fields).toMatchObject({
+        date: '2027-06-15', display_date: '15 June 2027',
+        meal: 'aperitivo', display_meal: 'Aperitif',
+        guests: 1, guest_label: '1 person',
+      });
+    });
   });
 });

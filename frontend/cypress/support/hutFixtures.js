@@ -53,6 +53,20 @@ export function pickCalendarDate(trigger, date) {
   pick();
 }
 
+/**
+ * Signs in through the login form (seed accounts use the password "password").
+ * Call it after createSlotOnFreeDate: the fixture's warden login/logout shares
+ * the browser's cookie jar and would end this session.
+ */
+export function logInViaForm(email) {
+  cy.visit('/login');
+  cy.get('form.eh-login-form', { timeout: 10000 }).should('be.visible');
+  cy.get('input#login-email').clear().type(email);
+  cy.get('input#login-password').clear().type('password', { log: false });
+  cy.get('button[type="submit"]').click();
+  cy.url({ timeout: 10000 }).should('not.include', '/login');
+}
+
 /** Public availability search (MH-04) for a date, meal label and party size. */
 export function searchAvailability(date, mealLabel, guests) {
   cy.visit('/availability');

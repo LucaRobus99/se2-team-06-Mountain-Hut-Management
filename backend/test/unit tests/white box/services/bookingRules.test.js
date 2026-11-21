@@ -33,6 +33,20 @@ describe('bookingRules - White-Box Tests', () => {
       }
     });
 
+    it('should throw UnprocessableEntityError with code SLOT_ALREADY_STARTED when leadMs is 0 and slot has started', () => {
+      const slot = { status: 'available', date: '2026-08-14', start_time: '10:00' };
+      const now = new Date('2026-08-14T10:05:00.000Z'); // Slot started 5 minutes ago
+
+      try {
+        assertSlotOpen(slot, { timeZone: 'Europe/Rome', now, leadMs: 0 });
+        expect.fail('Should have thrown an error');
+      } catch (err) {
+        expect(err).toBeInstanceOf(UnprocessableEntityError);
+        expect(err.code).toBe('SLOT_ALREADY_STARTED');
+        expect(err.message).toBe('This slot has already started.');
+      }
+    });
+
   });
 
   describe('seatOrFail internal error codes and empty details array', () => {

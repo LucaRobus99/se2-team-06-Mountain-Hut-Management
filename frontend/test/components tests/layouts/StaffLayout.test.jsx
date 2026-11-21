@@ -11,7 +11,6 @@ vi.mock('../../../src/auth/AuthContext.jsx', () => ({
 }));
 
 describe('StaffLayout Component Integration Tests', () => {
-
   const mockSignOut = vi.fn();
 
   beforeEach(() => {
@@ -132,4 +131,66 @@ describe('StaffLayout Component Integration Tests', () => {
     expect(toggleButton).toHaveAttribute('aria-expanded', 'true');
   });
 
+  it('should close mobile menu when clicking backdrop or a navigation link', async () => {
+    useAuth.mockReturnValue({
+      user: { displayName: 'Staff User', role: 'employee' },
+      signOut: mockSignOut,
+    });
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={['/staff']}>
+        <Routes>
+          <Route element={<StaffLayout />}>
+            <Route path="/staff" element={<div data-testid="staff-outlet">Dashboard View</div>} />
+            <Route path="/staff/slots" element={<div data-testid="slots-outlet">Slots View</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const toggleButton = screen.getByRole('button', { name: /toggle staff navigation/i });
+    await user.click(toggleButton);
+    expect(toggleButton).toHaveAttribute('aria-expanded', 'true');
+
+    // Close via backdrop
+    await user.click(screen.getByRole('button', { name: /close navigation/i }));
+    expect(toggleButton).toHaveAttribute('aria-expanded', 'false');
+
+    // Reopen and close via a NavLink click
+    await user.click(toggleButton);
+    expect(toggleButton).toHaveAttribute('aria-expanded', 'true');
+
+    await user.click(screen.getByRole('link', { name: /manage slots/i }));
+    expect(toggleButton).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByTestId('slots-outlet')).toBeInTheDocument();
+  });
+
+  it('should render fallback labels when user or displayName is missing and use default logout error message', async () => {
+    mockSignOut.mockRejectedValueOnce({});
+    useAuth.mockReturnValue({
+      user: null,
+      signOut: mockSignOut,
+    });
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={['/staff']}>
+        <Routes>
+          <Route element={<StaffLayout />}>
+            <Route path="/staff" element={<div data-testid="staff-outlet">Dashboard View</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Staff')).toBeInTheDocument();
+    expect(screen.getByText('Employee')).toBeInTheDocument();
+    expect(screen.getByText('ST', { selector: '.staff-avatar' })).toBeInTheDocument();
+    expect(screen.getByText(/welcome,/i)).toHaveTextContent('Team member');
+
+    await user.click(screen.getByRole('button', { name: /sign out/i }));
+    const errorAlert = await screen.findByRole('alert');
+    expect(errorAlert).toHaveTextContent('Could not log out.');
+  });
 });

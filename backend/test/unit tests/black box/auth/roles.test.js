@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { ROLES, STAFF_ROLES, STAFF_ONLY_MESSAGE, isStaff } from '../../../../src/auth/roles.js';
+import { 
+  ROLES, 
+  STAFF_ROLES, 
+  STAFF_ONLY_MESSAGE, 
+  HIKER_BOOKING_MESSAGE, 
+  HIKER_CANCEL_MESSAGE, 
+  isStaff 
+} from '../../../../src/auth/roles.js';
 
 describe('roles - Black-Box Tests', () => {
 
@@ -29,6 +36,14 @@ describe('roles - Black-Box Tests', () => {
   it('should provide the standard staff-only error message string', () => {
     expect(STAFF_ONLY_MESSAGE).toBeTypeOf('string');
     expect(STAFF_ONLY_MESSAGE.length).toBeGreaterThan(0);
+  });
+
+  it('should provide the hiker booking and cancellation error message strings', () => {
+    expect(HIKER_BOOKING_MESSAGE).toBeTypeOf('string');
+    expect(HIKER_BOOKING_MESSAGE.length).toBeGreaterThan(0);
+
+    expect(HIKER_CANCEL_MESSAGE).toBeTypeOf('string');
+    expect(HIKER_CANCEL_MESSAGE.length).toBeGreaterThan(0);
   });
 
 });

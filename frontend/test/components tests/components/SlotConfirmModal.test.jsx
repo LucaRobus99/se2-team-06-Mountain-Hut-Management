@@ -137,4 +137,78 @@ describe('SlotConfirmModal Component', () => {
     expect(cancelButton).toBeDisabled();
     expect(confirmButton).toBeDisabled();
   });
+
+  it('should render plural tables and singular seat labels when appropriate', () => {
+    const multiTableSingleSeatSummary = {
+      ...mockSummary,
+      seats: 1,
+      tables: [
+        { tableIdentifier: 'T1', seats: 1 },
+        { tableIdentifier: 'T2', seats: 2 },
+      ],
+    };
+
+    render(
+      <SlotConfirmModal
+        show={true}
+        summary={multiTableSingleSeatSummary}
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/2 tables · 1 seat/i)).toBeInTheDocument();
+    expect(screen.getByText('T1: 1')).toBeInTheDocument();
+    expect(screen.getByText('T2: 2')).toBeInTheDocument();
+  });
+
+  it('should handle missing/null summary gracefully when open', () => {
+    render(
+      <SlotConfirmModal
+        show={true}
+        summary={null}
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/confirm new slot/i)).toBeInTheDocument();
+    expect(
+      screen.getByText((content, element) =>
+        element?.tagName === 'DD' && /0\s+tables\s+·\s+seats/i.test(content)
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByText(/no tables assigned · 0 seats available/i)).toBeInTheDocument();
+  });
+
+  it('should call onCancel on Escape when not busy, and ignore Escape when busy', async () => {
+    const onCancelMock = vi.fn();
+    const user = userEvent.setup();
+
+    const { rerender } = render(
+      <SlotConfirmModal
+        show={true}
+        summary={mockSummary}
+        onCancel={onCancelMock}
+        onConfirm={vi.fn()}
+        busy={false}
+      />
+    );
+
+    await user.keyboard('{Escape}');
+    expect(onCancelMock).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <SlotConfirmModal
+        show={true}
+        summary={mockSummary}
+        onCancel={onCancelMock}
+        onConfirm={vi.fn()}
+        busy={true}
+      />
+    );
+
+    await user.keyboard('{Escape}');
+    expect(onCancelMock).toHaveBeenCalledTimes(1);
+  });
 });

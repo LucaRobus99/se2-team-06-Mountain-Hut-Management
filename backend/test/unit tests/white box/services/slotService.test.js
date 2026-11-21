@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createSlotService } from '../../../../src/services/slotService.js';
-import { ValidationError, ForbiddenError } from '../../../../src/errors/AppError.js';
+import { ValidationError, ForbiddenError, ConflictError } from '../../../../src/errors/AppError.js';
 
 describe('slotService - White-Box Tests', () => {
   let slotDao;
@@ -20,13 +20,14 @@ describe('slotService - White-Box Tests', () => {
     role: 'hiker',
   };
 
-  beforeEach(() => {
+beforeEach(() => {
     slotDao = {
       listByDate: vi.fn(),
       getTablesWithFreeForSlot: vi.fn(),
       getTablesWithFreeForSlots: vi.fn(),
       findById: vi.fn(),
       findMealAt: vi.fn(),
+      findMealByType: vi.fn(), 
       createSlot: vi.fn(),
       addTableToSlot: vi.fn(),
       findTableByLabel: vi.fn(),
@@ -169,6 +170,80 @@ describe('slotService - White-Box Tests', () => {
         expect(err.details).toEqual(
           expect.arrayContaining([
             expect.objectContaining({ field: 'endTime' })
+          ])
+        );
+      }
+    });
+
+  });
+
+  describe('Internal Past-Time and Overlap Safety Net Branches', () => {
+
+    it('should throw ValidationError if attempting to create a slot in the past', async () => {
+      // fixedNow è impostato alle 07:00 del 2026-08-14. Creiamo uno slot nel passato (es. ore 05:00)
+      slotDao.findMealByType.mockResolvedValue({ id: 2, meal_type: 'lunch' });
+
+      try {
+        await slotService.createSlot(mockStaff, {
+          date: '2026-08-14',
+          startTime: '05:00',
+          endTime: '06:00',
+          meal: 'lunch',
+          tables: [{ tableIdentifier: 'T1', seats: 4 }]
+        });
+        expect.fail('Should have thrown ValidationError for past slot');
+      } catch (err) {
+        expect(err).toBeInstanceOf(ValidationError);
+        expect(err.details).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ rule: 'past' })
+          ])
+        );
+      }
+    });
+
+    it('should catch database-level overlap errors in transaction safety net and wrap them as ConflictError', async () => {
+      slotDao.findMealByType.mockResolvedValue({ id: 2, meal_type: 'lunch' });
+      slotDao.listByDate.mockResolvedValue([]);
+      
+      // Simula un errore sollevato direttamente dal database durante la creazione dello slot
+      slotDao.createSlot.mockRejectedValueOnce(new Error('sqlite error: overlaps another slot'));
+
+      try {
+        await slotService.createSlot(mockStaff, {
+          date: '2026-08-14',
+          startTime: '12:00',
+          endTime: '13:00',
+          meal: 'lunch',
+          tables: [{ tableIdentifier: 'T1', seats: 4 }]
+        });
+        expect.fail('Should have thrown ConflictError');
+      } catch (err) {
+        expect(err).toBeInstanceOf(ConflictError);
+        expect(err.code).toBe('SLOT_OVERLAP');
+      }
+    });
+
+  });
+
+  describe('Internal Table Validation Branches (validateCreateSlotBody)', () => {
+
+    it('should reject requests providing both tables and copyTablesFromSlotId (conflict)', async () => {
+      try {
+        await slotService.createSlot(mockStaff, {
+          date: '2026-08-14',
+          startTime: '12:00',
+          endTime: '13:00',
+          meal: 'lunch',
+          tables: [{ tableIdentifier: 'T1', seats: 4 }],
+          copyTablesFromSlotId: 50,
+        });
+        expect.fail('Should have thrown ValidationError');
+      } catch (err) {
+        expect(err).toBeInstanceOf(ValidationError);
+        expect(err.details).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ field: 'tables', rule: 'conflict' })
           ])
         );
       }

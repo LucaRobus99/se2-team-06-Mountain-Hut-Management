@@ -250,4 +250,19 @@ describe('authRoutes - Black-Box Tests (Full Coverage)', () => {
       expect(res.status).toBe(500);
     });
   });
+  describe('Error Handling in Account & Avatar Endpoints', () => {
+    it('should pass error to next if accountService.updateProfile throws', async () => {
+      accountService.updateProfile.mockRejectedValue(new Error('Update failed'));
+
+      const res = await request(app).patch('/api/auth/me').send({ name: 'Fail Update' });
+      expect(res.status).toBe(500);
+    });
+
+    it('should pass error to next if accountService.changePassword throws', async () => {
+      accountService.changePassword.mockRejectedValue(new Error('Password change failed'));
+
+      const res = await request(app).post('/api/auth/change-password').send({ oldPassword: 'old', newPassword: 'new' });
+      expect(res.status).toBe(500);
+    });
+  });
 });

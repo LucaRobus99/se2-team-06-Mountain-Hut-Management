@@ -195,6 +195,19 @@ describe('AvailabilitySlotCard Component and Utils Tests', () => {
       await user.click(screen.getByRole('button'));
       expect(handleClick).toHaveBeenCalledTimes(1);
     });
-  });
 
+    it('should return yellow tone when exactly 2 tables fit', () => {
+      const slot = { tables: [{ freeSeats: 5 }, { freeSeats: 5 }] };
+      const result = getTableAvailability(slot, 4);
+      expect(result).toEqual({ label: '2 tables available', tone: 'yellow' });
+    });
+
+    it('should handle undefined slot.tables gracefully in getTableAvailability', () => {
+      const slot = {}; // tables is undefined
+      const result = getTableAvailability(slot, 2);
+      expect(result).toEqual({ label: 'Available for your group', tone: null });
+    });
+    
+  });
+ 
 });

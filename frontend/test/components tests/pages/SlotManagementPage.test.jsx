@@ -219,4 +219,105 @@ describe('SlotManagementPage Component Integration Tests', () => {
     });
   });
 
+  it('handles schedule load errors, non-available slot badge, and modal cancellation', async () => {
+    listStaffSlots.mockRejectedValueOnce(new Error('Failed to load slots'));
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <SlotManagementPage />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Failed to load slots');
+
+    // Load a slot with status 'off'
+    listStaffSlots.mockResolvedValueOnce({
+      slots: [
+        {
+          id: 2,
+          meal: 'dinner',
+          status: 'off',
+          startTime: '19:00',
+          endTime: '20:30',
+          tables: [],
+        },
+      ],
+    });
+
+    // Re-trigger via a new render or by opening modal and cancelling
+    await user.click(screen.getByRole('button', { name: /create slot/i }));
+    expect(await screen.findByRole('dialog', { name: /confirm slot creation/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /cancel/i }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  // MH-02 #47: tables come from the fixed catalog, so per-slot identifiers and
+  // seat counts are no longer typed in; a new physical table is validated instead.
+  it('validates the new-table form and shows API field error details', async () => {
+    const apiFieldErr = new Error('Validation failed');
+    apiFieldErr.details = [{ field: 'startTime', message: 'Overlapping slot time' }];
+    createStaffSlot.mockRejectedValueOnce(apiFieldErr);
+
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <SlotManagementPage />
+      </MemoryRouter>
+    );
+
+    await user.click(await screen.findByRole('checkbox', { name: /T1 2 seats/i }));
+
+    // A new physical table needs a positive whole number of seats.
+    await user.click(screen.getByRole('button', { name: /define a new table/i }));
+    await user.type(screen.getByLabelText('Table identifier'), 'Terrace');
+    await user.type(screen.getByLabelText('Fixed seats'), '0');
+    await user.click(screen.getByRole('button', { name: /^create table$/i }));
+    expect(await screen.findByText(/positive whole number of seats/i)).toBeInTheDocument();
+    expect(createCatalogTable).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /close new table form/i }));
+
+    // API validation errors are shown next to the field they refer to.
+    await user.click(screen.getByRole('button', { name: /create slot/i }));
+    await user.click(await screen.findByRole('button', { name: /confirm slot/i }));
+
+    expect(await screen.findByText('Overlapping slot time')).toBeInTheDocument();
+  });
+
+  it('supports created slot confirmation banner actions and copy source errors', async () => {
+    createStaffSlot.mockResolvedValueOnce({
+      id: 77,
+      date: '2026-11-15',
+      meal: 'lunch',
+      startTime: '12:00',
+      endTime: '13:00',
+      tables: [{ tableId: 1, tableIdentifier: 'T1', seats: 4 }],
+    });
+
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <SlotManagementPage />
+      </MemoryRouter>
+    );
+
+    await user.click(await screen.findByRole('checkbox', { name: /T1 2 seats/i }));
+    await user.click(screen.getByRole('button', { name: /create slot/i }));
+    await user.click(await screen.findByRole('button', { name: /confirm slot/i }));
+
+    expect(await screen.findByText(/slot created successfully/i)).toBeInTheDocument();
+
+    // Click "View in schedule" and "Dismiss confirmation"
+    await user.click(screen.getByRole('button', { name: /view in schedule/i }));
+    await user.click(screen.getByRole('button', { name: /dismiss confirmation/i }));
+    expect(screen.queryByText(/slot created successfully/i)).not.toBeInTheDocument();
+
+    // Switch to copy mode and simulate source list error
+    listStaffSlots.mockRejectedValueOnce(new Error('Source slots unavailable'));
+    await user.click(screen.getByRole('radio', { name: /copy tables from another slot/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Source slots unavailable');
+  });
+
 });

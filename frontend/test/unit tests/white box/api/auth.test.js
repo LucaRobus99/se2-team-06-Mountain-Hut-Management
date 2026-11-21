@@ -327,4 +327,54 @@ describe('Auth API - White-Box Unit Tests', () => {
 
   });
 
+  describe('Additional Edge Cases & 204 No Content Handling', () => {
+it('should correctly handle status 204 returning null body without invoking .json()', async () => {
+      const jsonSpy = vi.fn();
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 204,
+        json: jsonSpy
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      await expect(logout()).resolves.toBeUndefined();
+      expect(jsonSpy).not.toHaveBeenCalled();
+    });
+
+    it('should default details to empty array if error.details is not an array', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({
+          error: {
+            code: 'SOME_ERROR',
+            message: 'Error with non-array details',
+            details: 'not-an-array-string' // Valore non array per testare la guardia Array.isArray
+          }
+        })
+      }));
+
+      try {
+        await login({ email: 'test@hut.test', password: 'pwd' });
+        expect.fail('Should have thrown an error');
+      } catch (err) {
+        expect(err.details).toEqual([]);
+      }
+    });
+
+    it('should ensure credentials include option is always passed to fetch', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ user: { id: 1 } })
+      }));
+
+      await removeMyAvatar();
+
+      const optionsPassed = fetch.mock.calls[0][1];
+      expect(optionsPassed.credentials).toBe('include');
+    });
+
+  });
+
 });
