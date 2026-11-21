@@ -71,7 +71,7 @@ describe('MH-07 staff reservations', { timeout: 20_000 }, () => {
     await user.click(await screen.findByRole('button', { name: /12:00/ }));
     await user.click(screen.getByRole('button', { name: /add dietary requirement/i }));
     await user.type(screen.getByLabelText('Requirement 1'), 'Peanut allergy');
-    await user.click(screen.getByRole('checkbox', { name: 'Allergy' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Contains an allergy' }));
     await user.click(screen.getByRole('button', { name: /confirm reservation/i }));
     await waitFor(() => expect(createStaffBooking).toHaveBeenCalledWith(expect.objectContaining({ mode: 'existingHiker', hikerId: 7, slotId: 9, expectedSeating: 'single_table', requirements: [expect.objectContaining({ description: 'Peanut allergy', allergies: true })] })));
     expect(await screen.findByRole('region', { name: 'Reservation confirmed' })).toBeInTheDocument();

@@ -199,7 +199,7 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
             rows={2} placeholder="e.g. 2 vegetarian guests" disabled={saving}
             onChange={event => changeRequirement(requirement.id, { description: event.target.value })} />
           <label className={`eh-edit-allergy${requirement.allergies ? ' is-checked' : ''}`}><input type="checkbox" checked={Boolean(requirement.allergies)} disabled={saving}
-            onChange={event => changeRequirement(requirement.id, { allergies: event.target.checked })} /> <span>Allergy</span></label>
+            onChange={event => changeRequirement(requirement.id, { allergies: event.target.checked })} /> <span>Contains an allergy</span></label>
         </div>
       ))}
       <button type="button" className="eh-edit-add" disabled={saving} onClick={addRequirement}>+ Add dietary requirement</button>

@@ -172,8 +172,8 @@ describe('Edit booking — photographic availability slots', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/please describe dietary requirement 1/i);
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
     await user.type(screen.getByLabelText('Requirement 1'), '1 guest allergic to peanuts');
-    await user.click(screen.getAllByRole('checkbox', { name: 'Allergy' })[0]);
-    expect(screen.getAllByRole('checkbox', { name: 'Allergy' })[0]).toBeChecked();
+    await user.click(screen.getAllByRole('checkbox', { name: 'Contains an allergy' })[0]);
+    expect(screen.getAllByRole('checkbox', { name: 'Contains an allergy' })[0]).toBeChecked();
     await user.click(screen.getByRole('button', { name: 'Remove requirement 2' }));
     expect(screen.queryByLabelText('Requirement 2')).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();

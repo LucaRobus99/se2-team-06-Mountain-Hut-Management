@@ -253,7 +253,7 @@ export default function StaffReservationsPage() {
           {requirements.map((item, index) => <div className="eh-edit-requirement" key={item.id}>
             <div className="eh-edit-requirement-head"><label htmlFor={`sr-requirement-${item.id}`}>Requirement {index + 1}</label><button type="button" className="eh-edit-remove" aria-label={`Remove requirement ${index + 1}`} onClick={() => setRequirements(list => list.filter(r => r.id !== item.id))}>Remove</button></div>
             <textarea id={`sr-requirement-${item.id}`} rows={2} maxLength={500} placeholder="e.g. 2 vegetarian guests" value={item.description} onChange={e => setRequirements(list => list.map(r => r.id === item.id ? { ...r, description: e.target.value } : r))} />
-            <label className={`eh-edit-allergy${item.allergies ? ' is-checked' : ''}`}><input type="checkbox" checked={item.allergies} onChange={e => setRequirements(list => list.map(r => r.id === item.id ? { ...r, allergies: e.target.checked } : r))} /> <span>Allergy</span></label>
+            <label className={`eh-edit-allergy${item.allergies ? ' is-checked' : ''}`}><input type="checkbox" checked={item.allergies} onChange={e => setRequirements(list => list.map(r => r.id === item.id ? { ...r, allergies: e.target.checked } : r))} /> <span>Contains an allergy</span></label>
           </div>)}
           <button className="eh-edit-add" type="button" onClick={() => setRequirements(list => [...list, { id: ++nextId.current, description: '', allergies: false }])}>+ Add dietary requirement</button>
           {requirementsError && <p className="eh-edit-error eh-edit-requirements-error" role="alert">{requirementsError}</p>}
