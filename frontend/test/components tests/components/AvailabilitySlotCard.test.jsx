@@ -1,15 +1,38 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import AvailabilitySlotCard, { getTableAvailability } from '../../../src/components/AvailabilitySlotCard.jsx';
+import AvailabilitySlotCard, { getTableAvailability, photoForSlot } from '../../../src/components/AvailabilitySlotCard.jsx';
 
 describe('AvailabilitySlotCard Component and Utils Tests', () => {
+  it.each([
+    ['aperitivo', ['charcuterie_board.jpg', 'aperitivo-01-hugo.webp', 'aperitivo-03-beer.webp']],
+    ['breakfast', ['cake_coffee_terrace.jpg', 'breakfast_alpine_sunrise.jpg', 'breakfast_cappuccino.jpg']],
+    ['lunch', ['lunch-01-polenta.webp', 'lunch-04-salad.webp', 'soup_view.jpg']],
+    ['dinner', ['dinner-01-risotto.webp', 'dinner-03-ravioli.webp', 'dinner-06-salmon.webp']],
+  ])('uses the fixed first three photos for %s in order', (meal, filenames) => {
+    const photos = filenames.map((_, index) => photoForSlot({ meal }, index));
+    expect(photos.map(photo => photo.split('/').pop())).toEqual(filenames);
+    expect(photos.every(photo => !photo.includes('/meal-gallery/'))).toBe(true);
+  });
+
+  it('cycles through the original and new meal-specific photos without repeats', () => {
+    const allPhotos = [];
+    for (const [meal, count] of Object.entries({ breakfast: 13, lunch: 8, aperitivo: 8, dinner: 8 })) {
+      const photos = Array.from({ length: count }, (_, index) => photoForSlot({ meal }, index));
+      expect(new Set(photos).size).toBe(count);
+      expect(photos.every(photo => !/hero_|fireplace_lounge/.test(photo))).toBe(true);
+      expect(photoForSlot({ meal }, count)).toBe(photos[0]);
+      allPhotos.push(...photos);
+    }
+    expect(new Set(allPhotos).size).toBe(37);
+  });
 
   describe('getTableAvailability', () => {
     it('should show availability without a color when the table count is unknown', () => {
       const slot = { tables: null };
       const result = getTableAvailability(slot, 4);
       expect(result).toEqual({ label: 'Available for your group', tone: null });
+      expect(getTableAvailability(slot, 4, true)).toEqual({ label: 'Available for this group', tone: null });
     });
 
     it('should return yellow tone with 1 table when exactly one table fits', () => {
@@ -34,6 +57,11 @@ describe('AvailabilitySlotCard Component and Utils Tests', () => {
       const slot = { tables: [{ freeSeats: 2 }, { freeSeats: 2 }] };
       const result = getTableAvailability(slot, 4);
       expect(result).toEqual({ label: 'Multiple-table seating available', tone: 'orange' });
+    });
+
+    it('uses red rather than orange if even the combined seats are insufficient', () => {
+      expect(getTableAvailability({ tables: [{ freeSeats: 1 }, { freeSeats: 2 }] }, 4))
+        .toEqual({ label: 'No tables available', tone: 'red' });
     });
   });
 

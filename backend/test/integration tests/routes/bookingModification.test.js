@@ -179,10 +179,13 @@ describe('MH-06 — modification availability and transactional updates', () => 
     expect(sendBookingEmail).toHaveBeenCalledWith('updated', 'hiker@hut.test', {
       name: updated.body.contactName,
       date: newDate,
+      display_date: '17 June 2027',
       start_time: '13:00',
       end_time: '14:00',
       meal: 'lunch',
+      display_meal: 'Lunch',
       guests: 4,
+      guest_label: '4 people',
       split: false,
       booking_id: booking.id,
       party_requirements: newRequirements,

@@ -46,9 +46,9 @@ describe('MH-06 — change a booking', () => {
               cy.get(`button[aria-label^="Open booking #${id}:"]`).click();
               cy.contains('button', 'Change booking').click();
               cy.get('.eh-edit-panel').should('be.visible');
-              cy.get('.eh-slot-tile').contains('Current time').should('be.visible');
+              cy.get('.eh-slot-tile').contains('12:00').should('be.visible');
               cy.get('#edit-guests').clear().type('3');
-              cy.contains('Your current time is no longer available').should('be.visible');
+              cy.contains('Your original time is unavailable').should('be.visible');
               cy.contains('button.eh-slot-tile', '12:00').should('not.exist');
               cy.contains('button', 'Save changes').should('be.disabled');
               cy.contains('button.eh-slot-tile', '13:00').click();

@@ -45,6 +45,19 @@ describe('SplitSeatingModal Component Tests', () => {
     expect(screen.getByText('Table split: 1 guest + 2 guests')).toBeInTheDocument();
   });
 
+  it('addresses the employee and reminds them to inform the guest', async () => {
+    const onContinue = vi.fn();
+    const user = userEvent.setup();
+    render(<SplitSeatingModal {...defaultProps} staff onContinue={onContinue} />);
+    expect(screen.queryByText('Your reservation')).not.toBeInTheDocument();
+    expect(screen.getByText('Staff-assisted booking')).toBeInTheDocument();
+    expect(screen.getByText(/The guests will be seated across multiple tables/)).toBeInTheDocument();
+    expect(screen.getByText(/Inform the guest about the table split/)).toBeInTheDocument();
+    expect(screen.getByText('Table split: 3 guests + 2 guests')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /continue with split seating/i }));
+    expect(onContinue).toHaveBeenCalledTimes(1);
+  });
+
   it('should not render split arrangement text if seatAssignments has 1 or fewer items', () => {
     const singleSeating = {
       seatAssignments: [{ seats: 4 }]

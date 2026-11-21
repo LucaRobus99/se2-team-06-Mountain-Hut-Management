@@ -46,7 +46,7 @@ describe('MH-07 — staff-assisted reservations', () => {
     cy.contains('button', /^Search$/).click();
     cy.contains('button.sr-hiker', existingEmail).click();
     chooseSlot();
-    cy.contains("You're all set.").should('be.visible');
+    cy.contains('Reservation created successfully.').should('be.visible');
     cy.contains('button', 'Create another reservation').click();
     cy.contains('button', 'Temporary guest').click();
     cy.get('#sr-name').type('E2E Walk-in');

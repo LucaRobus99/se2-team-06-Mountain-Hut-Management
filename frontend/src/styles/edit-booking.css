@@ -20,6 +20,7 @@
 .eh-edit-eyebrow { margin:0 0 .45rem; color:#80583d; letter-spacing:.14em; text-transform:uppercase; font:700 .69rem system-ui,sans-serif; }
 .eh-edit-title-row { display:flex; gap:1rem; align-items:center; justify-content:space-between; margin-bottom:.6rem; }
 .eh-edit-title-row h3 { font:700 clamp(1.55rem,2.3vw,2rem)/1.15 Georgia,serif; color:#23432f; margin:0; }
+.eh-manage-details .eh-edit-title-row h3 { color:#242424; }
 .eh-edit-status,.eh-edit-upcoming-pill { display:inline-flex; align-items:center; border:1px solid #c9d8c5; background:#eaf0e8; color:#315b3d; padding:.4rem .82rem; font:700 .79rem system-ui,sans-serif; border-radius:2rem; white-space:nowrap; }
 .eh-edit-subtitle { font:italic .93rem/1.5 Georgia,serif; color:#6a736b; margin:0 0 1.15rem; }
 .eh-edit-current { display:flex; flex-wrap:wrap; gap:.35rem .9rem; align-items:center; padding:.8rem .9rem; border-radius:.65rem; background:#f1f3ec; margin-bottom:1.2rem; font:.85rem/1.5 system-ui,sans-serif; color:#425448; }
@@ -30,7 +31,6 @@
 .eh-edit-field > input,.eh-edit-field > select { width:100%; height:58px; box-sizing:border-box; border:1px solid #c6d2c5; border-radius:.68rem; padding:0 .7rem; background:#fffefa; color:#1e3428; font:500 .96rem/1.25 Georgia,serif; }
 .eh-edit-field .ea-control { height:58px; min-height:58px; background:#fffefa; border-color:#c6d2c5; }
 .eh-edit-field :is(input,select,button):focus-visible { outline:2px solid #4c7c56; outline-offset:2px; }
-.eh-edit-availability { margin:1rem 0 1.2rem; background:#eaf3e8; color:#2f6640; border:1px solid #d5e5d0; padding:.73rem .9rem; border-radius:.68rem; font:.87rem/1.5 system-ui,sans-serif; }
 .eh-edit-small-warning { color:#80573a; font-size:.82rem; margin:-.65rem 0 1rem; }
 .eh-edit-requirements-title { border-top:1px solid #e8e5da; padding-top:1rem; display:flex; gap:.65rem; align-items:baseline; margin-bottom:.8rem; }
 .eh-edit-requirements-title h4 { margin:0; font:700 1.15rem Georgia,serif; color:#765034; }
@@ -46,7 +46,9 @@
 .eh-edit-allergy.is-checked { background:#f9ede7; color:#94432d; border-color:#ebc6b2; }
 .eh-edit-remove { border:0; background:transparent; color:#925b48; padding:.35rem .15rem; font:600 .75rem/1.3 system-ui,sans-serif; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
 .eh-edit-remove:disabled { opacity:.5; cursor:not-allowed; }
-.eh-edit-add { border:1px solid #c4d6c4; background:#f3f7ee; color:#315d3d; border-radius:.5rem; font:700 .85rem system-ui,sans-serif; padding:.6rem .85rem; }
+.eh-edit-add { border:1px solid #6b4935; background:#6b4935; color:#fffefa; border-radius:.5rem; font:700 .85rem system-ui,sans-serif; padding:.6rem .85rem; }
+.eh-edit-add:hover:not(:disabled) { background:#513728; border-color:#513728; }
+.eh-edit-add:focus-visible { outline:2px solid #9e7958; outline-offset:3px; }
 .eh-edit-policy { font:400 .8rem/1.6 system-ui,sans-serif; color:#697667; margin:1rem 0; }
 .eh-edit-error { padding:.75rem; border-radius:.55rem; border:1px solid #e7bdb4; background:#fff1ed; color:#8f3f31; font:.85rem system-ui,sans-serif; }
 .eh-edit-requirements-error { margin:.85rem 0 0; line-height:1.5; overflow-wrap:anywhere; }
@@ -97,6 +99,12 @@
 .eh-manage-detail-list dd { margin:0; color:#47584c; overflow-wrap:anywhere; }
 .eh-manage-cutoff { color:#49684e; background:#ecf2e9; border:1px solid #d3e2d1; border-radius:.7rem; margin:0; padding:.8rem; font:.8rem/1.45 system-ui,sans-serif; }
 .eh-manage-notice { margin:0 0 1.2rem; padding:.8rem 1rem; background:#e9f3e8; border:1px solid #bfcfb9; color:#325941; border-radius:.65rem; font:.91rem system-ui,sans-serif; }
+.eh-manage-notice.eh-booking-email-notice--failed { background:#fceee9; border-color:#edc0b3; color:#963a2b; }
+.eh-manage-notice.eh-booking-email-notice--unknown, .eh-manage-notice.eh-booking-email-notice--skipped { background:#fff8e8; border-color:#ead8ab; color:#695326; }
+.eh-receipt-redirect-notice { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; background:#f4eee5; border-color:#decfbb; color:#514337; }
+.eh-receipt-redirect-notice strong { display:block; color:#242424; font:700 1.05rem Georgia,serif; margin-bottom:.3rem; }
+.eh-receipt-redirect-notice p { margin:0; line-height:1.5; }
+.eh-receipt-redirect-notice button { flex:none; border:0; background:none; color:#6b4935; font-size:1.25rem; line-height:1; padding:.2rem .4rem; }
 @media(max-width:930px) { .eh-manage-grid { grid-template-columns:minmax(230px,37%) minmax(0,1fr); } .eh-edit-panel { padding:1.05rem; } }
 @media(max-width:760px) { .eh-manage-grid { grid-template-columns:minmax(0,1fr); } .eh-manage-list { grid-template-columns:repeat(2,minmax(0,1fr)); } .eh-manage-booking { padding:.75rem; } }
 @media(max-width:540px) { .eh-edit-fields,.eh-manage-list { grid-template-columns:minmax(0,1fr); } .eh-manage-detail-list > div { grid-template-columns:100px minmax(0,1fr); } .eh-manage-card-text strong { font-size:1.1rem; } }
@@ -124,27 +132,18 @@
 .eh-manage-dietary { padding:1rem 0 .2rem; border-top:1px solid #e8e6db; }
 .eh-manage-dietary h4 { color:#765034; margin:0 0 .8rem; font:700 1.16rem Georgia,serif; }
 .eh-manage-none { margin:0; color:#707a70; font:.91rem system-ui,sans-serif; }
-.eh-manage-diet-list { margin:0; padding:0; display:grid; gap:.58rem; list-style:none; }
-.eh-manage-diet-list li { display:flex; align-items:center; min-height:3.1rem; padding:.8rem 1rem; background:#f9faf6; border:1px solid #e6e7dd; border-left:3px solid #77937b; border-radius:.65rem; color:#345441; }
-.eh-manage-diet-list li.has-allergy { background:#fff8f3; border-color:#f0dacc; border-left-color:#b4442f; }
-.eh-manage-diet-list li > span:last-child { display:grid; gap:.2rem; min-width:0; overflow-wrap:anywhere; }
-.eh-manage-diet-list strong {   color: #252525; font:600 .88rem/1.4 system-ui,sans-serif; }
-.eh-manage-diet-list small { color:#965c3f; font:.78rem system-ui,sans-serif; }
 
 /* Editing uses exactly the search controls and photographic slot cards of Availability. */
 .eh-edit-search-fields { grid-template-columns:repeat(3,minmax(0,1fr)); }
-.eh-edit-times { margin:1.4rem 0 1.5rem; padding-top:1rem; border-top:1px solid #e9e8dd; }
-.eh-edit-times-head { display:flex; align-items:baseline; justify-content:space-between; gap:1rem; margin-bottom:.55rem; }
-.eh-edit-times-head h4 { color:#765034; margin:0; font:700 1.22rem Georgia,serif; }
-.eh-edit-times-head > span { color:#527259; font:600 .78rem system-ui,sans-serif; }
-.eh-edit-times .eh-edit-availability { margin:.6rem 0 .9rem; }
-.eh-edit-availability-note { display:block; margin-top:.2rem; }
-.eh-edit-availability.is-warning { background:#fff6ed; border-color:#efd1bb; color:#885034; }
+.eh-edit-times { margin:1.15rem 0 1.5rem; }
+.eh-edit-times .eh-empty-results { padding:1.7rem 1.15rem; }
+.eh-edit-times .eh-empty-results h3 { font-size:1.25rem; }
+.eh-slot-search-pending { margin:.65rem 0; padding:.65rem .85rem; border-radius:.5rem; background:#f1f3ec; color:#5e625c; font:.84rem/1.5 system-ui,sans-serif; }
+.eh-slot-retry { margin-top:.9rem; }
 .eh-edit-slot-cards { grid-template-columns:repeat(auto-fit,minmax(min(100%,185px),1fr)); gap:.75rem; }
 .eh-edit-slot-cards .eh-slot-tile { min-width:0; }
-.eh-edit-slot-cards .eh-slot-tile--selected { border-color:#2e5940; box-shadow:0 0 0 3px #2e5940; }
+.eh-edit-slot-cards .eh-slot-tile--selected { border-color:#2e5940; box-shadow:0 0 0 2px rgba(46,89,64,.24); }
 .eh-edit-slot-cards .eh-slot-tile:only-child { max-width:300px; }
-.eh-edit-slot-cards .eh-slot-tile img { height:95px; }
 .eh-edit-slot-cards .eh-slot-tile-body { min-height:95px; padding:.7rem .8rem; }
 .eh-edit-slot-cards .eh-slot-tile-info strong { font-size:1.5rem; }
 .eh-edit-slot-cards .eh-slot-availability { font-size:.9rem; }
@@ -174,7 +173,6 @@
   .eh-edit-search-fields { grid-template-columns:minmax(0,1fr); }
   .eh-edit-search-fields > :nth-child(3) { grid-column:auto; max-width:none; }
   .eh-edit-slot-cards { grid-template-columns:repeat(2,minmax(0,1fr)); gap:.55rem; }
-  .eh-edit-slot-cards .eh-slot-tile img { height:76px; }
   .eh-edit-slot-cards .eh-slot-tile-body { padding:.6rem .55rem; min-height:82px; }
   .eh-edit-slot-cards .eh-slot-tile-info strong { font-size:1.22rem; }
   .eh-edit-slot-cards .eh-slot-availability { font-size:.73rem; }
@@ -190,7 +188,6 @@
 @media(max-width:370px) {
   .eh-manage-facts { grid-template-columns:minmax(0,1fr); }
   .eh-edit-slot-cards { grid-template-columns:minmax(0,1fr); }
-  .eh-edit-slot-cards .eh-slot-tile img { height:95px; }
 }
 
 /* Only the chevron button toggles the reservation panel. */

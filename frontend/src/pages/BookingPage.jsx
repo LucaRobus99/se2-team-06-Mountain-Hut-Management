@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { getPendingBooking, clearPendingBooking } from '../utils/pendingBooking.js';
 import SplitSeatingModal from '../components/SplitSeatingModal.jsx';
 import PartyRequirementsFields from '../components/PartyRequirementsFields.jsx';
+import DietaryRequirementsSummary from '../components/DietaryRequirementsSummary.jsx';
 import { validatePartyRequirements } from '../utils/partyRequirements.js';
 import bookingBackground from '../assets/edelweiss-booking-background.jpg';
 import { createBooking, getBooking, getSlotSeating, checkSlotBooking, bookingErrorMessage } from '../api/booking.js';
@@ -45,7 +46,9 @@ export default function BookingPage() {
   const [prechecking, setPrechecking] = useState(Boolean(!bookingId && draft));
   const [booking, setBooking] = useState(null);
   const [receiptLoading, setReceiptLoading] = useState(Boolean(bookingId));
-  const [receiptError, setReceiptError] = useState('');
+  const [receiptError, setReceiptError] = useState(null);
+  const [receiptLoadedKey, setReceiptLoadedKey] = useState(null);
+  const [receiptRetry, setReceiptRetry] = useState(0);
   const [error, setError] = useState('');
   const [staleSelection, setStaleSelection] = useState(false);
   const [checkingSeating, setCheckingSeating] = useState(false);
@@ -62,6 +65,8 @@ export default function BookingPage() {
   const groupIsSplit = booking ? booking.split : seating?.fit === 'split';
   const confirmationEmailStatus = booking?.confirmationEmail?.status;
   const confirmationAddress = booking?.email || user?.email;
+  const receiptKey = `${user?.id ?? ''}:${bookingId ?? ''}:${receiptRetry}`;
+  const validReceiptId = /^[1-9]\d*$/.test(bookingId || '') && Number.isSafeInteger(Number(bookingId));
   useEffect(() => {
     if (bookingId || !draft?.selectedSlotId || loadingAuth) return;
     if (user?.role !== 'hiker') { setPrechecking(false); return; }
@@ -79,26 +84,36 @@ export default function BookingPage() {
   }, [bookingId, draft?.selectedSlotId, loadingAuth, user?.id, user?.role]);
 
   useEffect(() => {
-    if (!bookingId) return;
+    if (!bookingId || !validReceiptId || loadingAuth || user?.role !== 'hiker') return;
     let active = true;
     setReceiptLoading(true);
-    setReceiptError('');
+    setReceiptError(null);
     setBooking(null);
     // GET checks that the current hiker owns this booking. Never rely solely
     // on browser history state to display a confirmed reservation.
     getBooking(Number(bookingId))
       .then((confirmed) => {
         if (!active) return;
-        const emailStatus = location.state?.bookingId === confirmed.id
+        if (String(confirmed?.id) !== bookingId) throw new Error('Unexpected reservation response.');
+        const emailStatus = location.state?.bookingId === confirmed.id && location.state?.receiptOwnerId === user.id
           ? location.state?.emailStatus : null;
         setBooking(emailStatus
           ? { ...confirmed, confirmationEmail: { status: emailStatus } }
           : confirmed);
       })
-      .catch((err) => { if (active) setReceiptError(bookingErrorMessage(err)); })
-      .finally(() => { if (active) setReceiptLoading(false); });
+      .catch((err) => {
+        if (!active) return;
+        const unavailable = err.status === 404 || err.status === 403 || err.code === 'BOOKING_NOT_FOUND';
+        setReceiptError({ unavailable });
+        // If the cookie expired while the receipt was open, let ProtectedRoute
+        // send the visitor back to login instead of keeping a stale session.
+        if (err.status === 401 || err.code === 'UNAUTHENTICATED') {
+          void refreshUser?.().catch(() => {});
+        }
+      })
+      .finally(() => { if (active) { setReceiptLoadedKey(receiptKey); setReceiptLoading(false); } });
     return () => { active = false; };
-  }, [bookingId, location.state?.bookingId, location.state?.emailStatus]);
+  }, [bookingId, validReceiptId, loadingAuth, user?.id, user?.role, receiptKey, location.state?.bookingId, location.state?.receiptOwnerId, location.state?.emailStatus]);
   const mealLabel = shownMeal === 'aperitivo'
     ? 'Aperitif'
     : shownMeal ? `${shownMeal[0].toUpperCase()}${shownMeal.slice(1)}` : '';
@@ -160,7 +175,7 @@ export default function BookingPage() {
       // The GET on that route verifies ownership and reloads the details.
       navigate(`/book/confirmation/${confirmed.id}`, {
         replace: true,
-        state: { bookingId: confirmed.id, emailStatus: confirmed.confirmationEmail?.status },
+        state: { bookingId: confirmed.id, receiptOwnerId: user.id, emailStatus: confirmed.confirmationEmail?.status },
       });
     } catch (err) {
       handleBookingError(err);
@@ -205,15 +220,28 @@ export default function BookingPage() {
     await saveBooking();
   }
 
-  if (bookingId && (receiptLoading || (!receiptError && String(booking?.id) !== bookingId))) {
+  if (bookingId && !validReceiptId) {
+    return <Navigate to="/my-bookings" replace state={{ receiptUnavailable: true }} />;
+  }
+  if (bookingId && (receiptLoading || receiptLoadedKey !== receiptKey || (!receiptError && String(booking?.id) !== bookingId))) {
     return <main className="eh-booking-page eh-route-loading" role="status">Loading your booking confirmation…</main>;
   }
   if (bookingId && (receiptError || !booking)) {
+    if (receiptError?.unavailable) return <Navigate to="/my-bookings" replace state={{ receiptUnavailable: true }} />;
     return (
       <main className="eh-booking-page">
-        <Alert variant="danger" role="alert">{receiptError || 'Unable to load the booking confirmation.'}</Alert>
-        <Link to="/my-bookings" className="eh-button eh-button--green">← Back to My Bookings</Link>
-        <Link to="/availability" className="eh-button eh-button--outline">Check availability</Link>
+        <section className="eh-login-scene eh-booking-scene" style={{ backgroundImage: `url(${bookingBackground})` }}>
+          <div className="eh-login-card eh-booking-card eh-booking-card--blocked">
+            <div className="eh-booking-blocked-message" role="alert">
+              <h1>We couldn't load your reservation</h1>
+              <p>There may be a temporary connection problem. Try again, or open your bookings to find your reservation.</p>
+            </div>
+            <div className="eh-booking-actions">
+              <button type="button" className="eh-button eh-button--green" onClick={() => setReceiptRetry(value => value + 1)}>Try again</button>
+              <Link to="/my-bookings" className="eh-button eh-button--outline">Back to My Bookings</Link>
+            </div>
+          </div>
+        </section>
       </main>
     );
   }
@@ -288,14 +316,7 @@ export default function BookingPage() {
                   <h2>Dietary requirements</h2>
                   <span>{savedRequirements.length} {savedRequirements.length === 1 ? 'request' : 'requests'}</span>
                 </header>
-                <ul>
-                  {savedRequirements.map((item, index) => (
-                    <li key={index}>
-                      <span className="eh-confirmation-dietary-description">{item.description}</span>
-                      {item.allergies && <strong className="eh-confirmation-allergy-label">Allergy — special care required</strong>}
-                    </li>
-                  ))}
-                </ul>
+                <DietaryRequirementsSummary requirements={savedRequirements} />
               </section>
             )}
 
@@ -303,11 +324,11 @@ export default function BookingPage() {
               <strong>Reservation cancelled</strong><span>This reservation has been retained in your history. No seats are reserved.</span>
             </div> : <div className={`eh-booking-email-notice eh-booking-email-notice--${confirmationEmailStatus || 'unknown'} eh-confirmation-email`} role="status">
               {confirmationEmailStatus === 'sent' ? (
-                <><strong>Confirmation email queued</strong><span>{confirmationAddress ? `Submitted for delivery to ${confirmationAddress}.` : 'Submitted for delivery.'} Check your inbox and spam folder. Delivery may take a moment.</span></>
+                <><strong>Confirmation email sent</strong><span>{confirmationAddress ? `Sent to ${confirmationAddress}.` : 'Your confirmation email was sent.'} Check your inbox or spam folder.</span></>
               ) : confirmationEmailStatus === 'failed' ? (
-                <><strong>Email could not be sent</strong><span>Your reservation is confirmed. Keep your booking reference.</span></>
+                <><strong>Email could not be sent</strong><span>Your reservation is confirmed. Please keep your booking reference: #{booking.id}.</span></>
               ) : (
-                <><strong>Reservation saved</strong><span>Keep your booking reference in case the email is unavailable.</span></>
+                <><strong>Reservation saved</strong><span>Please keep your booking reference: #{booking.id}.</span></>
               )}
             </div>}
 

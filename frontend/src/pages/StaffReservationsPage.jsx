@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlpineDatePicker, AlpineMealSelect } from '../components/AlpineBookingFields.jsx';
 import AvailabilitySlotCard from '../components/AvailabilitySlotCard.jsx';
+import SlotAvailabilityState from '../components/SlotAvailabilityState.jsx';
 import SplitSeatingModal from '../components/SplitSeatingModal.jsx';
+import DietaryRequirementsSummary from '../components/DietaryRequirementsSummary.jsx';
 import { searchStaffHikers, getStaffAvailability, getStaffSeating, createStaffBooking } from '../api/booking.js';
 import { validatePartyRequirements } from '../utils/partyRequirements.js';
 import { readableBookingDate, readableMeal } from '../utils/bookingList.js';
@@ -17,16 +19,32 @@ const today = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome', 
 const validEmail = value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 const validPhone = value => /^[+\d\s().-]+$/.test(value) && value.replace(/\D/g, '').length >= 6;
 
-function Section({ number, title, description, children }) {
-  return <section className="staff-panel sr-section">
+function validateContact(contact, mode) {
+  const errors = {};
+  const account = mode === 'newHiker';
+  const name = contact.name.trim(), email = contact.email.trim(), phone = contact.phone.trim();
+  if (!name) errors.name = 'Enter the guest’s full name.';
+  else if (name.length > 100) errors.name = 'Use 100 characters or fewer.';
+  if (account && !email) errors.email = 'Enter the guest’s email address.';
+  else if (email && (email.length > 255 || !validEmail(email))) errors.email = 'Enter a valid email address.';
+  if (account && !phone) errors.phone = 'Enter the guest’s mobile number.';
+  else if (phone && (phone.length > 30 || !validPhone(phone))) errors.phone = 'Enter a valid number with at least 6 digits.';
+  if (account && contact.emergencyContact.trim().length > 200) errors.emergencyContact = 'Use 200 characters or fewer.';
+  if (account && contact.notes.trim().length > 1000) errors.notes = 'Use 1000 characters or fewer.';
+  return errors;
+}
+
+function Section({ number, title, description, children, className = '' }) {
+  return <section className={`staff-panel sr-section ${className}`}>
     <div className="sr-section-heading"><span className="sr-number">{number}</span><div><h2>{title}</h2><p>{description}</p></div></div>
     {children}
   </section>;
 }
 
-function ContactField({ field, label, value, onChange, required, type = 'text', maxLength, placeholder }) {
+function ContactField({ field, label, value, onChange, onBlur, error, required, type = 'text', maxLength, placeholder }) {
   return <div className="eh-edit-field"><label htmlFor={`sr-${field}`}>{label}{required ? ' *' : ' · Optional'}</label>
-    <input id={`sr-${field}`} type={type} value={value} required={required} maxLength={maxLength} placeholder={placeholder} onChange={e => onChange(field, e.target.value)} />
+    <input id={`sr-${field}`} type={type} value={value} required={required} maxLength={maxLength} placeholder={placeholder} autoComplete="off" onChange={e => onChange(field, e.target.value)} onBlur={() => onBlur(field)} aria-invalid={Boolean(error)} aria-describedby={error ? `sr-${field}-error` : undefined} />
+    {error && <span id={`sr-${field}-error`} className="staff-field-error" role="alert">{error}</span>}
   </div>;
 }
 
@@ -37,18 +55,18 @@ function ReservationReceipt({ receipt, onNew }) {
   return <section className="staff-panel sr-receipt" aria-label="Reservation confirmed">
     <span className="sr-success-mark" aria-hidden="true">✓</span>
     <p className="sr-kicker">RESERVATION CONFIRMED</p>
-    <h2>You're all set.</h2>
+    <h2>Reservation created successfully.</h2>
     <p>Booking #{receipt.id} · {receipt.contactName || receipt.account?.name}</p>
     <div className="sr-receipt-facts">
       <div><span>Date</span><strong>{readableBookingDate(slot.date)}</strong></div>
       <div><span>Meal &amp; time</span><strong>{readableMeal(slot.meal)} · {slot.startTime}–{slot.endTime}</strong></div>
       <div><span>Guests</span><strong>{receipt.partySize}</strong></div>
     </div>
-    {receipt.split && <p className="sr-receipt-note">Table split: {receipt.seatAssignments?.map(item => item.seats).join(' + ') || 'Multiple tables'}</p>}
+    {receipt.split && <p className="sr-receipt-note">Table split: {receipt.seatAssignments?.map(item => item.seats).join(' + ') || 'Multiple tables'}. Confirm the seating arrangement with the guest.</p>}
     {receipt.requirements?.length > 0 && <div className="sr-receipt-requirements"><h3>Dietary requirements</h3>
-      {receipt.requirements.map((r, i) => <div key={i} className={r.allergies ? 'sr-allergy-note' : ''}>{r.description}{r.allergies && <small>Allergy · special care required</small>}</div>)}
+      <DietaryRequirementsSummary requirements={receipt.requirements} />
     </div>}
-    <p className="sr-receipt-note" role="status">{confirmationEmail?.status === 'sent' ? 'Confirmation email accepted for delivery.' : confirmationEmail?.status === 'failed' ? 'Reservation saved. The email could not be sent.' : 'Reservation saved. No confirmation email was sent.'}</p>
+    <p className={`sr-receipt-note eh-booking-email-notice eh-booking-email-notice--${confirmationEmail?.status || 'unknown'}`} role="status">{confirmationEmail?.status === 'sent' ? 'Confirmation email sent to the guest.' : confirmationEmail?.status === 'failed' ? `Reservation saved. The email could not be sent. Give the guest booking reference #${receipt.id}.` : `Reservation saved. No confirmation email was sent. Give the guest booking reference #${receipt.id}.`}</p>
     {initialPassword && <div className="sr-credentials">
       <h3>New hiker account</h3><p>Communicate this temporary password privately to the guest. It is displayed only here and must be changed at first login.</p>
       <span className="sr-account-email">{receipt.account?.email}</span>
@@ -64,6 +82,7 @@ function ReservationReceipt({ receipt, onNew }) {
 export default function StaffReservationsPage() {
   const [mode, setMode] = useState('existingHiker');
   const [contact, setContact] = useState(emptyContact);
+  const [touched, setTouched] = useState({});
   const [query, setQuery] = useState('');
   const [hiker, setHiker] = useState(null);
   const [lookup, setLookup] = useState({ loading: false, searched: false, results: [], error: '' });
@@ -90,8 +109,10 @@ export default function StaffReservationsPage() {
   const checking = searched && validSearch && availability.key !== key;
   const slots = searched && !checking && availability.key === key ? availability.slots : [];
   const requirementsError = validatePartyRequirements(requirements);
-  const guestReady = mode === 'existingHiker' ? Boolean(hiker) : Boolean(contact.name.trim()) &&
-    (mode === 'guest' ? (!contact.email || validEmail(contact.email)) && (!contact.phone || validPhone(contact.phone)) : validEmail(contact.email) && validPhone(contact.phone));
+  const contactErrors = validateContact(contact, mode);
+  const guestReady = mode === 'existingHiker' ? Boolean(hiker) : !Object.keys(contactErrors).length;
+  const touchField = field => setTouched(previous => ({ ...previous, [field]: true }));
+  const contactProps = field => ({ field, value: contact[field], onChange: updateContact, onBlur: touchField, error: touched[field] ? contactErrors[field] : '' });
   const canSubmit = guestReady && selection && !checking && !checkingSeating && !pendingSplit && !saving && !requirementsError;
 
   useEffect(() => {
@@ -122,7 +143,7 @@ export default function StaffReservationsPage() {
   function changeMode(value) {
     if (value === mode) return;
     lookupRequest.current += 1;
-    setMode(value); setQuery(''); setHiker(null); setContact(emptyContact());
+    setMode(value); setQuery(''); setHiker(null); setContact(emptyContact()); setTouched({});
     setLookup({ loading: false, searched: false, results: [], error: '' }); setError('');
   }
   function updateQuery(value) {
@@ -157,7 +178,7 @@ export default function StaffReservationsPage() {
       if (request === seatRequest.current) setCheckingSeating(false);
     }
   }
-  const updateContact = (field, value) => { setContact(previous => ({ ...previous, [field]: value })); setError(''); };
+  function updateContact(field, value) { setContact(previous => ({ ...previous, [field]: value })); setError(''); }
   async function submit(event) {
     event.preventDefault();
     if (!canSubmit || submitting.current) return;
@@ -178,16 +199,16 @@ export default function StaffReservationsPage() {
     } finally { submitting.current = false; setSaving(false); }
   }
   function newReservation() {
-    setReceipt(null); setMode('existingHiker'); setContact(emptyContact()); updateQuery('');
+    setReceipt(null); setMode('existingHiker'); setContact(emptyContact()); setTouched({}); updateQuery('');
     clearSelection(); setRequirements([]); setError(''); setSearched(false); setAvailability({ key: '', slots: [], error: '' });
     setDate(today()); setMeal('lunch'); setGuests('2');
   }
 
   return <div className="staff-page sr-page">
-    <div className="staff-page-heading"><div><p className="staff-eyebrow">GUEST SERVICES</p><h1>Reservations</h1><p>Welcome guests arriving by phone, message or in person.</p></div><span className="staff-heading-pill">Staff-assisted booking</span></div>
+    <div className="staff-page-heading"><div><p className="staff-eyebrow">GUEST SERVICES</p><h1>Reservations</h1><p>Create a reservation on behalf of a guest, by phone, message or in person.</p></div><span className="staff-heading-pill">Staff-assisted booking</span></div>
     {receipt ? <ReservationReceipt receipt={receipt} onNew={newReservation} /> : <form className="sr-form" onSubmit={submit} noValidate>
       <fieldset className="sr-fieldset" disabled={saving}>
-        <Section number="01" title="Guest information" description="Choose who this reservation is for.">
+        <Section number="01" title="Guest information" description="Select the guest type and collect the guest’s contact details.">
           <div className="sr-modes" role="group" aria-label="Guest type">
             {MODES.map(([value, title, note]) => <button key={value} type="button" className={`sr-mode${mode === value ? ' is-active' : ''}`} aria-pressed={mode === value} onClick={() => changeMode(value)}>
               <span className="sr-radio-dot" aria-hidden="true" /><strong>{title}</strong><small>{note}</small>
@@ -204,33 +225,30 @@ export default function StaffReservationsPage() {
             </button>)}</div>
           </> : <>
             <div className="sr-contact-grid">
-              <ContactField field="name" label="Full name" value={contact.name} onChange={updateContact} required maxLength={100} placeholder="Guest's full name" />
-              <ContactField field="phone" label="Mobile number" type="tel" value={contact.phone} onChange={updateContact} required={mode === 'newHiker'} maxLength={30} placeholder="+39 …" />
-              <ContactField field="email" label="Email" type="email" value={contact.email} onChange={updateContact} required={mode === 'newHiker'} maxLength={255} placeholder="guest@email.com" />
-              {mode === 'newHiker' && <><ContactField field="emergencyContact" label="Emergency contact" value={contact.emergencyContact} onChange={updateContact} maxLength={200} /><div className="eh-edit-field sr-wide"><label htmlFor="sr-notes">Notes · Optional</label><textarea id="sr-notes" rows={2} maxLength={1000} value={contact.notes} onChange={e => updateContact('notes', e.target.value)} /></div></>}
+              <ContactField {...contactProps('name')} label="Full name" required maxLength={100} placeholder="Guest's full name" />
+              <ContactField {...contactProps('phone')} label="Mobile number" type="tel" required={mode === 'newHiker'} maxLength={30} placeholder="+39 345 123 4567" />
+              <ContactField {...contactProps('email')} label="Email" type="email" required={mode === 'newHiker'} maxLength={255} placeholder="guest@email.com" />
+              {mode === 'newHiker' && <><ContactField {...contactProps('emergencyContact')} label="Emergency contact" maxLength={200} placeholder="Name and mobile number" /><div className="eh-edit-field sr-wide"><label htmlFor="sr-notes">Notes · Optional</label><textarea id="sr-notes" rows={2} maxLength={1000} placeholder="e.g. mountain guide, preferred contact time, helpful details for bookings" value={contact.notes} onChange={e => updateContact('notes', e.target.value)} onBlur={() => touchField('notes')} aria-invalid={Boolean(touched.notes && contactErrors.notes)} aria-describedby={touched.notes && contactErrors.notes ? 'sr-notes-error' : undefined} />{touched.notes && contactErrors.notes && <span id="sr-notes-error" className="staff-field-error" role="alert">{contactErrors.notes}</span>}</div></>}
             </div>
-            <p className="sr-help">{mode === 'guest' ? 'A temporary guest cannot log in to the website. Email is optional for the booking confirmation.' : 'An initial password is generated automatically and must be changed at first login.'}</p>
+            <p className="sr-help">{mode === 'guest' ? 'A temporary guest cannot log in to the website. Collect an email address if the guest wants a booking confirmation by email.' : 'A temporary password is generated automatically. Share it privately with the guest, who must change it at first login.'}</p>
           </>}
         </Section>
-        <Section number="02" title="Reservation details" description="Select a date, meal and party size to find available times.">
+        <Section number="02" title="Reservation details" description="Ask the guest for their preferred date, meal and party size, then check availability.">
           <div className="sr-search-fields eh-edit-search-fields">
             <div className="eh-edit-field"><label htmlFor="sr-date">Date</label><AlpineDatePicker id="sr-date" value={date} minDate={today()} onChange={v => changeSearch(setDate, v, date)} required /></div>
             <div className="eh-edit-field"><label htmlFor="sr-meal">Meal</label><AlpineMealSelect id="sr-meal" value={meal} onChange={v => changeSearch(setMeal, v, meal)} required /></div>
             <div className="eh-edit-field"><label htmlFor="sr-guests">Guests</label><input id="sr-guests" type="number" min="1" step="1" value={guests} onChange={e => changeSearch(setGuests, e.target.value, guests)} required /></div>
             <button className="eh-button eh-button--green sr-find" type="button" disabled={!validSearch || checking} onClick={findAvailability}>{checking ? 'Searching…' : 'Find availability'} <span aria-hidden="true">↗</span></button>
           </div>
-          {searched && <div className="eh-edit-times sr-times">
-            <div className="eh-edit-times-head"><h4>Available times</h4><span>{checking ? 'Searching…' : `${slots.length} ${slots.length === 1 ? 'option' : 'options'}`}</span></div>
-            <div className={`eh-edit-availability${availability.error && !checking ? ' is-warning' : ''}`} role="status">
-              {!validSearch ? 'Enter a valid date, meal and guest count.' : checking ? 'Checking availability…' : availability.error || (!slots.length ? 'No times available. Try another date, meal or guest count.' : 'Choose one of the available slots.')}
-              {slots.length > 0 && <span className="eh-edit-availability-note">Availability is updated as you edit. Final seats are checked when confirming.</span>}
-            </div>
-            {!!slots.length && <div className="eh-slot-cards eh-edit-slot-cards sr-slots">{slots.map((slot, index) => <AvailabilitySlotCard key={slot.id} slot={slot} index={index} partySize={partySize} selected={selection?.slot.id === slot.id} disabled={checkingSeating || saving} onClick={() => selectSlot(slot)} />)}</div>}
+          {searched && <section className="eh-edit-times sr-times" aria-label="Available meal slots">
+            <SlotAvailabilityState checking={checking} error={!validSearch ? 'Enter a valid date, meal and guest count.' : availability.error}
+              empty={!slots.length} onRetry={validSearch && !saving ? findAvailability : undefined} />
+            {!!slots.length && <div className="eh-slot-cards eh-edit-slot-cards sr-slots">{slots.map((slot, index) => <AvailabilitySlotCard key={slot.id} slot={slot} index={index} partySize={partySize} staff selected={selection?.slot.id === slot.id} disabled={checkingSeating || saving} onClick={() => selectSlot(slot)} />)}</div>}
             {checkingSeating && <p className="sr-help" role="status">Checking seating…</p>}
-          </div>}
+          </section>}
           <p className="sr-help sr-time-policy">Staff may reserve up to the start of the selected time slot.</p>
         </Section>
-        <Section number="03" title="Dietary requirements" description="Optional · Help the kitchen prepare for the group.">
+        <Section number="03" title="Dietary requirements" description="Optional · Ask the guest about dietary needs and allergies for the group." className="sr-dietary-section">
           {!requirements.length && <p className="eh-edit-no-requirements">No dietary requirements added.</p>}
           {requirements.map((item, index) => <div className="eh-edit-requirement" key={item.id}>
             <div className="eh-edit-requirement-head"><label htmlFor={`sr-requirement-${item.id}`}>Requirement {index + 1}</label><button type="button" className="eh-edit-remove" aria-label={`Remove requirement ${index + 1}`} onClick={() => setRequirements(list => list.filter(r => r.id !== item.id))}>Remove</button></div>
@@ -245,7 +263,7 @@ export default function StaffReservationsPage() {
           <div className="sr-submit-row"><div><strong>{mode === 'existingHiker' ? hiker?.name || 'Select a guest' : contact.name || 'Enter guest details'}</strong><p>{selection ? `${readableBookingDate(date)} · ${readableMeal(meal)} · ${selection.slot.startTime}–${selection.slot.endTime} · ${partySize} guests` : 'Choose an available time to continue.'}</p></div><button type="submit" className="eh-button eh-button--green" disabled={!canSubmit}>{saving ? 'Confirming…' : 'Confirm reservation'} →</button></div>
         </div>
       </fieldset>
-      <SplitSeatingModal show={Boolean(pendingSplit)} seating={pendingSplit?.seating} onCancel={() => setPendingSplit(null)} onContinue={() => { setSelection(pendingSplit); setPendingSplit(null); }} />
+      <SplitSeatingModal staff show={Boolean(pendingSplit)} seating={pendingSplit?.seating} onCancel={() => setPendingSplit(null)} onContinue={() => { setSelection(pendingSplit); setPendingSplit(null); }} />
     </form>}
   </div>;
 }

@@ -12,7 +12,6 @@ export default function MenuPage() {
         </div>
       </section>
       <section className="eh-menu-empty eh-wide-wrap">
-        <span className="eh-ornament" aria-hidden="true">✳</span>
         <h2>Something good is coming.</h2>
         <p>Our menu will be available here soon.</p>
         <Link to="/availability" className="eh-button eh-button--green">Check availability <span aria-hidden="true">↗</span></Link>

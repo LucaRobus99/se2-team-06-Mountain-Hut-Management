@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { Modal } from 'react-bootstrap';
 import { getMyBookings, getBooking, cancelBooking, bookingErrorMessage } from '../api/booking.js';
 import { bookingSummary, readableBookingDate, readableMeal } from '../utils/bookingList.js';
 import { canModifyBooking } from '../utils/editBooking.js';
 import EditBookingForm from '../components/EditBookingForm.jsx';
+import DietaryRequirementsSummary from '../components/DietaryRequirementsSummary.jsx';
 import heroImage from '../assets/edelweiss-my-bookings.jpg';
 import '../styles/account-bookings.css';
 import '../styles/edit-booking.css';
@@ -21,17 +22,10 @@ const EMPTY_TEXT = {
 };
 const timeLabel = booking => `${String(booking.slot.startTime).slice(0, 5)}${booking.slot.endTime ? `–${String(booking.slot.endTime).slice(0, 5)}` : ''}`;
 
-function RequirementSummary({ requirements }) {
-  if (!requirements?.length) return <p className="eh-manage-none">No dietary requirements added.</p>;
-  return <ul className="eh-manage-diet-list">{requirements.map((item, index) => (
-    <li key={index} className={item.allergies ? 'has-allergy' : ''}>
-      <span><strong>{item.description}</strong>{item.allergies && <small>Allergy · special care required</small>}</span>
-    </li>
-  ))}</ul>;
-}
-
 export default function MyBookingsPage() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const [receiptUnavailable, setReceiptUnavailable] = useState(Boolean(location.state?.receiptUnavailable));
   const [bookings, setBookings] = useState([]);
   const [filter, setFilter] = useState(() => {
     const initial = new URLSearchParams(location.search).get('tab');
@@ -44,6 +38,7 @@ export default function MyBookingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [noticeTone, setNoticeTone] = useState('success');
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelError, setCancelError] = useState('');
@@ -52,6 +47,12 @@ export default function MyBookingsPage() {
   const gridRef = useRef(null);
   const editRequestRef = useRef(0);
   const loadBookings = useCallback(() => setReload(value => value + 1), []);
+
+  useEffect(() => {
+    if (!location.state?.receiptUnavailable) return;
+    setReceiptUnavailable(true);
+    navigate(location.pathname + location.search, { replace: true, state: null });
+  }, [location.state, location.pathname, location.search, navigate]);
 
   useEffect(() => {
     const tab = new URLSearchParams(location.search).get('tab');
@@ -129,6 +130,7 @@ export default function MyBookingsPage() {
       const latest = await getBooking(selected.id);
       if (requestId !== editRequestRef.current) return;
       if (!canModifyBooking(latest)) {
+        setNoticeTone('failed');
         setNotice('This reservation can no longer be changed (48-hour cutoff).');
         return;
       }
@@ -137,7 +139,7 @@ export default function MyBookingsPage() {
       setEditingBooking(latest);
       setEditing(true);
       focusPanelOnSmallScreens();
-    } catch (err) { if (requestId === editRequestRef.current) setNotice(bookingErrorMessage(err)); }
+    } catch (err) { if (requestId === editRequestRef.current) { setNoticeTone('failed'); setNotice(bookingErrorMessage(err)); } }
     finally { if (requestId === editRequestRef.current) setEditLoading(false); }
   }
 
@@ -154,11 +156,12 @@ export default function MyBookingsPage() {
       setFilter('cancelled');
       setSelectedId(cancelled.id);
       setConfirmCancel(false);
+      setNoticeTone(cancelled.alreadyCancelled ? 'unknown' : cancelled.cancellationEmail?.status || 'unknown');
       setNotice(cancelled.alreadyCancelled ? 'This booking was already cancelled.'
         : cancelled.cancellationEmail?.status === 'sent'
-          ? 'Booking cancelled successfully. A cancellation email was submitted for delivery.'
+          ? 'Booking cancelled successfully. Cancellation email sent.'
           : cancelled.cancellationEmail?.status === 'failed'
-            ? 'Booking cancelled successfully, but the cancellation email could not be sent.'
+            ? `Booking cancelled successfully, but the cancellation email could not be sent. Reference #${cancelled.id}.`
             : 'Booking cancelled successfully. Email delivery was not confirmed.');
       focusPanelOnSmallScreens();
     } catch (err) {
@@ -187,10 +190,11 @@ export default function MyBookingsPage() {
     setSelectedId(updated.id);
     setEditing(false);
     setEditingBooking(null);
+    setNoticeTone(updated.confirmationEmail?.status || 'unknown');
     setNotice(updated.confirmationEmail?.status === 'sent'
-      ? 'Booking updated successfully. A confirmation email was submitted for delivery.'
+      ? 'Booking updated successfully. Confirmation email sent.'
       : updated.confirmationEmail?.status === 'failed'
-        ? 'Booking updated successfully, but the confirmation email could not be sent.'
+        ? `Booking updated successfully, but the confirmation email could not be sent. Please keep booking reference #${updated.id}.`
         : 'Booking updated successfully. Email delivery was not confirmed.');
     focusPanelOnSmallScreens();
   }
@@ -220,7 +224,11 @@ export default function MyBookingsPage() {
             {option.label} {!loading && !error && <span>{groups[option.id].length}</span>}
           </button>)}
         </div>}
-        {notice && <div className="eh-manage-notice" role="status">{notice}</div>}
+        {receiptUnavailable && <div className="eh-manage-notice eh-receipt-redirect-notice" role="status">
+          <div><strong>Reservation link unavailable</strong><p>That reservation cannot be opened. You can find all bookings associated with your account below.</p></div>
+          <button type="button" aria-label="Dismiss reservation notice" onClick={() => setReceiptUnavailable(false)}>×</button>
+        </div>}
+        {notice && <div className={`eh-manage-notice eh-booking-email-notice--${noticeTone}`} role="status">{notice}</div>}
         {loading ? <div className="eh-bookings-state" role="status">Loading your bookings…</div>
           : error ? <div className="eh-bookings-state eh-bookings-state--error" role="alert">
             <h3>We couldn't load your bookings</h3><p>{error}</p>
@@ -271,7 +279,7 @@ export default function MyBookingsPage() {
                     <div><span>Guests</span><strong>{selected.partySize} {selected.partySize === 1 ? 'person' : 'people'}</strong></div>
                     {selected.status !== 'cancelled' && <div><span>Seating</span><strong>{selected.split ? 'Seated across multiple tables' : 'Seated together'}</strong></div>}
                   </div>
-                  <div className="eh-manage-dietary"><h4>Dietary requirements</h4><RequirementSummary requirements={selected.requirements} /></div>
+                  <div className="eh-manage-dietary"><h4>Dietary requirements</h4><DietaryRequirementsSummary requirements={selected.requirements} /></div>
                   <div className="eh-edit-actions">
                     <Link className="eh-edit-cancel" to={`/book/confirmation/${selected.id}`}
                       state={{ bookingListFilter: shownFilter }}>View full details</Link>

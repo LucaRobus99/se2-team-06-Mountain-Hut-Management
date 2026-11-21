@@ -33,6 +33,14 @@ function showPage(initialEntries = ['/my-bookings']) {
 }
 
 describe('My Bookings — expandable details and edit flow', () => {
+  it('shows a dismissible generic message after a receipt redirect', async () => {
+    const user = userEvent.setup();
+    showPage([{ pathname: '/my-bookings', state: { receiptUnavailable: true } }]);
+    expect(await screen.findByText('Reservation link unavailable')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /upcoming 1/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Dismiss reservation notice' }));
+    expect(screen.queryByText('Reservation link unavailable')).not.toBeInTheDocument();
+  });
   it('loads upcoming/past/cancelled history without automatically opening details', async () => {
     showPage();
     expect(await screen.findByRole('button', { name: /upcoming 1/i })).toBeInTheDocument();
@@ -105,7 +113,7 @@ describe('My Bookings — expandable details and edit flow', () => {
     expect(cancelBooking).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Cancel booking' }));
     await user.click(screen.getByRole('button', { name: 'Confirm cancellation' }));
-    expect(await screen.findByText(/Booking cancelled successfully. A cancellation email was submitted for delivery/)).toBeInTheDocument();
+    expect(await screen.findByText(/Booking cancelled successfully. Cancellation email sent/)).toBeInTheDocument();
     expect(cancelBooking).toHaveBeenCalledExactlyOnceWith(1);
     expect(screen.getByRole('button', { name: /cancelled 2/i })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /upcoming 0/i })).toBeInTheDocument();

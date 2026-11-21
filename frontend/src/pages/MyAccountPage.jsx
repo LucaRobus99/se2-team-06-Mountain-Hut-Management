@@ -4,7 +4,6 @@ import { updateMyProfile, changeMyPassword, uploadMyAvatar, removeMyAvatar } fro
 import { prepareAvatar } from '../utils/avatar.js';
 import AccountIcon from '../components/AccountIcon.jsx';
 import heroImage from '../assets/edelweiss-my-account.jpg';
-import avatarImage from '../assets/edelweiss-terrace.jpg';
 import '../styles/account-bookings.css';
 import '../styles/my-account.css';
 import '../styles/account-email-fix.css';
@@ -209,7 +208,11 @@ export default function MyAccountPage() {
                 onClick={() => setPhotoMenuOpen((open) => !open)}
               >
                 <span className="eh-account-portrait">
-                  <img src={user?.avatarUrl || avatarImage} alt="" />
+                  {user?.avatarUrl ? <img src={user.avatarUrl} alt="" /> :
+                    <svg className="eh-account-default-avatar" viewBox="0 0 120 120" aria-hidden="true">
+                      <circle cx="60" cy="44" r="23" fill="currentColor" />
+                      <path d="M15 120v-9a45 45 0 0 1 90 0v9z" fill="currentColor" />
+                    </svg>}
                 </span>
                 <span className="eh-account-photo-edit-icon" aria-hidden="true"><AccountIcon name="camera" size={22} /></span>
               </button>

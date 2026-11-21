@@ -183,7 +183,7 @@ export default function RegisterPage() {
             </div>
             <div className="eh-register-field eh-register-field--full">
               <label htmlFor="register-notes">Notes <span className="eh-register-optional">(optional)</span></label>
-              <textarea {...fieldProps('notes')} maxLength="1000" rows="2" placeholder="E.g. registered mountain guide" />
+              <textarea {...fieldProps('notes')} maxLength="1000" rows="2" placeholder="e.g. mountain guide, preferred contact time, helpful details for bookings" />
               {message('notes')}
             </div>
             <div className="eh-register-field eh-register-field--full">

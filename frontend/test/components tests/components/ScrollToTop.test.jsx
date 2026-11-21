@@ -63,7 +63,7 @@ describe('ScrollToTop Component Tests', () => {
     expect(window.scrollTo).toHaveBeenCalledTimes(2);
   });
 
-  it('should scroll to top when search parameters change', () => {
+  it('should keep the scroll position when only search parameters change', () => {
     render(
       <MemoryRouter initialEntries={['/page?tab=info']}>
         <ScrollToTop />
@@ -71,11 +71,6 @@ describe('ScrollToTop Component Tests', () => {
       </MemoryRouter>
     );
 
-    expect(window.scrollTo).toHaveBeenCalledTimes(2);
-    expect(window.scrollTo).toHaveBeenCalledWith({
-      top: 0,
-      left: 0,
-      behavior: 'auto',
-    });
+    expect(window.scrollTo).toHaveBeenCalledTimes(1);
   });
 });

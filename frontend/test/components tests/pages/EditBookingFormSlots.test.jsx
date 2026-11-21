@@ -34,7 +34,10 @@ describe('Edit booking — photographic availability slots', () => {
     render(<EditBookingForm booking={booking} onCancel={vi.fn()} onSaved={vi.fn()} />);
     expect(await screen.findByRole('button', { name: /13:00.*3 tables available/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /13:00.*3 tables available/i }).querySelector('.eh-status-dot--green')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Current time.*12:00.*1 table available/i }).querySelector('.eh-status-dot--yellow')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /12:00.*1 table available/i }).querySelector('.eh-status-dot--yellow')).toBeInTheDocument();
+    expect(screen.queryByText('Current time')).not.toBeInTheDocument();
+    expect(screen.queryByText('Available times')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Choose one of the available slots/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Selected:/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Time')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
@@ -74,11 +77,13 @@ describe('Edit booking — photographic availability slots', () => {
     await user.click(screen.getByRole('button', { name: 'Choose another time' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(updateBooking).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: /Current time.*12:00/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /12:00/i })).toHaveAttribute('aria-pressed', 'false');
     await user.click(split);
     await user.click(await screen.findByRole('button', { name: 'Continue with split seating' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(split).toHaveAttribute('aria-pressed', 'true');
+    expect(split.querySelector('.eh-slot-selected-mark')).toBeInTheDocument();
+    expect(split.querySelector('.eh-slot-arrow')).not.toBeInTheDocument();
     await user.click(split);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByText(/Table split:/i)).not.toBeInTheDocument();
@@ -97,7 +102,7 @@ describe('Edit booking — photographic availability slots', () => {
       }],
     }));
     render(<EditBookingForm booking={booking} onCancel={vi.fn()} onSaved={vi.fn()} />);
-    await screen.findByRole('button', { name: /Current time.*12:00/i });
+    await screen.findByRole('button', { name: /12:00/i });
     fireEvent.change(screen.getByLabelText('Guests'), { target: { value: '3' } });
     await screen.findByRole('button', { name: /12:00.*Multiple-table seating available/i });
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
@@ -111,13 +116,21 @@ describe('Edit booking — photographic availability slots', () => {
 
   it('removes the original time if the increased group does not fit', async () => {
     render(<EditBookingForm booking={booking} onCancel={vi.fn()} onSaved={vi.fn()} />);
-    const current = await screen.findByRole('button', { name: /Current time.*12:00/i });
+    const current = await screen.findByRole('button', { name: /12:00/i });
     expect(current).toHaveAttribute('aria-pressed', 'false');
     fireEvent.change(screen.getByLabelText('Guests'), { target: { value: '3' } });
-    expect(await screen.findByText(/your current time is no longer available/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Current time.*12:00/i })).not.toBeInTheDocument();
+    expect(await screen.findByText(/your original time is unavailable/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /12:00/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
     expect(updateBooking).not.toHaveBeenCalled();
+  });
+
+  it('shows one red availability notice when no times fit', async () => {
+    getModificationSlots.mockResolvedValue({ slots: [] });
+    render(<EditBookingForm booking={booking} onCancel={vi.fn()} onSaved={vi.fn()} />);
+    const notice = await screen.findByText('No tables available for this search.');
+    expect(notice.parentElement).toHaveClass('eh-empty-results');
+    expect(screen.queryByText(/your original time is unavailable/i)).not.toBeInTheDocument();
   });
 
   it('blocks saving on a failed availability request and retries', async () => {
@@ -126,9 +139,9 @@ describe('Edit booking — photographic availability slots', () => {
     render(<EditBookingForm booking={booking} onCancel={vi.fn()} onSaved={vi.fn()} />);
     expect(await screen.findByText('Could not check available times.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
-    expect(screen.queryByRole('button', { name: /Current time.*12:00/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /12:00/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /try again/i }));
-    expect(await screen.findByRole('button', { name: /Current time.*12:00/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(await screen.findByRole('button', { name: /12:00/i })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('refreshes availability after a conflicting save while preserving the draft', async () => {
@@ -143,7 +156,7 @@ describe('Edit booking — photographic availability slots', () => {
     await user.click(screen.getByRole('button', { name: /save changes/i }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Not enough seats.');
     await waitFor(() => expect(getModificationSlots).toHaveBeenCalledTimes(2));
-    expect(await screen.findByRole('button', { name: /Current time.*12:00/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(await screen.findByRole('button', { name: /12:00/i })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByLabelText('Requirement 1')).toHaveValue('Vegetarian');
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
     expect(saved).not.toHaveBeenCalled();
@@ -153,7 +166,7 @@ describe('Edit booking — photographic availability slots', () => {
     const user = userEvent.setup();
     const saved = vi.fn();
     render(<EditBookingForm booking={booking} onCancel={vi.fn()} onSaved={saved} />);
-    await user.click(await screen.findByRole('button', { name: /Current time.*12:00/i }));
+    await user.click(await screen.findByRole('button', { name: /12:00/i }));
     await user.click(screen.getByRole('button', { name: /add dietary requirement/i }));
     await user.click(screen.getByRole('button', { name: /add dietary requirement/i }));
     expect(screen.getByRole('alert')).toHaveTextContent(/please describe dietary requirement 1/i);

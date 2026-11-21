@@ -29,17 +29,31 @@ describe('MH-07 staff reservations', () => {
     await user.type(screen.getByLabelText(/full name/i), 'Guest');
     await user.click(screen.getByRole('button', { name: /find availability/i }));
     const card = await screen.findByRole('button', { name: /12:00.*multiple-table/i });
+    expect(screen.queryByText('Available times')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Choose one of the available slots/i)).not.toBeInTheDocument();
     expect(card).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByRole('button', { name: /confirm reservation/i })).toBeDisabled();
     await user.click(card);
     expect(await screen.findByText('Table split: 1 guest + 1 guest')).toBeInTheDocument();
+    expect(screen.getByText(/Inform the guest about the table split/)).toBeInTheDocument();
+    expect(screen.queryByText('Your reservation')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Continue with split seating' }));
     await waitFor(() => expect(card).toHaveAttribute('aria-pressed', 'true'));
     await user.click(card);
     expect(getStaffSeating).toHaveBeenCalledTimes(1);
+    getStaffAvailability.mockResolvedValue({ slots: [{ ...slot, tables: [{ freeSeats: 2 }, { freeSeats: 1 }] }] });
     fireEvent.change(screen.getByLabelText('Guests'), { target: { value: '3' } });
     await waitFor(() => expect(getStaffAvailability).toHaveBeenLastCalledWith(expect.objectContaining({ partySize: 3 })));
     expect(await screen.findByRole('button', { name: /12:00.*multiple-table/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /confirm reservation/i })).toBeDisabled();
+  });
+
+  it('shows the same unavailable state as public availability and does not allow submission', async () => {
+    getStaffAvailability.mockResolvedValue({ slots: [] });
+    const user = userEvent.setup();
+    render(<StaffReservationsPage />);
+    await user.click(screen.getByRole('button', { name: /find availability/i }));
+    expect((await screen.findByText('No tables available for this search.')).parentElement).toHaveClass('eh-empty-results');
     expect(screen.getByRole('button', { name: /confirm reservation/i })).toBeDisabled();
   });
 
@@ -70,9 +84,18 @@ describe('MH-07 staff reservations', () => {
     await user.type(screen.getByLabelText(/full name/i), 'Old guest');
     await user.click(screen.getByRole('button', { name: /new hiker/i }));
     expect(screen.getByLabelText(/full name/i)).toHaveValue('');
+    expect(screen.getByPlaceholderText('+39 345 123 4567')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Name and mobile number')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/e.g. mountain guide/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/mobile number/i), '123');
+    await user.tab();
+    expect(screen.getByText('Enter a valid number with at least 6 digits.')).toBeInTheDocument();
+    await user.clear(screen.getByLabelText(/mobile number/i));
     await user.type(screen.getByLabelText(/full name/i), 'New Guest');
     await user.type(screen.getByLabelText(/mobile number/i), '+39012345678');
     await user.type(screen.getByLabelText(/email/i), 'new@example.test');
+    await user.type(screen.getByLabelText(/emergency contact/i), 'Alex +39012345678');
+    await user.type(screen.getByLabelText(/notes/i), 'Mountain guide');
     await user.click(screen.getByRole('button', { name: /find availability/i }));
     await user.click(await screen.findByRole('button', { name: /12:00/ }));
     await user.click(screen.getByRole('button', { name: /confirm reservation/i }));
@@ -80,9 +103,23 @@ describe('MH-07 staff reservations', () => {
     expect(screen.queryByText('temporary-example')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Show password' }));
     expect(screen.getByText('temporary-example')).toBeInTheDocument();
-    expect(createStaffBooking.mock.calls[0][0]).toMatchObject({ mode: 'newHiker', name: 'New Guest', email: 'new@example.test', phone: '+39012345678' });
+    expect(createStaffBooking.mock.calls[0][0]).toMatchObject({ mode: 'newHiker', name: 'New Guest', email: 'new@example.test', phone: '+39012345678', emergencyContact: 'Alex +39012345678', notes: 'Mountain guide' });
     expect(createStaffBooking.mock.calls[0][0]).not.toHaveProperty('contactName');
     await user.click(screen.getByRole('button', { name: /create another reservation/i }));
     expect(screen.queryByText('temporary-example')).not.toBeInTheDocument();
+  });
+
+  it('confirms a temporary guest reservation after accepting split seating', async () => {
+    const user = userEvent.setup();
+    render(<StaffReservationsPage />);
+    await user.click(screen.getByRole('button', { name: /temporary guest/i }));
+    await user.type(screen.getByLabelText(/full name/i), 'Guest');
+    await user.click(screen.getByRole('button', { name: /find availability/i }));
+    await user.click(await screen.findByRole('button', { name: /12:00/ }));
+    await user.click(await screen.findByRole('button', { name: 'Continue with split seating' }));
+    await user.click(screen.getByRole('button', { name: /confirm reservation/i }));
+    expect(await screen.findByText('Reservation created successfully.')).toBeInTheDocument();
+    expect(createStaffBooking).toHaveBeenCalledWith(expect.objectContaining({ mode: 'guest', contactName: 'Guest', expectedSeating: 'split', slotId: 9 }));
+    expect(screen.getByText(/Give the guest booking reference #3/)).toBeInTheDocument();
   });
 });

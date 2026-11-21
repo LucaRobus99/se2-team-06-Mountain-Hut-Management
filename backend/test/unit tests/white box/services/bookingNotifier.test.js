@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createBookingNotifier } from '../../../../src/services/bookingNotifier.js';
+import { bookingEmailFields, createBookingNotifier } from '../../../../src/services/bookingNotifier.js';
 
 const booking = {
   id: 42, partySize: 2, split: false, requirements: [],
@@ -7,6 +7,15 @@ const booking = {
 };
 
 describe('Booking email acknowledgement', () => {
+  it('formats the reservation exactly as in the booking receipt, retaining raw values', () => {
+    const fields = bookingEmailFields({ ...booking, partySize: 1, slot: { ...booking.slot, meal: 'aperitivo' } });
+    expect(fields).toMatchObject({
+      date: '2027-06-15', display_date: '15 June 2027',
+      meal: 'aperitivo', display_meal: 'Aperitif',
+      guests: 1, guest_label: '1 person',
+    });
+    expect(bookingEmailFields(booking).guest_label).toBe('2 people');
+  });
   it('reports provider acceptance and logs its message ID without exposing the recipient', async () => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => {});
     try {

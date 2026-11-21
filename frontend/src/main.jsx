@@ -6,6 +6,7 @@ import './styles/global.css';
 import { AuthProvider } from './auth/AuthContext.jsx';
 import App from './App.jsx';
 import './styles/reservation-dialog.css';
+import './styles/dietary-requirements.css';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
