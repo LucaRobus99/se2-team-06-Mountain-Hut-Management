@@ -7,6 +7,7 @@ import DietaryRequirementsSummary from '../components/DietaryRequirementsSummary
 import { searchStaffHikers, getStaffAvailability, getStaffSeating, createStaffBooking } from '../api/booking.js';
 import { validatePartyRequirements } from '../utils/partyRequirements.js';
 import { readableBookingDate, readableMeal } from '../utils/bookingList.js';
+import { isValidEmail, isValidPhone } from '../utils/contactValidation.js';
 import '../styles/staff-reservations.css';
 
 const MODES = [
@@ -16,8 +17,6 @@ const MODES = [
 ];
 const emptyContact = () => ({ name: '', email: '', phone: '', notes: '', emergencyContact: '' });
 const today = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-const validEmail = value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-const validPhone = value => /^[+\d\s().-]+$/.test(value) && value.replace(/\D/g, '').length >= 6;
 
 function validateContact(contact, mode) {
   const errors = {};
@@ -26,9 +25,9 @@ function validateContact(contact, mode) {
   if (!name) errors.name = 'Enter the guest’s full name.';
   else if (name.length > 100) errors.name = 'Use 100 characters or fewer.';
   if (account && !email) errors.email = 'Enter the guest’s email address.';
-  else if (email && (email.length > 255 || !validEmail(email))) errors.email = 'Enter a valid email address.';
+  else if (email && (email.length > 255 || !isValidEmail(email))) errors.email = 'Enter a valid email address.';
   if (account && !phone) errors.phone = 'Enter the guest’s mobile number.';
-  else if (phone && (phone.length > 30 || !validPhone(phone))) errors.phone = 'Enter a valid number with at least 6 digits.';
+  else if (phone && (phone.length > 30 || !isValidPhone(phone))) errors.phone = 'Enter a valid number with at least 6 digits.';
   if (account && contact.emergencyContact.trim().length > 200) errors.emergencyContact = 'Use 200 characters or fewer.';
   if (account && contact.notes.trim().length > 1000) errors.notes = 'Use 1000 characters or fewer.';
   return errors;

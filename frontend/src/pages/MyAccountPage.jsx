@@ -7,6 +7,7 @@ import heroImage from '../assets/edelweiss-my-account.jpg';
 import '../styles/account-bookings.css';
 import '../styles/my-account.css';
 import '../styles/account-email-fix.css';
+import { isValidPhone } from '../utils/contactValidation.js';
 
 function unavailableMessage(error, operation) {
   if (error?.status === 404 || error?.status === 405) {
@@ -118,7 +119,7 @@ export default function MyAccountPage() {
       setError('Please enter a name of up to 100 characters.');
       return;
     }
-    if (trimmedPhone.length > 30 || !/^[+\d\s().-]+$/.test(trimmedPhone) || trimmedPhone.replace(/\D/g, '').length < 6) {
+    if (trimmedPhone.length > 30 || !isValidPhone(trimmedPhone)) {
       setError('Enter a valid mobile number (at least 6 digits).');
       return;
     }

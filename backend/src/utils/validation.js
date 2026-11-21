@@ -46,6 +46,15 @@ export function isValidEmail(value) {
   return typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+/**
+ * International mobile numbers can contain +, spaces, dashes, dots and
+ * parentheses. Require at least 6 digits, without an Italian-only prefix.
+ * Shared by registration, profile edits and staff bookings (MH-07).
+ */
+export function isValidPhone(value) {
+  return typeof value === 'string' && /^[+\d\s().-]+$/.test(value) && value.replace(/\D/g, '').length >= 6;
+}
+
 /** What a field must be, used in every `invalid` message so they read the same way. */
 export const EXPECTED = {
   positiveInt: 'a positive integer',

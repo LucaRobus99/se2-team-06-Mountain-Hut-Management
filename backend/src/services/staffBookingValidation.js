@@ -5,6 +5,7 @@ import {
   isMissing,
   isPositiveInt,
   isValidEmail,
+  isValidPhone,
   required,
   tooLong,
   unknown,
@@ -70,11 +71,6 @@ function optionalText(body, field, max, details) {
   }
 
   return text;
-}
-
-/** Same rule as registration/account: international numbers, at least 6 digits. */
-function isValidPhone(value) {
-  return /^[+\d\s().-]+$/.test(value) && value.replace(/\D/g, '').length >= 6;
 }
 
 export function validateStaffBookingBody(body) {

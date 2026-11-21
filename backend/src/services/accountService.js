@@ -1,5 +1,5 @@
 import { ValidationError } from '../errors/AppError.js';
-import { invalid, invalidFields, required, tooLong, unknown, EXPECTED } from '../utils/validation.js';
+import { invalid, invalidFields, isValidPhone, required, tooLong, unknown, EXPECTED } from '../utils/validation.js';
 import { hashPassword, verifyPassword } from './password.js';
 
 const IMAGE_MAX_BYTES = 400 * 1024;
@@ -32,8 +32,7 @@ function validateProfile(body, previous) {
     if (trimmed.length > limit) { details.push(tooLong(field, limit)); continue; }
     next[field] = trimmed || null;
   }
-  if (typeof next.phone === 'string' &&
-      (!/^[+\d\s().-]+$/.test(next.phone) || next.phone.replace(/\D/g, '').length < 6)) {
+  if (typeof next.phone === 'string' && !isValidPhone(next.phone)) {
     details.push(invalid('phone', 'a valid mobile number (at least 6 digits)'));
   }
   if (details.length) throw invalidFields(details);

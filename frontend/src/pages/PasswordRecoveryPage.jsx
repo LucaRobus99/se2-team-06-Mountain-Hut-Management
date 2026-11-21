@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { changeMyPassword, requestPasswordReset, resetPassword } from '../api/auth.js';
 import EdelweissBrand from '../components/EdelweissBrand.jsx';
 import interiorBackground from '../assets/edelweiss-login-interior.png';
+import { isValidEmail } from '../utils/contactValidation.js';
 
 export default function PasswordRecoveryPage({ mode }) {
   const { user, loadingAuth, refreshUser, signOut } = useAuth();
@@ -27,7 +28,7 @@ export default function PasswordRecoveryPage({ mode }) {
     event.preventDefault();
     if (busy) return;
     setError('');
-    if (forgot && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError('Enter a valid email address.');
+    if (forgot && !isValidEmail(email.trim())) return setError('Enter a valid email address.');
     if (!forgot && (password.length < 8 || password.length > 128 || password !== confirm)) return setError('Use 8–128 characters and make sure the passwords match.');
     if (first && (!current || current === password)) return setError('Enter your temporary password and choose a different new password.');
     setBusy(true);

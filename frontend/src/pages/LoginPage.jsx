@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { getPendingBooking } from '../utils/pendingBooking.js';
 import EdelweissBrand from '../components/EdelweissBrand.jsx';
 import interiorBackground from '../assets/edelweiss-login-interior.png';
+import { isValidEmail } from '../utils/contactValidation.js';
 
 function FieldIcon({ type }) {
   if (type === 'mail') return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>;
@@ -64,7 +65,7 @@ export default function LoginPage() {
     if (loading || loadingAuth) return;
     const errors = {};
     if (!email.trim()) errors.email = 'Enter your email address.';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errors.email = 'Enter a valid email address.';
+    else if (!isValidEmail(email.trim())) errors.email = 'Enter a valid email address.';
     if (!password) errors.password = 'Enter your password.';
     setFieldErrors(errors);
     setGeneralError('');
@@ -106,7 +107,7 @@ export default function LoginPage() {
         {generalError && <Alert variant="danger" role="alert" className="eh-login-alert">{generalError}</Alert>}
         <form onSubmit={handleSubmit} className="eh-login-form" noValidate>
           <label htmlFor="login-email"><FieldIcon type="mail" />Email</label>
-          <input id="login-email" type="email" placeholder="your@email.com" autoComplete="username" required value={email} onChange={e => update('email', e.target.value)} onBlur={() => { if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) setFieldErrors(prev => ({ ...prev, email: 'Enter a valid email address.' })); }} aria-invalid={Boolean(fieldErrors.email)} aria-describedby={fieldErrors.email ? 'login-email-error' : undefined} disabled={loading || loadingAuth} />
+          <input id="login-email" type="email" placeholder="your@email.com" autoComplete="username" required value={email} onChange={e => update('email', e.target.value)} onBlur={() => { if (email && !isValidEmail(email.trim())) setFieldErrors(prev => ({ ...prev, email: 'Enter a valid email address.' })); }} aria-invalid={Boolean(fieldErrors.email)} aria-describedby={fieldErrors.email ? 'login-email-error' : undefined} disabled={loading || loadingAuth} />
           {fieldErrors.email && <span id="login-email-error" className="eh-field-error" role="alert">{fieldErrors.email}</span>}
           <label htmlFor="login-password"><FieldIcon type="lock" />Password</label>
           <div className="eh-password-input">
