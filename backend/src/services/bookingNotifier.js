@@ -32,7 +32,7 @@ export function createBookingNotifier(emailService) {
      * @returns {Promise<{status: 'sent'|'skipped'|'failed'}>}
      */
     async notify(kind, view, recipient, { fallbackName = null } = {}) {
-      if (typeof emailService?.sendBookingEmail !== 'function') {
+      if (!recipient || typeof emailService?.sendBookingEmail !== 'function') {
         return { status: 'skipped' };
       }
 

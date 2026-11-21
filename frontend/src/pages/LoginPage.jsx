@@ -24,7 +24,7 @@ export default function LoginPage() {
   // same receipt after login, not the homepage or an old booking draft.
   const receiptDestination = /^\/book\/confirmation\/[1-9]\d*$/.test(location.state?.from || '')
     ? location.state.from : null;
-  const destination = (user?.role === 'employee' || user?.role === 'warden')
+  const destination = user?.passwordChangeRequired ? '/change-password' : (user?.role === 'employee' || user?.role === 'warden')
     ? '/staff'
     : (receiptDestination || (bookingDraft ? '/book' : (location.state?.from === '/book' ? '/availability' : '/')));
   // The booking flow goes directly from Availability to Login, without
@@ -73,7 +73,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const signedInUser = await signIn({ email: email.trim(), password });
-      const next = (signedInUser?.role === 'employee' || signedInUser?.role === 'warden')
+      const next = signedInUser?.passwordChangeRequired ? '/change-password' : (signedInUser?.role === 'employee' || signedInUser?.role === 'warden')
         ? '/staff' : destination;
       navigate(next, {
         replace: true,
@@ -114,6 +114,7 @@ export default function LoginPage() {
             <button type="button" onClick={() => setShowPassword(v => !v)} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword}><FieldIcon type="eye" /></button>
           </div>
           {fieldErrors.password && <span id="login-password-error" className="eh-field-error" role="alert">{fieldErrors.password}</span>}
+          <Link className="eh-login-forgot" to="/forgot-password">Forgot your password?</Link>
           <button className="eh-button eh-button--green eh-login-submit" type="submit" disabled={loading || loadingAuth}>
             {loading || loadingAuth ? <><Spinner animation="border" size="sm" /> Signing in...</> : 'Log in'}
           </button>

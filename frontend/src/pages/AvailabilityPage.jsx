@@ -122,6 +122,7 @@ export default function AvailabilityPage() {
 
   async function handleSelectSlot(slot) {
     if (checkingSeating || loading) return;
+    if (selectedSlotId === slot.id && seating) return;
     setCheckingSeating(true);
     setError('');
     setBookingNotice('');

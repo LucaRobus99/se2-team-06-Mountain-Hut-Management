@@ -74,11 +74,13 @@ describe('Edit booking — photographic availability slots', () => {
     await user.click(screen.getByRole('button', { name: 'Choose another time' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(updateBooking).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: /Current time.*12:00/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Current time.*12:00/i })).toHaveAttribute('aria-pressed', 'false');
     await user.click(split);
     await user.click(await screen.findByRole('button', { name: 'Continue with split seating' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(split).toHaveAttribute('aria-pressed', 'true');
+    await user.click(split);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByText(/Table split:/i)).not.toBeInTheDocument();
     expect(updateBooking).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: /save changes/i }));
@@ -98,17 +100,19 @@ describe('Edit booking — photographic availability slots', () => {
     await screen.findByRole('button', { name: /Current time.*12:00/i });
     fireEvent.change(screen.getByLabelText('Guests'), { target: { value: '3' } });
     await screen.findByRole('button', { name: /12:00.*Multiple-table seating available/i });
-    await user.click(screen.getByRole('button', { name: /save changes/i }));
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: /12:00.*Multiple-table seating available/i }));
     expect(await screen.findByText('Table split: 2 guests + 1 guest')).toBeInTheDocument();
     expect(updateBooking).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Continue with split seating' }));
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
     await waitFor(() => expect(updateBooking).toHaveBeenCalledExactlyOnceWith(8, { partySize: 3, expectedSeating: 'split' }));
   });
 
   it('removes the original time if the increased group does not fit', async () => {
     render(<EditBookingForm booking={booking} onCancel={vi.fn()} onSaved={vi.fn()} />);
     const current = await screen.findByRole('button', { name: /Current time.*12:00/i });
-    expect(current).toHaveAttribute('aria-pressed', 'true');
+    expect(current).toHaveAttribute('aria-pressed', 'false');
     fireEvent.change(screen.getByLabelText('Guests'), { target: { value: '3' } });
     expect(await screen.findByText(/your current time is no longer available/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Current time.*12:00/i })).not.toBeInTheDocument();
@@ -124,7 +128,7 @@ describe('Edit booking — photographic availability slots', () => {
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
     expect(screen.queryByRole('button', { name: /Current time.*12:00/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /try again/i }));
-    expect(await screen.findByRole('button', { name: /Current time.*12:00/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(await screen.findByRole('button', { name: /Current time.*12:00/i })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('refreshes availability after a conflicting save while preserving the draft', async () => {
@@ -149,7 +153,7 @@ describe('Edit booking — photographic availability slots', () => {
     const user = userEvent.setup();
     const saved = vi.fn();
     render(<EditBookingForm booking={booking} onCancel={vi.fn()} onSaved={saved} />);
-    await screen.findByRole('button', { name: /Current time.*12:00/i });
+    await user.click(await screen.findByRole('button', { name: /Current time.*12:00/i }));
     await user.click(screen.getByRole('button', { name: /add dietary requirement/i }));
     await user.click(screen.getByRole('button', { name: /add dietary requirement/i }));
     expect(screen.getByRole('alert')).toHaveTextContent(/please describe dietary requirement 1/i);

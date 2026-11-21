@@ -52,7 +52,7 @@ The connection layer is `src/db/postgres.js`: `query(sql, params)` returns `{ ro
 | GET | `/api/slots/:slotId` | Employee/Warden | Slot details |
 | POST | `/api/slots` | Employee/Warden | Create a slot and configure its table capacity |
 
-The application serves one hut. Slot creation uses explicit `startTime` and `endTime` values, not `durationMinutes`; routes containing `/api/huts/:hutId/slots` are not part of the current API. The literal route `/api/bookings/slot-status` is registered before `/api/bookings/:bookingId` so it is not parsed as an ID. MH-07 currently provides the backend API only (the staff page is a frontend task).
+The application serves one hut. Slot creation uses explicit `startTime` and `endTime` values, not `durationMinutes`; routes containing `/api/huts/:hutId/slots` are not part of the current API. The literal route `/api/bookings/slot-status` is registered before `/api/bookings/:bookingId` so it is not parsed as an ID. MH-07 uses separate staff-only endpoints from the staff Reservations UI.
 
 ## Accounts, password changes and avatars
 
@@ -225,6 +225,8 @@ A successful change returns the updated booking in the same shape as a list item
 - **newHiker** — a complete hiker account and the booking are created in **one transaction**. The initial password is generated server-side with `node:crypto` (`password_change_required = 1`), only its scrypt hash is stored, and the plaintext value is returned **once** in the `201` response (`initialPassword`, `Cache-Control: no-store`). It is never emailed, logged or exposed by any other endpoint (#46, option A: the attending staff member communicates it). If the booking fails (e.g. `INSUFFICIENT_CAPACITY`), the account is rolled back too.
 
 `#35`: staff may book **until the slot starts**; afterwards the request fails with `422 SLOT_ALREADY_STARTED`. Hikers keep the two-hour cut-off (`422 SLOT_TOO_LATE`). `GET /api/staff/availability` returns the same slots as the public availability plus those starting within two hours.
+
+The optional `expectedSeating` field (`single_table` or `split`) protects the staff preview: if a single-table selection is no longer possible, the transaction returns `409 SEATING_CHANGED` without creating a booking or account. Review the new availability before retrying.
 
 While `passwordChangeRequired` is true, every authenticated endpoint except `/api/auth/me`, `/api/auth/change-password`, `/api/auth/logout` returns `403 PASSWORD_CHANGE_REQUIRED`; changing the password clears the flag.
 

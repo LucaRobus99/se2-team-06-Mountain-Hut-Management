@@ -19,7 +19,7 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
   const [date, setDate] = useState(booking.slot.date);
   const [meal, setMeal] = useState(booking.slot.meal);
   const [guests, setGuests] = useState(String(booking.partySize));
-  const [selectedSlotId, setSelectedSlotId] = useState(booking.slot.id);
+  const [selectedSlotId, setSelectedSlotId] = useState(null);
   const [requirements, setRequirements] = useState(() => (booking.requirements || []).map((r, id) => ({ ...r, id: id + 1 })));
   const nextRequirementId = useRef(requirements.length);
   const [available, setAvailable] = useState({ key: '', slots: [], loading: true, error: '' });
@@ -69,13 +69,13 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
   }, [freshResults, available.loading, available.error, choiceIds]);
 
   function changeSearch(setter, value) {
+    if ((setter === setDate && value === date) || (setter === setMeal && value === meal) ||
+        (setter === setGuests && value === guests)) return;
     setter(value);
     setPendingSplit(null);
     setAcceptedSplit(null);
     setSaveError('');
-    if (setter === setDate && value !== date) setSelectedSlotId(null);
-    if (setter === setMeal && value !== meal) setSelectedSlotId(null);
-    // Changing guests can keep the same slot; server rechecks the seats on PATCH.
+    setSelectedSlotId(null);
   }
 
   function addRequirement() {
@@ -99,6 +99,7 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
 
   function selectSlot(slot) {
     setSaveError('');
+    if (selectedSlotId === slot.id && (slot.fit !== 'split' || acceptedSplit === splitKey(slot))) return;
     if (slot.fit === 'split') {
       setPendingSplit({ slot, saveAfterConfirm: false });
     } else {
@@ -133,6 +134,7 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
       // A concurrent change may invalidate our preview; refresh without losing the draft.
       if (err.status === 409) {
         setAcceptedSplit(null);
+        setSelectedSlotId(null);
         setRefresh(value => value + 1);
       }
     } finally { setSaving(false); }

@@ -10,6 +10,7 @@ import MyBookingsPage from './pages/MyBookingsPage.jsx';
 import MyAccountPage from './pages/MyAccountPage.jsx';
 import SlotManagementPage from './pages/SlotManagementPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
+import PasswordRecoveryPage from './pages/PasswordRecoveryPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import MenuPage from './pages/MenuPage.jsx';
 import AboutPage from './pages/AboutPage.jsx';
@@ -38,6 +39,11 @@ function BookingEntry() {
 }
 
 export default function App() {
+  const { user, loadingAuth } = useAuth();
+  const location = useLocation();
+  if (!loadingAuth && user?.passwordChangeRequired && location.pathname !== '/change-password') {
+    return <Navigate to="/change-password" replace />;
+  }
   return (
     <>
       <ScrollToTop />
@@ -55,8 +61,11 @@ export default function App() {
         <Route path="find-us" element={<AboutPage />} />
         <Route path="about" element={<Navigate to="/find-us" replace />} />
         <Route path="login" element={<LoginPage />} />
+        <Route path="forgot-password" element={<PasswordRecoveryPage mode="forgot" />} />
+        <Route path="reset-password" element={<PasswordRecoveryPage mode="reset" />} />
         <Route path="register" element={<RegisterPage />} />
       </Route>
+      <Route path="change-password" element={<PasswordRecoveryPage mode="first" />} />
       <Route element={<ProtectedRoute staffOnly />}>
         <Route path="staff" element={<StaffLayout />}>
           <Route index element={<StaffDashboardPage />} />

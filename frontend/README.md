@@ -36,7 +36,10 @@ Open `http://localhost:5173`. In Docker, the production build is served by nginx
 | `/my-account` | Profile/photo management and password security | Hiker |
 | `/staff` | Staff dashboard | Employee/Warden |
 | `/staff/slots` | Create/list meal slots and configure tables/seats | Employee/Warden |
-| `/staff/reservations` | Placeholder (not yet implemented) | Employee/Warden |
+| `/staff/reservations` | Create reservations for registered, temporary or new hikers | Employee/Warden |
+| `/change-password` | Mandatory first-login password replacement | Restricted authenticated account |
+| `/forgot-password` | Request a password reset email | Public |
+| `/reset-password?token=…` | Set a new password using a valid reset link | Public |
 
 `/about` redirects to `/find-us`.
 
@@ -93,7 +96,17 @@ Run Cypress E2E tests against an actively running backend/frontend when validati
 
 ## Known scope limits
 
-The staff Reservations page and production email delivery setup are outside the currently completed UI. Mailgun keys must remain in the backend `.env` and must never be included in frontend code.
+Staff Reservations uses an explicit first availability search, live updates after changes, and explicit slot selection. Split seating is confirmed once per selection. The confirmation page shows an initial password only for a new hiker, never persisted in browser storage. Mailgun keys must remain in the backend `.env` and must never be included in frontend code.
+
+### MH-07 end-to-end test (isolated database)
+
+Use the same isolated backend and Vite setup described below, then run:
+
+```bash
+npx cypress run --spec cypress/e2e/staff-booking.cy.js
+```
+
+This tests all three staff booking modes and the mandatory first-login password change. The actual email delivery and reset link must also be checked manually with Docker and valid Mailgun configuration.
 
 ### MH-06 end-to-end test (isolated database)
 

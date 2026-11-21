@@ -57,6 +57,29 @@ export async function getSlotSeating({ slotId, partySize }) {
   return apiRequest(`/api/availability/${slotId}/seating?${new URLSearchParams({ partySize: String(partySize) })}`);
 }
 
+export async function searchStaffHikers(query) {
+  return apiRequest(`/api/staff/hikers?${new URLSearchParams({ query: query.trim() })}`);
+}
+
+export async function getStaffAvailability({ date, meal, partySize }) {
+  const error = validateSearch({ date, meal, partySize });
+  if (error) throw new Error(error);
+  return apiRequest(`/api/staff/availability?${new URLSearchParams({ date, meal, partySize: String(partySize) })}`);
+}
+
+export async function getStaffSeating({ slotId, partySize }) {
+  return apiRequest(`/api/staff/availability/${slotId}/seating?${new URLSearchParams({ partySize: String(partySize) })}`);
+}
+
+export async function createStaffBooking({ requirements = [], ...booking }) {
+  const error = validatePartyRequirements(requirements);
+  if (error) throw new Error(error);
+  return apiRequest('/api/staff/bookings', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...booking, requirements: serializePartyRequirements(requirements) }),
+  });
+}
+
 export async function createBooking({ slotId, partySize, requirements = [] }) {
   if (!positiveInteger(slotId) || !positiveInteger(partySize)) {
     throw new Error('Please select an available time and a valid number of guests.');

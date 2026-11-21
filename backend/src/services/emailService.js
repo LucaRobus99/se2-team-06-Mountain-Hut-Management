@@ -246,7 +246,11 @@ export function createEmailService({
           },
         });
       } catch (err) {
-        console.error('Failed to send password reset email:', err);
+        // Provider errors can contain the request, including the reset token.
+        console.error('Failed to send password reset email:', {
+          status: err?.status ?? err?.statusCode ?? null,
+          code: err?.code ?? null,
+        });
         throw err;
       }
     },
