@@ -113,7 +113,7 @@ export function createSlotDao(db) {
       return rows[0].id;
     },
 
-    /** Adds a table to the slot with the seats it has in this slot only. */
+    /** Adds a table with its fixed catalog capacity. */
     async addTableToSlot(...args) {
       const { db: exec, args: a } = executorOf(args);
       const slotId = a[0];
@@ -129,7 +129,7 @@ export function createSlotDao(db) {
       const { db: exec, args: a } = executorOf(args);
       const label = a[0];
       const { rows } = await exec.query(
-        `SELECT id FROM dining_tables WHERE label = $1`,
+        `SELECT id, label, seats FROM dining_tables WHERE label = $1`,
         [label]
       );
       return rows[0] ?? null;
@@ -139,10 +139,23 @@ export function createSlotDao(db) {
       const { db: exec, args: a } = executorOf(args);
       const table = a[0];
       const { rows } = await exec.query(
-        `INSERT INTO dining_tables (label) VALUES ($1) RETURNING id`,
-        [table.label]
+        `INSERT INTO dining_tables (label, seats) VALUES ($1, $2) RETURNING id`,
+        [table.label, table.seats]
       );
       return rows[0].id;
+    },
+
+    async listTables() {
+      const { rows } = await db.query('SELECT id, label, seats FROM dining_tables ORDER BY label, id');
+      return rows;
+    },
+
+    async listTimePatterns() {
+      const { rows } = await db.query(`SELECT DISTINCT s.start_time AS "startTime",
+        s.end_time AS "endTime", m.meal_type AS meal
+        FROM slots s JOIN meals m ON m.id = s.meal_id
+        ORDER BY "startTime", "endTime", meal`);
+      return rows;
     },
   };
 }

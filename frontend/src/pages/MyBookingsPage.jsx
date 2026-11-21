@@ -293,7 +293,7 @@ export default function MyBookingsPage() {
       </section>
       {selected && <Modal show={confirmCancel} onHide={closeCancellation} centered scrollable
         animation={false} backdrop="static" keyboard={!cancelBusy}
-        dialogClassName="eh-cancel-modal" backdropClassName="eh-cancel-backdrop"
+        dialogClassName="eh-cancel-modal eh-dialog" backdropClassName="eh-cancel-backdrop"
         aria-labelledby="eh-cancel-title" aria-describedby="eh-cancel-description">
         <Modal.Header className="eh-cancel-modal-header">
           <div>

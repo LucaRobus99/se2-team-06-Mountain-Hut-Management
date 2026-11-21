@@ -41,9 +41,11 @@ export default function AvailabilityPage() {
   const [checkingSeating, setCheckingSeating] = useState(false);
   const searchRequest = useRef(0);
   const selectionRequest = useRef(0);
+  const searched = useRef(false);
+  const liveTimer = useRef(null);
   const searchReady = useMemo(() => Boolean(date && meal && /^\d+$/.test(partySize) && Number(partySize) > 0), [date, meal, partySize]);
 
-  function resetSelection() { selectionRequest.current += 1; setSelectedSlotId(null); setSeating(null); setPendingSplit(null); }
+  function resetSelection() { selectionRequest.current += 1; setSelectedSlotId(null); setSeating(null); setPendingSplit(null); setCheckingSeating(false); }
   function onFieldChange(setter, value) {
     setter(value);
     resetSelection();
@@ -53,9 +55,20 @@ export default function AvailabilityPage() {
     setError('');
     setBookingNotice('');
     setSlotNotice('');
+    clearTimeout(liveTimer.current);
+    const next = { date: setter === setDate ? value : date, meal: setter === setMeal ? value : meal,
+      partySize: setter === setPartySize ? value : partySize };
+    if (searched.current && next.date && next.meal && /^\d+$/.test(next.partySize) && Number(next.partySize) > 0) {
+      liveTimer.current = setTimeout(() => {
+        const params = new URLSearchParams({ date: next.date, meal: next.meal, guests: next.partySize });
+        if (params.toString() === searchParams.toString()) void performSearch(next);
+        else setSearchParams(params, { replace: true });
+      }, 220);
+    }
   }
 
   async function performSearch(values) {
+    searched.current = true;
     const request = ++searchRequest.current;
     setLoading(true);
     setResult(null);
@@ -76,6 +89,7 @@ export default function AvailabilityPage() {
   }
 
   useEffect(() => {
+    clearTimeout(liveTimer.current);
     // A new Availability search must never accidentally reuse an old draft.
     clearPendingBooking();
     const params = new URLSearchParams(location.search);
@@ -94,6 +108,7 @@ export default function AvailabilityPage() {
       // search parameters change, not just once when the component mounts.
       performSearch(next);
     } else {
+      searched.current = false;
       searchRequest.current += 1;
       setLoading(false);
       setError('');
@@ -102,6 +117,8 @@ export default function AvailabilityPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 
+  useEffect(() => () => clearTimeout(liveTimer.current), []);
+
   useEffect(() => {
     setBookingNotice(location.state?.bookingNotice || '');
     setBookingNoticeType(location.state?.bookingNoticeType || 'info');
@@ -109,6 +126,7 @@ export default function AvailabilityPage() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    clearTimeout(liveTimer.current);
     if (!searchReady || loading || checkingSeating) return;
     const newParams = new URLSearchParams({ date, meal, guests: partySize });
     if (newParams.toString() === searchParams.toString()) {
@@ -123,11 +141,11 @@ export default function AvailabilityPage() {
   async function handleSelectSlot(slot) {
     if (checkingSeating || loading) return;
     if (selectedSlotId === slot.id && seating) return;
-    setCheckingSeating(true);
     setError('');
     setBookingNotice('');
     setSlotNotice('');
     resetSelection();
+    setCheckingSeating(true);
     const request = selectionRequest.current;
     try {
       // Warn on this page, before navigating to Review Booking or entering allergies.
@@ -153,7 +171,7 @@ export default function AvailabilityPage() {
         setSlotNotice('');
         setError(err.message || 'Unable to check seating.');
       }
-    } finally { setCheckingSeating(false); }
+    } finally { if (request === selectionRequest.current) setCheckingSeating(false); }
   }
 
   function acceptSplit() {
@@ -186,15 +204,15 @@ export default function AvailabilityPage() {
         <form className="eh-availability-search" onSubmit={handleSubmit}>
           <div className="eh-availability-field">
             <label htmlFor="availability-date">Date</label>
-            <AlpineDatePicker id="availability-date" value={date} minDate={todayInHut()} onChange={value => onFieldChange(setDate, value)} required disabled={loading || checkingSeating} />
+            <AlpineDatePicker id="availability-date" value={date} minDate={todayInHut()} onChange={value => onFieldChange(setDate, value)} required disabled={checkingSeating} />
           </div>
           <div className="eh-availability-field">
             <label htmlFor="availability-meal">Meal</label>
-            <AlpineMealSelect id="availability-meal" value={meal} onChange={value => onFieldChange(setMeal, value)} required disabled={loading || checkingSeating} />
+            <AlpineMealSelect id="availability-meal" value={meal} onChange={value => onFieldChange(setMeal, value)} required disabled={checkingSeating} />
           </div>
           <div className="eh-availability-field eh-availability-guests">
             <label htmlFor="availability-guests">Guests</label>
-            <input id="availability-guests" type="number" min="1" step="1" value={partySize} onChange={event => onFieldChange(setPartySize, event.target.value)} required disabled={loading || checkingSeating} />
+            <input id="availability-guests" type="number" min="1" step="1" value={partySize} onChange={event => onFieldChange(setPartySize, event.target.value)} required disabled={checkingSeating} />
           </div>
           <button type="submit" className="eh-button eh-button--green eh-availability-submit" disabled={!searchReady || loading || checkingSeating}>
             {loading ? 'Searching...' : 'Search'} <span aria-hidden="true">↗</span>

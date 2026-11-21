@@ -3,12 +3,14 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import SlotManagementPage from '../../../src/pages/SlotManagementPage.jsx';
-import { listStaffSlots, createStaffSlot } from '../../../src/api/slots.js';
+import { listStaffSlots, createStaffSlot, listSlotCatalog, createCatalogTable } from '../../../src/api/slots.js';
 
 // Mock the slots API functions and utilities
 vi.mock('../../../src/api/slots.js', () => ({
   listStaffSlots: vi.fn(),
   createStaffSlot: vi.fn(),
+  listSlotCatalog: vi.fn(),
+  createCatalogTable: vi.fn(),
   mealLabel: vi.fn((meal) => (meal ? meal[0].toUpperCase() + meal.slice(1) : '')),
   todayInHut: vi.fn(() => '2026-11-15'),
 }));
@@ -33,6 +35,7 @@ describe('SlotManagementPage Component Integration Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     listStaffSlots.mockResolvedValue({ slots: [] });
+    listSlotCatalog.mockResolvedValue({ tables: [{ tableId: 1, tableIdentifier: 'T1', seats: 2 }, { tableId: 2, tableIdentifier: 'T2', seats: 4 }], timePatterns: [{ meal: 'dinner', startTime: '19:00', endTime: '21:00' }] });
   });
 
   it('should render page headings and load daily schedule slots', async () => {
@@ -72,16 +75,10 @@ describe('SlotManagementPage Component Integration Tests', () => {
       </MemoryRouter>
     );
 
-    const tableInputs = await screen.findAllByPlaceholderText(/e.g. t1/i);
-    for (const input of tableInputs) {
-      await user.clear(input);
-    }
-
-    const submitButton = screen.getByRole('button', { name: /create slot/i });
-    await user.click(submitButton);
-
-    const errorMessages = await screen.findAllByText(/enter a table identifier/i);
-    expect(errorMessages.length).toBeGreaterThan(0);
+    await user.click(await screen.findByRole('button', { name: /define a new table/i }));
+    await user.click(screen.getByRole('button', { name: /^create table$/i }));
+    expect(await screen.findByText(/enter a table identifier/i)).toBeInTheDocument();
+    expect(createCatalogTable).not.toHaveBeenCalled();
   });
 
   it('should successfully create a new manual slot through confirmation modal flow', async () => {
@@ -103,9 +100,7 @@ describe('SlotManagementPage Component Integration Tests', () => {
       </MemoryRouter>
     );
 
-    const tableInputs = await screen.findAllByPlaceholderText(/e.g. t1/i);
-    await user.clear(tableInputs[0]);
-    await user.type(tableInputs[0], 'T1');
+    await user.click(await screen.findByRole('checkbox', { name: /T1 2 seats/i }));
 
     const submitButton = screen.getByRole('button', { name: /create slot/i });
     await user.click(submitButton);
@@ -118,6 +113,7 @@ describe('SlotManagementPage Component Integration Tests', () => {
     });
 
     expect(createStaffSlot).toHaveBeenCalledTimes(1);
+    expect(createStaffSlot).toHaveBeenCalledWith(expect.objectContaining({ tables: [{ tableIdentifier: 'T1', seats: 2 }] }));
   });
 
   it('should support copy tables mode from an existing slot', async () => {
@@ -179,6 +175,24 @@ describe('SlotManagementPage Component Integration Tests', () => {
     });
   });
 
+  it('reuses an existing service time and creates a physical table with fixed seats', async () => {
+    const user = userEvent.setup();
+    createCatalogTable.mockResolvedValueOnce({ tableId: 9, tableIdentifier: 'Terrace', seats: 6 });
+    render(<MemoryRouter><SlotManagementPage /></MemoryRouter>);
+    await user.click(await screen.findByRole('button', { name: /service time/i }));
+    await user.click(screen.getByRole('option', { name: /Dinner · 19:00–21:00/i }));
+    await user.click(screen.getByRole('button', { name: /define a new table/i }));
+    await user.type(screen.getByLabelText('Table identifier'), 'Terrace');
+    await user.type(screen.getByLabelText('Fixed seats'), '6');
+    await user.click(screen.getByRole('button', { name: /^create table$/i }));
+    expect(await screen.findByRole('checkbox', { name: /Terrace 6 seats/i })).toBeChecked();
+    expect(createCatalogTable).toHaveBeenCalledWith('Terrace', 6);
+    createStaffSlot.mockResolvedValueOnce({ id: 9, date: '2026-11-15', meal: 'dinner', startTime: '19:00', endTime: '21:00', tables: [] });
+    await user.click(screen.getByRole('button', { name: /create slot/i }));
+    await user.click(await screen.findByRole('button', { name: /confirm slot/i }));
+    expect(createStaffSlot).toHaveBeenCalledWith(expect.objectContaining({ meal: 'dinner', startTime: '19:00', endTime: '21:00', tables: [{ tableIdentifier: 'Terrace', seats: 6 }] }));
+  });
+
   it('should handle API creation errors gracefully', async () => {
     createStaffSlot.mockRejectedValueOnce(new Error('Server error during slot creation'));
 
@@ -190,9 +204,7 @@ describe('SlotManagementPage Component Integration Tests', () => {
       </MemoryRouter>
     );
 
-    const tableInputs = await screen.findAllByPlaceholderText(/e.g. t1/i);
-    await user.clear(tableInputs[0]);
-    await user.type(tableInputs[0], 'T1');
+    await user.click(await screen.findByRole('checkbox', { name: /T1 2 seats/i }));
 
     const submitButton = screen.getByRole('button', { name: /create slot/i });
     await user.click(submitButton);

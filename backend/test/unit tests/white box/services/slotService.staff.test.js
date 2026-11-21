@@ -177,7 +177,7 @@ describe('slotService staff flows - White-Box Tests', () => {
     });
 
     it('should reuse existing tables, create new ones and run in one transaction', async () => {
-      slotDao.findTableByLabel.mockImplementation(async (_tx, label) => (label === 'T1' ? { id: 1 } : null));
+      slotDao.findTableByLabel.mockImplementation(async (_tx, label) => (label === 'T1' ? { id: 1, seats: 4 } : null));
 
       await service.createSlot(staff, body({
         tables: [
@@ -188,7 +188,7 @@ describe('slotService staff flows - White-Box Tests', () => {
 
       expect(db.transaction).toHaveBeenCalledTimes(1);
       expect(slotDao.createTable).toHaveBeenCalledTimes(1);
-      expect(slotDao.createTable).toHaveBeenCalledWith('mock-tx', { label: 'T2' });
+      expect(slotDao.createTable).toHaveBeenCalledWith('mock-tx', { label: 'T2', seats: 2 });
       expect(slotDao.addTableToSlot).toHaveBeenCalledWith('mock-tx', 50, 1, 4);
       expect(slotDao.addTableToSlot).toHaveBeenCalledWith('mock-tx', 50, 70, 2);
     });

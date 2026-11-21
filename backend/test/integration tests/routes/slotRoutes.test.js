@@ -79,6 +79,26 @@ describe('SlotRoutes - Integration Tests', () => {
       expect(Array.isArray(slotsList)).toBe(true);
     });
 
+    it('lists reusable time patterns and fixed tables, supports adding a table and rejects changing its capacity', async () => {
+      const catalog = await agent.get('/api/slots/catalog');
+      expect(catalog.status).toBe(200);
+      expect(catalog.body.tables).toContainEqual({ tableId: 1, tableIdentifier: 'T1', seats: 2 });
+      expect(catalog.body.timePatterns).toContainEqual({ meal: 'lunch', startTime: '12:00', endTime: '13:00' });
+      const created = await agent.post('/api/slots/tables').send({ tableIdentifier: 'Terrace 1', seats: 6 });
+      expect(created.status).toBe(201);
+      expect((await agent.post('/api/slots/tables').send({ tableIdentifier: 'Terrace 1', seats: 8 })).status).toBe(409);
+      const first = { date: '2026-11-20', meal: 'lunch', startTime: '12:00', endTime: '13:00' };
+      const valid = await agent.post('/api/slots').send({ ...first, tables: [{ tableIdentifier: 'Terrace 1', seats: 6 }] });
+      expect(valid.status).toBe(201);
+      const second = { ...first, startTime: '13:00', endTime: '14:00' };
+      const invalid = await agent.post('/api/slots').send({ ...second, tables: [{ tableIdentifier: 'Terrace 1', seats: 8 }] });
+      expect(invalid.status).toBe(409);
+      expect(invalid.body.error.code).toBe('TABLE_CAPACITY_MISMATCH');
+      expect((await agent.get('/api/slots').query({ date: first.date })).body.slots).toHaveLength(1);
+      await expect(db.query('INSERT INTO slot_tables (slot_id, table_id, seats) VALUES ($1,1,8)', [valid.body.id])).rejects.toThrow();
+      expect((await agent.post('/api/slots').send({ ...second, tables: [{ tableIdentifier: 'Terrace 1', seats: 6 }] })).status).toBe(201);
+    });
+
     it('should allow staff to retrieve a specific slot by ID', async () => {
       // Assuming slot ID 1 exists in the seed data
       const slotId = 1;

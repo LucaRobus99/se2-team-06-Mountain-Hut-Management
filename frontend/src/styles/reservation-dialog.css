@@ -1,0 +1,33 @@
+/* One confirmation-dialog theme for hiker and staff workflows.
+   Keep the approved cancellation palette and use green for positive actions. */
+.modal-dialog.eh-dialog { max-width:500px; }
+.modal-dialog.eh-dialog .modal-content {
+  background:#fffefa; color:#302d28; border:0; border-radius:1rem;
+  box-shadow:0 24px 65px #101b1b70; overflow:hidden;
+  font:.9rem/1.55 system-ui,sans-serif;
+}
+.modal-dialog.eh-dialog .modal-header {
+  display:flex; align-items:flex-start; justify-content:space-between;
+  gap:.8rem; padding:1.25rem 1.5rem; background:#304737; color:#fffefa; border:0;
+}
+.modal-dialog.eh-dialog .modal-title { font:700 clamp(1.35rem,3.8vw,1.8rem)/1.15 Georgia,serif; color:#fffefa; margin:0; }
+.eh-dialog-eyebrow { color:#e5d7b9; letter-spacing:.12em; font:700 .68rem system-ui,sans-serif; text-transform:uppercase; margin:0 0 .35rem; }
+.modal-dialog.eh-dialog .btn-close { filter:invert(1) grayscale(1); opacity:.85; margin:0; flex:none; padding:.45rem; }
+.modal-dialog.eh-dialog .modal-body { color:#666159; padding:1.35rem 1.5rem 1rem; font:.9rem/1.55 system-ui,sans-serif; }
+.modal-dialog.eh-dialog.eh-cancel-modal .modal-body { padding-bottom:1.5rem; }
+.modal-dialog.eh-dialog .modal-footer { border:0; padding:0 1.5rem 1.5rem; gap:.65rem; justify-content:flex-end; flex-wrap:wrap; }
+.modal-dialog.eh-dialog .modal-footer > * { margin:0; }
+.modal-dialog.eh-dialog .modal-footer button { min-height:44px; padding:.7rem 1rem; border-radius:.5rem; font:700 .85rem system-ui,sans-serif; }
+.modal-dialog.eh-dialog .modal-footer :is(.eh-button--outline,.staff-outline-button) { background:#fffefa; border:1px solid #c6bfb3; color:#48463e; }
+.modal-dialog.eh-dialog .modal-footer :is(.eh-button--green,.staff-primary-button) { background:#304737; color:#fff; border:1px solid #304737; }
+.modal-dialog.eh-dialog .modal-footer :is(.eh-button--outline,.staff-outline-button):hover { background:#f0ebe2; }
+.modal-dialog.eh-dialog .modal-footer :is(.eh-button--green,.staff-primary-button):hover { background:#263b2d; }
+.modal-dialog.eh-dialog .eh-split-arrangement { background:#f2eee5; color:#393126; font-weight:700; padding:.85rem 1rem; border-radius:.65rem; margin:1rem 0; }
+.modal-dialog.eh-dialog .eh-split-note { color:#666159; font-size:.85rem; margin-bottom:0; }
+.modal-dialog.eh-dialog button:focus-visible { outline:2px solid #9e7958; outline-offset:3px; }
+@media(max-width:575px) {
+  .modal-dialog.eh-dialog { margin:.75rem; }
+  .modal-dialog.eh-dialog .modal-header,.modal-dialog.eh-dialog .modal-body { padding:1rem; }
+  .modal-dialog.eh-dialog .modal-footer { padding:0 1rem 1rem; }
+  .modal-dialog.eh-dialog .modal-footer button { flex:1 1 auto; }
+}

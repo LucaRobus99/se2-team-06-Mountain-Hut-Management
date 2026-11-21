@@ -39,7 +39,7 @@
 .eh-edit-requirement { display:grid; grid-template-columns:minmax(0,1fr); gap:.6rem; min-width:0; background:#faf8f3; border:1px solid #e4dbcf; border-radius:.75rem; padding:.85rem 1rem; margin-bottom:.8rem; }
 .eh-edit-requirement-head { display:flex; align-items:center; justify-content:space-between; gap:.6rem; flex-wrap:wrap; }
 .eh-edit-requirement-head label { color:#765034; font:600 .8rem/1.4 system-ui,sans-serif; }
-.eh-edit-requirement textarea { box-sizing:border-box; display:block; width:100%; min-width:0; min-height:3.1rem; resize:vertical; background:#fffefa; border:1px solid #d3cabc; border-radius:.5rem; padding:.62rem .75rem; color:#294532; font:400 .9rem/1.5 system-ui,sans-serif; }
+.eh-edit-requirement textarea { box-sizing:border-box; display:block; width:100%; min-width:0; min-height:3.1rem; resize:vertical; background:#fffefa; border:1px solid #d3cabc; border-radius:.5rem; padding:.62rem .75rem; color:#302d28; font:400 .9rem/1.5 system-ui,sans-serif; }
 .eh-edit-requirement textarea:focus-visible,.eh-edit-allergy input:focus-visible,.eh-edit-remove:focus-visible { outline:2px solid #80583d; outline-offset:2px; }
 .eh-edit-allergy { display:inline-flex; justify-self:start; align-items:center; gap:.45rem; margin:0; padding:.35rem .55rem; border:1px solid transparent; border-radius:.4rem; color:#765034; font:600 .8rem/1.4 system-ui,sans-serif; cursor:pointer; }
 .eh-edit-allergy input { accent-color:#94503c; width:1rem; height:1rem; flex:none; margin:0; cursor:pointer; }

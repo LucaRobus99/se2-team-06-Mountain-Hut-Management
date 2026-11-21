@@ -32,6 +32,18 @@ export async function listStaffSlots(date) {
   return request(`/api/slots?${new URLSearchParams({ date })}`);
 }
 
+export function listSlotCatalog() {
+  return request('/api/slots/catalog');
+}
+
+export function createCatalogTable(tableIdentifier, seats) {
+  return request('/api/slots/tables', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tableIdentifier, seats }),
+  });
+}
+
 export async function createStaffSlot({ date, meal, startTime, endTime, tables, copyTablesFromSlotId }) {
   return request('/api/slots', {
     method: 'POST',

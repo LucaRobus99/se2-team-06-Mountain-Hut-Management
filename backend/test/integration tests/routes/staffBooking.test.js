@@ -21,7 +21,8 @@ describe('MH-07 — staff reservations and credentials', () => {
     expect((await login(hiker, 'hiker@hut.test')).status).toBe(200);
     const { rows } = await db.query("INSERT INTO slots (meal_id,date,start_time,end_time,status) VALUES (2,$1,'12:00','13:00','available') RETURNING id", [date]);
     slotId = rows[0].id;
-    await db.query('INSERT INTO slot_tables (slot_id,table_id,seats) VALUES ($1,1,2),($1,2,2)', [slotId]);
+    const second = await db.query("INSERT INTO dining_tables (label,seats) VALUES ('Second two-seat table',2) RETURNING id");
+    await db.query('INSERT INTO slot_tables (slot_id,table_id,seats) VALUES ($1,1,2),($1,$2,2)', [slotId, second.rows[0].id]);
   });
   afterEach(async () => { await db.close(); });
 
@@ -70,7 +71,8 @@ describe('MH-07 — staff reservations and credentials', () => {
     // Use a fresh slot layout with two single seats.
     const { rows } = await db.query("INSERT INTO slots (meal_id,date,start_time,end_time,status) VALUES (2,$1,'13:00','14:00','available') RETURNING id", [date]);
     const splitId = rows[0].id;
-    await db.query('INSERT INTO slot_tables (slot_id,table_id,seats) VALUES ($1,1,1),($1,2,1)', [splitId]);
+    const singles = await db.query("INSERT INTO dining_tables (label,seats) VALUES ('Single A',1),('Single B',1) RETURNING id");
+    await db.query('INSERT INTO slot_tables (slot_id,table_id,seats) VALUES ($1,$2,1),($1,$3,1)', [splitId, ...singles.rows.map(t => t.id)]);
     const rejected = await reserve({ mode: 'guest', slotId: splitId, contactName: 'Split guest', expectedSeating: 'single_table' });
     expect(rejected.status).toBe(409);
     expect(rejected.body.error.code).toBe('SEATING_CHANGED');

@@ -34,7 +34,7 @@ describe('MH-06 — change a booking', () => {
     })
       .its('body.id').then(original => {
         api('/slots', { method: 'POST', body: { date, meal: 'lunch', startTime: '13:00', endTime: '14:00',
-          tables: [{ tableIdentifier: 'E2E table', seats: 4 }] } }).its('body.id').then(target => {
+          tables: [{ tableIdentifier: 'E2E table four seats', seats: 4 }] } }).its('body.id').then(target => {
           api('/auth/logout', { method: 'POST' });
           api('/auth/register', { method: 'POST', body: {
             name: 'E2E Hiker', email, phone: '+39012345678', password: 'password',

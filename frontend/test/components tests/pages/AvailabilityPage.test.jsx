@@ -73,6 +73,21 @@ describe('AvailabilityPage Component Integration Tests', () => {
     expect(screen.getAllByText(/available for your group/i)[0]).toBeInTheDocument();
   });
 
+  it('refreshes after the first search when the guest count changes, without selecting a slot', async () => {
+    useAuth.mockReturnValue({ user: null });
+    getAvailableSlots.mockImplementation(async ({ date, meal, partySize }) => ({ date, meal, partySize, slots: [{ id: 101, startTime: '12:30', availableSeats: 8 }] }));
+    const user = userEvent.setup();
+    render(<MemoryRouter><AvailabilityPage /></MemoryRouter>);
+    expect(getAvailableSlots).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /search/i }));
+    await screen.findByRole('button', { name: /12:30/i });
+    expect(screen.getByRole('button', { name: /12:30/i })).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.change(screen.getByLabelText(/guests/i), { target: { value: '4' } });
+    await waitFor(() => expect(getAvailableSlots).toHaveBeenCalledTimes(2));
+    expect(getAvailableSlots).toHaveBeenLastCalledWith(expect.objectContaining({ partySize: 4 }));
+    expect(await screen.findByRole('button', { name: /12:30/i })).toHaveAttribute('aria-pressed', 'false');
+  });
+
   it('should handle slot selection and display seating details panel', async () => {
     useAuth.mockReturnValue({ user: { id: 1, role: 'hiker' } });
     const mockSlotsResponse = {

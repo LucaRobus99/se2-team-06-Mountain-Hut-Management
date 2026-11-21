@@ -13,7 +13,7 @@ A web application for managing meals, table availability and reservations at a s
 ## Implemented functionality
 
 - **MH-01 — Book a table:** authenticated hikers select a meal time and party size. The backend assigns tables and seats inside a transaction, preferring one table when possible.
-- **MH-02 — Define slot capacity:** staff can create meal slots and configure the tables and seats available for each one.
+- **MH-02 — Define slot capacity:** staff select reusable service times (or define new ones) and choose physical tables with fixed seats; each slot has its own subset of tables (#47).
 - **MH-03 — Receive confirmation:** booking confirmation is displayed immediately; a confirmation email is attempted when Mailgun is configured. Email delivery failures do not cancel confirmed bookings.
 - **MH-04 — Check availability:** public search by date, meal and number of guests; eligible time slots show their availability.
 - **MH-05 — Provide party requirements:** hikers can enter separate dietary/allergy requirements, including the number of affected guests, when confirming a booking. The confirmation page shows the saved information.
@@ -49,7 +49,7 @@ Open **http://localhost:5173**. The backend listens on **http://localhost:8080**
 
 Use `npm run dev` inside `backend/` for auto-restart during backend development. `npm start` is preferable for manual booking/account tests because a watch-mode restart also loses the in-memory session.
 
-Without `DATABASE_URL`, the backend uses an **embedded PostgreSQL (PGlite)** stored in `backend/database/pglite`, so no database server is needed. On first startup it creates the schema and demo records. Existing databases are **not migrated**: after a schema change, reset with `npm run db:reset` (deletes your local data).
+Without `DATABASE_URL`, the backend uses an **embedded PostgreSQL (PGlite)** stored in `backend/database/pglite`, so no database server is needed. On first startup it creates the schema and demo records. The MH-02 fixed-capacity update migrates existing databases only when every table label has exactly one historical capacity; inconsistent legacy data is rejected without changing bookings. Back up before updating. For a clean demo use a new Compose project and volume rather than deleting existing data.
 
 ## Run with Docker
 

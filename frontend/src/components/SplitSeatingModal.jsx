@@ -2,9 +2,9 @@ import { Modal } from 'react-bootstrap';
 
 export default function SplitSeatingModal({ show, seating, onCancel, onContinue, busy = false }) {
   return (
-    <Modal show={show} onHide={onCancel} centered backdrop="static" keyboard={!busy} aria-labelledby="split-seating-title" dialogClassName="eh-split-modal">
+    <Modal show={show} onHide={() => { if (!busy) onCancel(); }} centered scrollable backdrop="static" keyboard={!busy} aria-labelledby="split-seating-title" dialogClassName="eh-split-modal eh-dialog" backdropClassName="eh-cancel-backdrop">
       <Modal.Header closeButton={!busy}>
-        <Modal.Title id="split-seating-title">Seating Details</Modal.Title>
+        <div><p className="eh-dialog-eyebrow">Your reservation</p><Modal.Title as="h2" id="split-seating-title">Seating Details</Modal.Title></div>
       </Modal.Header>
       <Modal.Body>
         <p>There isn't one table large enough for everyone. You'll be seated across multiple tables.</p>

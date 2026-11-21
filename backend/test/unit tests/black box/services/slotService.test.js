@@ -164,7 +164,7 @@ describe('slotService - Black-Box Tests', () => {
       });
       slotDao.listByDate.mockResolvedValue([]);
       slotDao.createSlot.mockResolvedValue(105);
-      slotDao.findTableByLabel.mockResolvedValue({ id: 1 });
+      slotDao.findTableByLabel.mockResolvedValue({ id: 1, seats: 4 });
       slotDao.addTableToSlot.mockResolvedValue();
       
       slotDao.findById.mockResolvedValue({

@@ -26,10 +26,8 @@ const TEMPLATE = [
   { meal: 'dinner', start: '20:00', end: '21:00' },
 ];
 
-// Capacity is defined per slot, not globally (MH-02).
-const SEATS_BY_LABEL = new Map([
-  ['T1', 2], ['T2', 4], ['T3', 4], ['T4', 6], ['T5', 8],
-]);
+// Select the demo tables, using the capacity from their catalog records (#47).
+const DEMO_TABLES = new Set(['T1', 'T2', 'T3', 'T4', 'T5']);
 
 function tomorrowAtHut() {
   const hutToday = new Intl.DateTimeFormat('sv-SE', {
@@ -78,8 +76,8 @@ async function populate(db, { from, to, dryRun }) {
   for (const item of TEMPLATE) {
     if (!mealIds.has(item.meal)) throw new Error(`Missing meal '${item.meal}' in database. No changes made.`);
   }
-  const tables = (await db.query('SELECT id, label FROM dining_tables ORDER BY id')).rows
-    .filter((table) => SEATS_BY_LABEL.has(table.label));
+  const tables = (await db.query('SELECT id, label, seats FROM dining_tables ORDER BY id')).rows
+    .filter((table) => DEMO_TABLES.has(table.label));
   if (!tables.length) throw new Error('No T1–T5 dining tables found. No changes made.');
 
   const result = { days: 0, added: 0, skipped: 0, tables: tables.length };
@@ -102,7 +100,7 @@ async function populate(db, { from, to, dryRun }) {
         for (const table of tables) {
           await db.query(
             'INSERT INTO slot_tables (slot_id, table_id, seats) VALUES ($1, $2, $3)',
-            [slot.id, table.id, SEATS_BY_LABEL.get(table.label)]
+            [slot.id, table.id, table.seats]
           );
         }
       }

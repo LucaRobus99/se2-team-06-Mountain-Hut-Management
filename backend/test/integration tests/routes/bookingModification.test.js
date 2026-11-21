@@ -18,7 +18,8 @@ describe('MH-06 — modification availability and transactional updates', () => 
       [date, start, end, status]
     );
     const id = rows[0].id;
-    await db.query('INSERT INTO slot_tables (slot_id, table_id, seats) VALUES ($1, 1, $2)', [id, capacity]);
+    const tableId = capacity === 4 ? 2 : 4;
+    await db.query('INSERT INTO slot_tables (slot_id, table_id, seats) VALUES ($1, $2, $3)', [id, tableId, capacity]);
     return id;
   }
   async function create(agent, slotId, partySize, dietary = []) {
@@ -87,13 +88,13 @@ describe('MH-06 — modification availability and transactional updates', () => 
   });
 
   it('reallocates even requirements-only changes, clearing requirements when requested', async () => {
-    // The booking initially occupies two places at T1 (capacity four).
-    expect(booking.seatAssignments[0].tableId).toBe(1);
-    await db.query('INSERT INTO slot_tables (slot_id, table_id, seats) VALUES ($1, 2, 2)', [original]);
+    // The booking initially occupies two places at T2 (capacity four).
+    expect(booking.seatAssignments[0].tableId).toBe(2);
+    await db.query('INSERT INTO slot_tables (slot_id, table_id, seats) VALUES ($1, 1, 2)', [original]);
     const updated = await change(owner, { requirements: [] });
     expect(updated.status).toBe(200);
     expect(updated.body).toMatchObject({ id: booking.id, partySize: 2, requirements: [],
-      seatAssignments: [{ tableId: 2, seats: 2 }],
+      seatAssignments: [{ tableId: 1, seats: 2 }],
     });
     expect(updated.body.confirmationEmail).toHaveProperty('status');
     expect(sendBookingEmail).toHaveBeenCalledWith('updated', booking.email,
@@ -119,7 +120,8 @@ describe('MH-06 — modification availability and transactional updates', () => 
       fit: 'single_table', seatAssignments: [{ seats: 4 }],
     });
     await create(other, alternative, 5);
-    await db.query('INSERT INTO slot_tables (slot_id, table_id, seats) VALUES ($1, 2, 3)', [alternative]);
+    const added = await db.query("INSERT INTO dining_tables (label, seats) VALUES ('Three seat test table', 3) RETURNING id");
+    await db.query('INSERT INTO slot_tables (slot_id, table_id, seats) VALUES ($1, $2, 3)', [alternative, added.rows[0].id]);
     const next = await preview(owner, 4);
     const split = next.body.slots.find(s => s.id === alternative);
     expect(split.fit).toBe('split');
@@ -144,7 +146,7 @@ describe('MH-06 — modification availability and transactional updates', () => 
       'INSERT INTO bookings (slot_id, hiker_id, party_size, status, contact_name) VALUES ($1, $2, 1, $3, $4) RETURNING id',
       [pastSlot, booking.hikerId, 'confirmed', 'Past guest']
     );
-    await db.query('INSERT INTO booking_seats (booking_id, table_id, seats) VALUES ($1, 1, 1)', [rows[0].id]);
+    await db.query('INSERT INTO booking_seats (booking_id, table_id, seats) VALUES ($1, 2, 1)', [rows[0].id]);
     const cancelledSlot = await slot('2027-06-16', '12:00', '13:00', 4);
     const cancelled = await create(owner, cancelledSlot, 1);
     await db.query("UPDATE bookings SET status = 'cancelled' WHERE id = $1", [cancelled.id]);

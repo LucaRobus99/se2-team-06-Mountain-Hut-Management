@@ -2,12 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import SlotManagementPage from '../../src/pages/SlotManagementPage.jsx';
-import { createStaffSlot, listStaffSlots } from '../../src/api/slots.js';
+import { createStaffSlot, listStaffSlots, listSlotCatalog } from '../../src/api/slots.js';
 
 vi.mock('../../src/api/slots.js', async (importOriginal) => ({
   ...(await importOriginal()),
   createStaffSlot: vi.fn(),
   listStaffSlots: vi.fn(),
+  listSlotCatalog: vi.fn(),
 }));
 
 const createdSlot = {
@@ -18,6 +19,7 @@ const createdSlot = {
 async function openConfirmation(user) {
   render(<SlotManagementPage />);
   await screen.findByText('No slots for this date');
+  for (const checkbox of await screen.findAllByRole('checkbox')) await user.click(checkbox);
   await user.click(screen.getByRole('button', { name: /create slot/i }));
   return screen.findByRole('dialog');
 }
@@ -27,6 +29,7 @@ describe('SlotManagementPage confirmation popup', () => {
     vi.clearAllMocks();
     Element.prototype.scrollIntoView = vi.fn();
     listStaffSlots.mockResolvedValue({ slots: [] });
+    listSlotCatalog.mockResolvedValue({ tables: createdSlot.tables, timePatterns: [] });
   });
 
   it('shows a summary of the slot without calling the API', async () => {
@@ -40,16 +43,16 @@ describe('SlotManagementPage confirmation popup', () => {
     expect(createStaffSlot).not.toHaveBeenCalled();
   });
 
-  it('does not open the popup when the form is invalid', async () => {
+  it('does not silently select any tables', async () => {
     const user = userEvent.setup();
     render(<SlotManagementPage />);
     await screen.findByText('No slots for this date');
 
-    await user.clear(screen.getByLabelText('Table identifier', { selector: '#table-name-1' }));
+    for (const checkbox of await screen.findAllByRole('checkbox')) expect(checkbox).not.toBeChecked();
     await user.click(screen.getByRole('button', { name: /create slot/i }));
 
-    expect(await screen.findByText('Enter a table identifier.')).toBeInTheDocument();
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(within(await screen.findByRole('dialog')).getByText('0 tables · 0 seats')).toBeInTheDocument();
+    expect(createStaffSlot).not.toHaveBeenCalled();
   });
 
   it('never calls the API when cancelled', async () => {
