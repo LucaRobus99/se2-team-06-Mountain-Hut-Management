@@ -1,5 +1,15 @@
+const API_URL = 'http://localhost:8080';
+
 describe('Mountain Hut - Booking Flow (Guest to Login)', () => {
-  
+
+  beforeEach(() => {
+    cy.request('POST', `${API_URL}/api/test/reset`);
+  });
+
+  afterEach(() => {
+    cy.request('POST', `${API_URL}/api/test/reset`);
+  });
+
   it('should allow a guest to search availability, select a slot, and redirect to login', () => {
     // 1. Visit the availability page
     cy.visit('http://localhost:5173/availability');
@@ -10,13 +20,18 @@ describe('Mountain Hut - Booking Flow (Guest to Login)', () => {
     // 3. Click the custom date picker using its ID to open the calendar popup
     cy.get('#availability-date').click();
 
-    // 4. Click on the target day in the open calendar popup (day 15)
-    cy.get('.react-datepicker__day, .calendar-day, td, button').contains('15').click();
+    // 4. Advance 4 months (Nov 2026 -> Mar 2027) and pick day 15
+    for (let i = 0; i < 4; i++) {
+      cy.get('button[aria-label*="Next month"], button.ea-calendar-next, .react-datepicker__navigation--next')
+        .first()
+        .click();
+    }
+    cy.get('button.ea-calendar-day:not([disabled])').contains(/^15$/).click();
 
     // 5. Select the meal (lunch) - open the custom dropdown and click the option
     cy.get('#availability-meal', { timeout: 10000 }).should('be.visible').click();
     cy.contains('div, span, li, option', /^lunch$/i).click();
-    
+
     // 6. Select the number of guests (2) - handle native select or custom input box
     cy.get('select#availability-guests, input#availability-guests, #availability-guests', { timeout: 10000 })
       .should('be.visible')

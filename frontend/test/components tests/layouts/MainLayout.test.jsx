@@ -99,4 +99,50 @@ describe('MainLayout Component Integration Tests', () => {
     expect(mainElement).toHaveClass('py-md-5');
   });
 
+  it('should render full-width layout on dynamic /book/confirmation/:bookingId routes', () => {
+    render(
+      <MemoryRouter initialEntries={['/book/confirmation/42']}>
+        <Routes>
+          <Route element={<MainLayout />}>
+            <Route
+              path="/book/confirmation/:bookingId"
+              element={<div data-testid="confirmation-outlet">Confirmation Content</div>}
+            />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('confirmation-outlet')).toBeInTheDocument();
+
+    // Verify dynamic confirmation routes trigger the startsWith('/book/confirmation/') full-width branch
+    const mainElement = screen.getByTestId('confirmation-outlet').parentElement;
+    expect(mainElement).toHaveClass('eh-home-main');
+    expect(mainElement).not.toHaveClass('py-4');
+  });
+
+  it('should render correct footer links and current copyright year', () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route element={<MainLayout />}>
+            <Route path="/" element={<div>Home</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    // Verify directions anchor link and contact links
+    expect(screen.getByRole('link', { name: /directions/i })).toHaveAttribute('href', '/find-us#getting-here');
+    expect(screen.getByRole('link', { name: /\+39 366 364 9009/i })).toHaveAttribute('href', 'tel:+393663649009');
+    expect(screen.getByRole('link', { name: /info@edelweisshut\.example/i })).toHaveAttribute(
+      'href',
+      'mailto:info@edelweisshut.example'
+    );
+
+    // Verify dynamic copyright year
+    const currentYear = new Date().getFullYear();
+    expect(screen.getByText(new RegExp(`© ${currentYear} Edelweiss Hut`))).toBeInTheDocument();
+  });
+
 });

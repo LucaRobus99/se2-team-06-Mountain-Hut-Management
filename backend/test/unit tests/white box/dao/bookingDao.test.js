@@ -79,6 +79,14 @@ describe('bookingDao - White-Box Tests', () => {
 
       await expect(dao.findById(404)).resolves.toBeNull();
     });
+
+    it('should use the transaction executor in findById when passed first', async () => {
+      tx.query.mockResolvedValue({ rows: [{ id: 5 }] });
+
+      await expect(dao.findById(tx, 5)).resolves.toEqual({ id: 5 });
+      expect(tx.query).toHaveBeenCalledTimes(1);
+      expect(db.query).not.toHaveBeenCalled();
+    });
   });
 
   describe('update & updateStatus & deleteSeats', () => {
@@ -91,6 +99,14 @@ describe('bookingDao - White-Box Tests', () => {
       const [sql, params] = db.query.mock.calls[0];
       expect(sql).toContain('UPDATE bookings SET slot_id = $2, party_size = $3 WHERE id = $1');
       expect(params).toEqual([10, 4, 6]);
+    });
+
+    it('should default booking to an empty object when omitted in update', async () => {
+      db.query.mockResolvedValue({ rows: [] });
+
+      await dao.update(10);
+
+      expect(db.query.mock.calls[0][1]).toEqual([10, undefined, undefined]);
     });
 
     it('should update the booking status', async () => {
@@ -176,6 +192,12 @@ describe('bookingDao - White-Box Tests', () => {
       expect(db.query.mock.calls[1][1]).toEqual([12, 'None', 0]);
     });
 
+    it('should not execute queries when insertRequirements receives an empty array', async () => {
+      await dao.insertRequirements(12, []);
+
+      expect(db.query).not.toHaveBeenCalled();
+    });
+
     it('should replace requirements by deleting old ones and inserting new ones in transaction', async () => {
       tx.query.mockResolvedValue({ rows: [] });
 
@@ -186,6 +208,16 @@ describe('bookingDao - White-Box Tests', () => {
       expect(tx.query.mock.calls[0][1]).toEqual([30]);
       expect(tx.query.mock.calls[1][0]).toContain('INSERT INTO booking_requirements');
       expect(tx.query.mock.calls[1][1]).toEqual([30, 'Lactose free', 1]);
+    });
+
+    it('should clear requirements when replaceRequirements receives an empty array', async () => {
+      tx.query.mockResolvedValue({ rows: [] });
+
+      await dao.replaceRequirements(tx, 30, []);
+
+      expect(tx.query).toHaveBeenCalledTimes(1);
+      expect(tx.query.mock.calls[0][0]).toContain('DELETE FROM booking_requirements WHERE booking_id = $1');
+      expect(tx.query.mock.calls[0][1]).toEqual([30]);
     });
 
     it('should fetch requirements successfully with boolean mapping', async () => {
@@ -224,6 +256,39 @@ describe('bookingDao - White-Box Tests', () => {
       expect(db.query).toHaveBeenCalledTimes(1);
       expect(result.get(1)).toEqual([{ description: 'Nuts', allergies: true }]);
       expect(result.get(2)).toEqual([]);
+    });
+
+    it('should safely ignore rows whose bookingId is not in the requested ids map', async () => {
+      db.query.mockResolvedValue({
+        rows: [{ bookingId: 999, description: 'Orphan', allergies: 0 }],
+      });
+
+      const result = await dao.getRequirementsByBookingIds([1]);
+
+      expect(result.get(1)).toEqual([]);
+      expect(result.has(999)).toBe(false);
+    });
+  });
+
+  describe('cancelIfConfirmed', () => {
+    it('should return true when exactly one row is updated from confirmed to cancelled', async () => {
+      db.query.mockResolvedValue({ rowCount: 1 });
+
+      const success = await dao.cancelIfConfirmed(12);
+
+      expect(success).toBe(true);
+      const [sql, params] = db.query.mock.calls[0];
+      expect(sql).toContain("UPDATE bookings SET status = 'cancelled'");
+      expect(sql).toContain("status = 'confirmed'");
+      expect(params).toEqual([12]);
+    });
+
+    it('should return false when no rows are updated (e.g., already cancelled)', async () => {
+      db.query.mockResolvedValue({ rowCount: 0 });
+
+      const success = await dao.cancelIfConfirmed(12);
+
+      expect(success).toBe(false);
     });
   });
 });

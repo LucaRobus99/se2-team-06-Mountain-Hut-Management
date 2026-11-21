@@ -14,5 +14,16 @@ describe('roles - White-Box Tests', () => {
     expect(() => isStaff(undefined)).not.toThrow();
     expect(() => isStaff({})).not.toThrow();
   });
+it('should evaluate isStaff correctly based on internal STAFF_ROLES array inclusion', () => {
+    // Ramo true: ogni ruolo presente in STAFF_ROLES deve restituire true
+    STAFF_ROLES.forEach((role) => {
+      expect(isStaff({ role })).toBe(true);
+    });
 
+    // Ramo false: ruoli non staff o proprietà role non valide
+    expect(isStaff({ role: 'hiker' })).toBe(false);
+    expect(isStaff({ role: null })).toBe(false);
+    expect(isStaff({ role: 123 })).toBe(false);
+  });
+  
 });

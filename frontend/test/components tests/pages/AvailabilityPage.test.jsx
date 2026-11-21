@@ -298,4 +298,132 @@ describe('AvailabilityPage Component Integration Tests', () => {
     expect(screen.getByText('Login Page')).toBeInTheDocument();
   });
 
+  it('renders empty state when no slots are available and resets results when a field changes', async () => {
+    useAuth.mockReturnValue({ user: null });
+    getAvailableSlots.mockResolvedValueOnce({
+      date: '2026-11-15',
+      meal: 'lunch',
+      partySize: 1,
+      slots: [],
+    });
+
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <AvailabilityPage />
+      </MemoryRouter>
+    );
+
+    await user.click(screen.getByRole('button', { name: /search/i }));
+
+    expect(await screen.findByText(/no tables available for this search/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 guest/i)).toBeInTheDocument();
+
+    // Changing guests should clear previous search results
+    const guestsInput = screen.getByLabelText(/guests/i);
+    fireEvent.change(guestsInput, { target: { value: '3' } });
+
+    expect(screen.queryByText(/no tables available for this search/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/your table is one search away/i)).toBeInTheDocument();
+  });
+
+  it('navigates to /book when a hiker clicks continue to booking', async () => {
+    useAuth.mockReturnValue({ user: { id: 1, role: 'hiker' } });
+    getAvailableSlots.mockResolvedValueOnce({
+      date: '2026-11-15',
+      meal: 'lunch',
+      partySize: 2,
+      slots: [{ id: 101, startTime: '12:30', availableSeats: 6 }],
+    });
+    getSlotSeating.mockResolvedValueOnce({
+      fit: 'single_table',
+      seatAssignments: [{ tableLabel: 'Table 4', seats: 2 }],
+    });
+
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={['/availability']}>
+        <Routes>
+          <Route path="/availability" element={<AvailabilityPage />} />
+          <Route path="/book" element={<div>Booking Page</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await user.click(screen.getByRole('button', { name: /search/i }));
+    await user.click(await screen.findByRole('button', { name: /12:30/i }));
+    await user.click(await screen.findByRole('button', { name: /continue to booking/i }));
+
+    expect(screen.getByText('Booking Page')).toBeInTheDocument();
+  });
+
+  it('allows cancelling split seating modal without selecting the slot', async () => {
+    useAuth.mockReturnValue({ user: { id: 1, role: 'hiker' } });
+    getAvailableSlots.mockResolvedValueOnce({
+      date: '2026-11-15',
+      meal: 'lunch',
+      partySize: 6,
+      slots: [{ id: 103, startTime: '13:00', availableSeats: 6 }],
+    });
+    getSlotSeating.mockResolvedValueOnce({
+      requiresConfirmation: true,
+      fit: 'split_table',
+      seatAssignments: [{ tableLabel: 'Table 1', seats: 4 }, { tableLabel: 'Table 2', seats: 2 }],
+    });
+
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <AvailabilityPage />
+      </MemoryRouter>
+    );
+
+    await user.click(screen.getByRole('button', { name: /search/i }));
+    await user.click(await screen.findByRole('button', { name: /13:00/i }));
+    await screen.findByText(/seating details/i);
+
+    await user.click(screen.getByRole('button', { name: /choose another time/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/seating details/i)).not.toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: /continue to booking/i })).not.toBeInTheDocument();
+  });
+
+  it('displays an error alert when seating lookup fails and renders initial location bookingNotice', async () => {
+    useAuth.mockReturnValue({ user: { id: 1, role: 'hiker' } });
+    getAvailableSlots.mockResolvedValueOnce({
+      date: '2026-11-15',
+      meal: 'lunch',
+      partySize: 2,
+      slots: [{ id: 101, startTime: '12:30', availableSeats: 6 }],
+    });
+    getSlotSeating.mockRejectedValueOnce(new Error('Seating service unavailable'));
+
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: '/availability',
+            state: { bookingNotice: 'Previous booking expired', bookingNoticeType: 'danger' },
+          },
+        ]}
+      >
+        <AvailabilityPage />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Previous booking expired')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /search/i }));
+    await user.click(await screen.findByRole('button', { name: /12:30/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/seating service unavailable/i);
+  });
+
 });

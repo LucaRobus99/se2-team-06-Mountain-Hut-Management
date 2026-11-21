@@ -1,7 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import { sanitizeUser, configurePassport } from '../../../../src/auth/passport.js';
+import { verifyPassword } from '../../../../src/services/password.js';
 
-describe('passport - Black-Box Tests', () => {
+// Mock password service at the top level module scope
+vi.mock('../../../../src/services/password.js', () => ({
+  verifyPassword: vi.fn(),
+}));
+
+describe('passport - Black-Box and White-Box Tests', () => {
 
   describe('sanitizeUser', () => {
     
@@ -139,6 +145,127 @@ describe('passport - Black-Box Tests', () => {
       expect(typeof passportInstance.use).toBe('function');
       expect(typeof passportInstance.serializeUser).toBe('function');
       expect(typeof passportInstance.deserializeUser).toBe('function');
+    });
+
+  });
+
+  describe('LocalStrategy and Session (De)serialization Execution', () => {
+
+    it('should successfully authenticate user with valid credentials in LocalStrategy', async () => {
+      const userDao = {
+        findByEmail: vi.fn().mockResolvedValue({
+          id: 1,
+          email: 'hiker@hut.test',
+          name: 'Mario Rossi',
+          role: 'hiker',
+          password_hash: 'hashed_password',
+        }),
+        findById: vi.fn(),
+      };
+
+      // Configure mock verifyPassword to return true for valid password
+      verifyPassword.mockReturnValue(true);
+
+      const passport = configurePassport({ userDao });
+      
+      const strategy = passport._strategy('local');
+      expect(strategy).toBeDefined();
+
+      const done = vi.fn();
+      await strategy._verify('hiker@hut.test', 'correct_password', done);
+
+      expect(userDao.findByEmail).toHaveBeenCalledWith('hiker@hut.test');
+      expect(done).toHaveBeenCalledWith(null, expect.objectContaining({ id: 1, email: 'hiker@hut.test' }));
+    });
+
+    it('should fail authentication in LocalStrategy if user is not found or password is invalid', async () => {
+      const userDao = {
+        findByEmail: vi.fn().mockResolvedValue(null),
+        findById: vi.fn(),
+      };
+
+      const passport = configurePassport({ userDao });
+      const strategy = passport._strategy('local');
+
+      const done = vi.fn();
+      await strategy._verify('unknown@hut.test', 'wrong_password', done);
+
+      expect(done).toHaveBeenCalledWith(null, false, { message: 'Invalid email or password.' });
+    });
+
+    it('should catch database errors during LocalStrategy verification and pass error to done', async () => {
+      const dbError = new Error('Database connection lost');
+      const userDao = {
+        findByEmail: vi.fn().mockRejectedValue(dbError),
+        findById: vi.fn(),
+      };
+
+      const passport = configurePassport({ userDao });
+      const strategy = passport._strategy('local');
+
+      const done = vi.fn();
+      await strategy._verify('hiker@hut.test', 'password', done);
+
+      expect(done).toHaveBeenCalledWith(dbError);
+    });
+
+    it('should correctly serialize user into user.id', () => {
+      const passport = configurePassport({ userDao: {} });
+      const done = vi.fn();
+
+      const serializeFn = passport._serializers[0];
+      serializeFn({ id: 42, email: 'test@hut.test' }, done);
+
+      expect(done).toHaveBeenCalledWith(null, 42);
+    });
+
+    it('should correctly deserialize user by ID from userDao', async () => {
+      const userDao = {
+        findById: vi.fn().mockResolvedValue({
+          id: 1,
+          email: 'hiker@hut.test',
+          name: 'Mario Rossi',
+          role: 'hiker',
+        }),
+      };
+
+      const passport = configurePassport({ userDao });
+      const done = vi.fn();
+
+      const deserializeFn = passport._deserializers[0];
+      await deserializeFn(1, done);
+
+      expect(userDao.findById).toHaveBeenCalledWith(1);
+      expect(done).toHaveBeenCalledWith(null, expect.objectContaining({ id: 1, email: 'hiker@hut.test' }));
+    });
+
+    it('should return false during deserialization if user is not found in database', async () => {
+      const userDao = {
+        findById: vi.fn().mockResolvedValue(null),
+      };
+
+      const passport = configurePassport({ userDao });
+      const done = vi.fn();
+
+      const deserializeFn = passport._deserializers[0];
+      await deserializeFn(999, done);
+
+      expect(done).toHaveBeenCalledWith(null, false);
+    });
+
+    it('should handle errors during deserialization gracefully', async () => {
+      const dbError = new Error('DB error on findById');
+      const userDao = {
+        findById: vi.fn().mockRejectedValue(dbError),
+      };
+
+      const passport = configurePassport({ userDao });
+      const done = vi.fn();
+
+      const deserializeFn = passport._deserializers[0];
+      await deserializeFn(1, done);
+
+      expect(done).toHaveBeenCalledWith(dbError);
     });
 
   });

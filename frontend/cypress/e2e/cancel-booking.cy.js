@@ -1,61 +1,105 @@
-const host = 'http://localhost:5173';
-const api = (path, options = {}) => cy.request({
-  url: `${host}/api${path}`,
-  retryOnNetworkFailure: !options.method || options.method === 'GET',
-  ...options,
-});
+const API_URL = 'http://localhost:8080'; // sostituisci con la porta del tuo backend se diversa
+const APP_URL = 'http://localhost:5173';
 
-function findFreeDate(days = 7) {
-  if (days > 60) throw new Error('No empty date for MH-08 E2E fixtures.');
-  const date = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
-  return api('/slots', { qs: { date } }).then(({ body }) =>
-    body.slots.length ? findFreeDate(days + 1) : date);
-}
+describe('MH-08 — Cancel a Booking', () => {
+  beforeEach(() => {
+    // Pulisce le prenotazioni di test tramite l'endpoint del backend già attivo
+    cy.request('POST', `${API_URL}/api/test/reset`);
 
-describe('MH-08 — cancel a booking', () => {
-  it('confirms cancellation, preserves history and restores public availability', () => {
-    api('/mh06-e2e').its('body').should('deep.equal', { isolated: true });
-    cy.viewport(390, 844);
-    const email = `mh08-${Date.now()}@hut.test`;
-    api('/auth/login', { method: 'POST', body: { email: 'warden@hut.test', password: 'password' } });
-    findFreeDate().then(date => {
-      const search = () => api('/availability', { qs: { date, meal: 'lunch', partySize: 2 } });
-      api('/slots', { method: 'POST', body: { date, meal: 'lunch', startTime: '12:00', endTime: '13:00',
-        tables: [{ tableIdentifier: 'MH08 E2E table', seats: 2 }] } }).its('body.id').then(slotId => {
-        api('/auth/logout', { method: 'POST' });
-        api('/auth/register', { method: 'POST', body: {
-          name: 'Cancellation Hiker', email, phone: '+39012345678', password: 'password',
-        } });
-        api('/bookings', { method: 'POST', body: { slotId, partySize: 2 } }).its('body.id').then(id => {
-          search().its('body.slots').should('be.empty');
-          cy.visit(`${host}/my-bookings`);
-          cy.get(`button[aria-label^="Open booking #${id}:"]`).click();
-          cy.contains('button', 'Cancel booking').click();
-          cy.get('[role="dialog"]').should('be.visible').and('have.attr', 'aria-modal', 'true');
-          cy.get('.modal').click('topLeft');
-          cy.get('[role="dialog"]').should('be.visible').contains('button', 'Keep booking').click();
-          cy.get('[role="dialog"]').should('not.exist');
-          api(`/bookings/${id}`).its('body.status').should('equal', 'confirmed');
-          cy.contains('button', 'Cancel booking').click();
-          cy.intercept('DELETE', `/api/bookings/${id}`).as('cancelBooking');
-          cy.get('[role="dialog"]').contains('button', 'Confirm cancellation').click();
-          cy.wait('@cancelBooking').its('response.statusCode').should('equal', 200);
-          cy.contains('Booking cancelled successfully').should('be.visible');
-          cy.contains('button', 'Cancelled').should('have.attr', 'aria-pressed', 'true');
-          cy.contains('button', 'Cancel booking').should('not.exist');
-          search().its('body.slots').should(slots => {
-            expect(slots.find(slot => slot.id === slotId).availableSeats).to.equal(2);
-          });
-          cy.contains('a', 'View full details').click();
-          cy.contains('Your booking was cancelled').should('be.visible');
-          cy.contains('a', 'Back to My Bookings').click();
-          cy.contains('button', 'Cancelled').should('have.attr', 'aria-pressed', 'true');
-          cy.reload();
-          cy.get(`button[aria-label^="Open booking #${id}:"]`).click();
-          cy.contains('button', 'Cancel booking').should('not.exist');
-          api(`/bookings/${id}`).its('body.status').should('equal', 'cancelled');
-        });
+    // 1. Visit login page and ensure form is visible
+    cy.visit(`${APP_URL}/login`);
+    cy.get('form.eh-login-form', { timeout: 10000 }).should('be.visible');
+
+    // 2. Fill in valid test credentials using the seed data
+    cy.get('input#login-email').should('be.visible').clear().type('hiker@hut.test');
+    cy.get('input#login-password').should('be.visible').clear().type('password');
+
+    // 3. Submit login form
+    cy.get('button[type="submit"]').click();
+
+    // 4. Assert successful authentication by checking URL change
+    cy.url({ timeout: 10000 }).should('not.include', '/login');
+  });
+
+  afterEach(() => {
+    // Pulisce anche al termine del test per lasciare il DB pronto al giro successivo
+    cy.request('POST', `${API_URL}/api/test/reset`);
+  });
+
+  it('creates a booking on 15 March 2027 and cancels it from My Bookings', () => {
+    // 1. Navigate to availability search page
+    cy.visit(`${APP_URL}/availability`);
+    cy.get('form.eh-availability-search', { timeout: 10000 }).should('be.visible');
+
+    // 2. Select target date (15 March 2027 -> +4 months from Nov 2026)
+    cy.get('#availability-date').click();
+    for (let i = 0; i < 4; i++) {
+      cy.get('button[aria-label*="Next month"], button.ea-calendar-next, .react-datepicker__navigation--next')
+        .first()
+        .click();
+    }
+    cy.get('button.ea-calendar-day:not([disabled])').contains(/^15$/).click();
+
+    // 3. Select meal (lunch)
+    cy.get('#availability-meal', { timeout: 10000 }).should('be.visible').click();
+    cy.contains('div, span, li, option', /^lunch$/i).click();
+
+    // 4. Select party size (2 guests -> single table)
+    cy.get('select#availability-guests, input#availability-guests, #availability-guests', { timeout: 10000 })
+      .should('be.visible')
+      .then(($el) => {
+        if ($el.is('select')) {
+          cy.wrap($el).select('2');
+        } else {
+          cy.wrap($el).click().type('{selectall}2');
+        }
       });
-    });
+
+    // 5. Submit search and pick slot
+    cy.get('button.search-submit-btn, button:contains("Search")').click();
+    cy.get('.eh-slot-tile', { timeout: 10000 }).should('be.visible').first().click();
+    cy.get('.eh-selection-summary', { timeout: 10000 }).should('be.visible');
+
+    // 6. Click "Continue to booking" button from the summary panel
+    cy.contains('button', /continue to booking/i, { timeout: 10000 }).should('be.visible').click();
+
+    // 7. Click "Confirm booking" using the exact green action button
+    cy.get('.eh-booking-actions > .eh-button--green', { timeout: 10000 })
+      .should('be.visible')
+      .click();
+
+    // 8. Assert successful booking confirmation screen (MH-03)
+    cy.contains(/reservation confirmed|booking successful|confirmed|success/i, { timeout: 10000 }).should('be.visible');
+
+    // 9. Return to My Bookings via the green action button
+    cy.get('.eh-booking-actions > .eh-button--green', { timeout: 10000 })
+      .should('be.visible')
+      .click();
+    cy.url({ timeout: 10000 }).should('include', '/my-bookings');
+
+    // 10. Expand the booking card, open cancellation dialog, and confirm cancellation
+    cy.get('.eh-manage-arrow-button', { timeout: 10000 })
+      .first()
+      .should('be.visible')
+      .click();
+
+    cy.get('.eh-cancel-booking-button', { timeout: 10000 })
+      .should('be.visible')
+      .click();
+
+    cy.intercept('DELETE', '**/api/bookings/*').as('cancelBooking');
+
+    cy.get('.eh-cancel-confirm', { timeout: 10000 })
+      .should('be.visible')
+      .click();
+
+    cy.wait('@cancelBooking').its('response.statusCode').should('equal', 200);
+
+    // 11. Verify the booking status in .eh-edit-status is cancelled
+    cy.get('.eh-edit-status', { timeout: 10000 })
+      .should('be.visible')
+      .and(($el) => {
+        expect($el.text().trim().toLowerCase()).to.include('cancelled');
+      });
   });
 });

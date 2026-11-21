@@ -197,4 +197,92 @@ describe('AuthContext Component Integration Tests', () => {
     consoleSpy.mockRestore();
   });
 
+  it('should update and return currentUser when refreshUser succeeds', async () => {
+    const initialUser = { id: 1, displayName: 'Mario Rossi', role: 'hiker' };
+    const refreshedUser = { id: 1, displayName: 'Mario Rossi', role: 'warden' };
+    getCurrentUser.mockResolvedValueOnce(initialUser).mockResolvedValueOnce(refreshedUser);
+
+    let latestAuth;
+    function CaptureAuth() {
+      latestAuth = useAuth();
+      return <div data-testid="user">{latestAuth.user ? latestAuth.user.role : 'no-user'}</div>;
+    }
+
+    render(
+      <AuthProvider>
+        <CaptureAuth />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('user')).toHaveTextContent('hiker');
+    });
+
+    const returned = await latestAuth.refreshUser();
+    expect(returned).toEqual(refreshedUser);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('user')).toHaveTextContent('warden');
+    });
+  });
+
+  it('should set user to null on UNAUTHENTICATED code and keep user on non-401 errors in refreshUser', async () => {
+    const mockUser = { id: 1, displayName: 'Mario Rossi', role: 'hiker' };
+    getCurrentUser.mockResolvedValueOnce(mockUser);
+
+    let latestAuth;
+    function CaptureAuth() {
+      latestAuth = useAuth();
+      return <div data-testid="user">{latestAuth.user ? JSON.stringify(latestAuth.user) : 'no-user'}</div>;
+    }
+
+    render(
+      <AuthProvider>
+        <CaptureAuth />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('user')).toHaveTextContent(JSON.stringify(mockUser));
+    });
+
+    // Non-401 error: user stays set and error is rethrown
+    const networkError = new Error('Network down');
+    networkError.status = 503;
+    getCurrentUser.mockRejectedValueOnce(networkError);
+
+    await expect(latestAuth.refreshUser()).rejects.toThrow('Network down');
+    expect(screen.getByTestId('user')).toHaveTextContent(JSON.stringify(mockUser));
+
+    // UNAUTHENTICATED code: user is reset to null and error is rethrown
+    const unauthCodeError = new Error('Session missing');
+    unauthCodeError.code = 'UNAUTHENTICATED';
+    getCurrentUser.mockRejectedValueOnce(unauthCodeError);
+
+    await expect(latestAuth.refreshUser()).rejects.toThrow('Session missing');
+    await waitFor(() => {
+      expect(screen.getByTestId('user')).toHaveTextContent('no-user');
+    });
+  });
+
+  it('should ignore late getCurrentUser resolution after unmount', async () => {
+    let resolveCurrentUser;
+    getCurrentUser.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveCurrentUser = resolve; })
+    );
+
+    const { unmount } = render(
+      <AuthProvider>
+        <TestConsumer />
+      </AuthProvider>
+    );
+
+    expect(screen.getByTestId('loading')).toHaveTextContent('loading');
+    unmount();
+
+    resolveCurrentUser({ id: 1, displayName: 'Late User', role: 'hiker' });
+    await Promise.resolve();
+    expect(getCurrentUser).toHaveBeenCalledTimes(1);
+  });
+  
 });
