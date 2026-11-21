@@ -68,4 +68,39 @@ describe('emailService - delivery resilience', () => {
       expect.objectContaining({ to: ['user@example.com'] })
     );
   });
+  it('tries the other Mailgun region after a 401', async () => {
+    const unauthorized = Object.assign(new Error('Unauthorized'), { status: 401 });
+    mockCreateMessage.mockRejectedValueOnce(unauthorized).mockResolvedValueOnce({ id: '<ok>' });
+    const service = createEmailService({
+      apiKey: 'key', domain: 'hut.org', url: 'https://api.mailgun.net', retryDelaysMs: [0],
+    });
+
+    const result = await service.sendBookingEmail('created', 'user@example.com', { name: 'User' });
+
+    expect(result).toEqual({ id: '<ok>' });
+    expect(mockCreateMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('verifyTemplates falls back to the other region after a 401', async () => {
+    const ok = () => new Response(
+      JSON.stringify({ template: { versions: [{ tag: 'v1', active: true }] } }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockImplementation(async () => ok());
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const service = createEmailService({
+        apiKey: 'key', domain: 'hut.org', url: 'https://api.mailgun.net',
+      });
+      const result = await service.verifyTemplates();
+      expect(result.templates.every((template) => template.ok)).toBe(true);
+      expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
 });
