@@ -343,4 +343,98 @@ describe('MyAccountPage Component Integration & Coverage Tests', () => {
     expect(screen.queryByRole('menu', { name: /profile photo options/i })).not.toBeInTheDocument();
   });
   
+  it('closes photo menu on outside mousedown and handles empty file input or avatar upload failure', async () => {
+    uploadMyAvatar.mockRejectedValueOnce(Object.assign(new Error('Service off'), { status: 405 }));
+
+    render(
+      <MemoryRouter>
+        <MyAccountPage />
+      </MemoryRouter>
+    );
+
+    const portraitBtn = screen.getByRole('button', { name: /open profile photo options/i });
+    fireEvent.click(portraitBtn);
+    expect(screen.getByRole('menu', { name: /profile photo options/i })).toBeInTheDocument();
+
+    // Outside mousedown closes menu
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole('menu', { name: /profile photo options/i })).not.toBeInTheDocument();
+
+    // Empty file selection returns early without calling prepareAvatar
+    const fileInput = screen.getByLabelText(/choose profile photo/i);
+    fireEvent.change(fileInput, { target: { files: [] } });
+    expect(prepareAvatar).not.toHaveBeenCalled();
+
+    // Failed avatar upload shows unavailable message (405)
+    prepareAvatar.mockResolvedValueOnce('img-data');
+    const file = new File(['x'], 'avatar.png', { type: 'image/png' });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    expect(
+      await screen.findByText('Uploading your photo is not available yet. The profile service still needs to be enabled.')
+    ).toBeInTheDocument();
+  });
+
+  it('validates notes/emergencyContact length and sends null for blank optional fields', async () => {
+    updateMyProfile.mockResolvedValueOnce({});
+
+    render(
+      <MemoryRouter>
+        <MyAccountPage />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /edit personal information/i }));
+    const notesInput = screen.getByLabelText(/^notes/i);
+    const emergencyInput = screen.getByLabelText(/emergency contact/i);
+    const form = notesInput.closest('form');
+
+    // Notes > 1000 chars triggers validation error
+    fireEvent.change(notesInput, { target: { value: 'a'.repeat(1001) } });
+    fireEvent.submit(form);
+    expect(
+      await screen.findByText('Notes must be under 1000 characters and emergency contact under 200.')
+    ).toBeInTheDocument();
+
+    // Clearing optional fields sends null and switches to security via card action button
+    fireEvent.change(notesInput, { target: { value: '   ' } });
+    fireEvent.change(emergencyInput, { target: { value: '' } });
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(updateMyProfile).toHaveBeenCalledWith({
+        name: 'Mario Rossi',
+        phone: '+393331234567',
+        notes: null,
+        emergencyContact: null,
+      });
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /change password/i }));
+    expect(screen.getByRole('heading', { name: /change your password/i })).toBeInTheDocument();
+  });
+
+  it('renders fallback values when user fields are missing and handles removePhoto failure', async () => {
+    useAuth.mockReturnValue({
+      user: { displayName: '', email: '', phone: '', notes: '', emergencyContact: '', avatarUrl: 'img.png' },
+      refreshUser: mockRefreshUser,
+    });
+    removeMyAvatar.mockRejectedValueOnce(new Error('Remove failed'));
+
+    render(
+      <MemoryRouter>
+        <MyAccountPage />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Your account')).toBeInTheDocument();
+    expect(screen.getAllByText('No email available').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Not provided')).toHaveLength(4);
+
+    fireEvent.click(screen.getByRole('button', { name: /open profile photo options/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /remove photo/i }));
+
+    expect(await screen.findByText('Remove failed')).toBeInTheDocument();
+  });
+
 });

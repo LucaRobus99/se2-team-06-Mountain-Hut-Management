@@ -15,5 +15,16 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './test/setupTests.js',
+    coverage: {
+      provider: 'v8', // oppure 'istanbul' se usi quello nel progetto
+      include: ['src/**/*.{js,jsx,ts,tsx}'],
+      exclude: [
+        'src/main.jsx',
+        'src/index.jsx',
+        '**/*.test.{js,jsx,ts,tsx}',
+        '**/*.spec.{js,jsx,ts,tsx}',
+        'test/**',
+      ],
+    },
   },
 });

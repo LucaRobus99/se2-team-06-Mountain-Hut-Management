@@ -133,4 +133,81 @@ describe('StaffTimePicker Component Tests', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('should default to 12:00 when value is empty or invalid', () => {
+    render(
+      <StaffTimePicker
+        id="time-picker"
+        value=""
+        onChange={() => {}}
+        label="Select time"
+      />
+    );
+
+    expect(screen.getByText('12:00')).toBeInTheDocument();
+  });
+
+  it('should close on Escape or outside pointerdown when open', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <div>
+        <span data-testid="outside">Outside</span>
+        <StaffTimePicker
+          id="time-picker"
+          value="14:30"
+          onChange={() => {}}
+          label="Select time"
+        />
+      </div>
+    );
+
+    const triggerButton = screen.getByRole('button', { name: /select time/i });
+    await user.click(triggerButton);
+    expect(screen.getByRole('dialog', { name: /select time picker/i })).toBeInTheDocument();
+
+    // Close via Escape
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    // Reopen and close via outside pointerdown
+    await user.click(triggerButton);
+    expect(screen.getByRole('dialog', { name: /select time picker/i })).toBeInTheDocument();
+
+    await user.pointer({ target: screen.getByTestId('outside'), keys: '[MouseLeft]' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('should open above when space below is smaller than desired height and smaller than space above', async () => {
+    const user = userEvent.setup();
+
+    Object.defineProperty(window, 'innerHeight', { value: 200, configurable: true });
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      top: 180,
+      bottom: 195,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 15,
+      x: 0,
+      y: 180,
+      toJSON: () => {},
+    });
+
+    render(
+      <StaffTimePicker
+        id="time-picker"
+        value="14:30"
+        onChange={() => {}}
+        label="Select time"
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: /select time/i }));
+    expect(screen.getByRole('dialog', { name: /select time picker/i })).toHaveClass(
+      'staff-time-panel--above'
+    );
+
+    vi.restoreAllMocks();
+  });
+  
 });
