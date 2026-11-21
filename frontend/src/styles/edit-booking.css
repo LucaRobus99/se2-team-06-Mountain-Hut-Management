@@ -196,3 +196,11 @@
 .eh-manage-arrow-button:hover { background:#e4efe3; border-color:#96b298; }
 .eh-manage-arrow-button:focus-visible { outline:3px solid #548262; outline-offset:3px; }
 .eh-manage-booking.is-selected .eh-manage-arrow-button { border-color:#a7c1aa; }
+
+/* MH-06: confirmation dialog before saving a booking change. */
+.eh-confirm-changes-summary { display:grid; gap:.55rem; margin:0 0 1rem; }
+.eh-confirm-changes-summary > div { border:1px solid #e3e5d8; border-radius:.55rem; padding:.65rem .85rem; }
+.eh-confirm-changes-summary > div.is-new { background:#eaf0e7; border-color:#c9d9c6; }
+.eh-confirm-changes-summary dt { font-size:.78rem; letter-spacing:.06em; text-transform:uppercase; color:#657168; font-weight:600; }
+.eh-confirm-changes-summary dd { margin:0; color:#24392d; }
+.eh-confirm-changes-summary > div.is-new dd { color:#2d573c; font-weight:700; }

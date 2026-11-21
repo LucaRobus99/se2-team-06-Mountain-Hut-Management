@@ -52,6 +52,9 @@ describe('MH-06 — change a booking', () => {
               cy.contains('button', 'Save changes').should('be.disabled');
               cy.contains('button.eh-slot-tile', '13:00').click();
               cy.contains('button', 'Save changes').click();
+              // Nothing is sent until the hiker confirms the summary.
+              cy.get('[role="dialog"]').should('contain.text', 'Save these changes?').and('contain.text', '3 guests');
+              cy.contains('button', 'Confirm changes').click();
               cy.contains('Booking updated successfully').should('be.visible');
               cy.reload();
               cy.get(`button[aria-label^="Open booking #${id}:"]`).click();
@@ -71,6 +74,7 @@ describe('MH-06 — change a booking', () => {
               api('/auth/login', { method: 'POST', body: { email, password: 'password' } });
               cy.intercept('PATCH', `/api/bookings/${id}`).as('updateBooking');
               cy.contains('button', 'Save changes').click();
+              cy.contains('button', 'Confirm changes').click();
               cy.wait('@updateBooking').its('response.statusCode').should('equal', 409);
               cy.contains('Your original booking has not changed').should('be.visible');
               cy.get('#edit-guests').should('have.value', '4');

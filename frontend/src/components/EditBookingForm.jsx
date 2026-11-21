@@ -3,6 +3,7 @@ import { AlpineDatePicker, AlpineMealSelect } from './AlpineBookingFields.jsx';
 import AvailabilitySlotCard from './AvailabilitySlotCard.jsx';
 import SlotAvailabilityState from './SlotAvailabilityState.jsx';
 import SplitSeatingModal from './SplitSeatingModal.jsx';
+import ConfirmBookingChangesModal from './ConfirmBookingChangesModal.jsx';
 import { getModificationSlots, updateBooking, bookingErrorMessage } from '../api/booking.js';
 import { validatePartyRequirements } from '../utils/partyRequirements.js';
 import { readableBookingDate, readableMeal } from '../utils/bookingList.js';
@@ -25,6 +26,8 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
   const nextRequirementId = useRef(requirements.length);
   const [available, setAvailable] = useState({ key: '', slots: [], loading: true, error: '' });
   const [saving, setSaving] = useState(false);
+  // MH-06: the change is sent only after the hiker confirms it in a dialog.
+  const [confirming, setConfirming] = useState(false);
   const [pendingSplit, setPendingSplit] = useState(null);
   const [acceptedSplit, setAcceptedSplit] = useState(null);
   const [saveError, setSaveError] = useState('');
@@ -116,7 +119,7 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
       setPendingSplit({ slot: selectedOption, saveAfterConfirm: true });
       return;
     }
-    await persistChanges();
+    setConfirming(true);
   }
 
   async function persistChanges() {
@@ -131,6 +134,7 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
       });
       await onSaved(updated);
     } catch (err) {
+      setConfirming(false);
       setSaveError(bookingErrorMessage(err, { editing: true }));
       // A concurrent change may invalidate our preview; refresh without losing the draft.
       if (err.status === 409) {
@@ -146,7 +150,7 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
     const { slot, saveAfterConfirm } = pendingSplit;
     setAcceptedSplit(splitKey(slot));
     setPendingSplit(null);
-    if (saveAfterConfirm) void persistChanges();
+    if (saveAfterConfirm) setConfirming(true);
     else setSelectedSlotId(slot.id);
   }
 
@@ -213,6 +217,15 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
       </div>
       <SplitSeatingModal show={Boolean(pendingSplit)} seating={pendingSplit?.slot}
         onCancel={() => setPendingSplit(null)} onContinue={acceptSplit} busy={saving} />
+      <ConfirmBookingChangesModal show={confirming && Boolean(selectedOption)} booking={booking} busy={saving}
+        next={selectedOption ? {
+          slot: { date, meal: selectedOption.meal ?? meal, startTime: selectedOption.startTime, endTime: selectedOption.endTime },
+          partySize: numberGuests,
+          requirements,
+          requirementsChanged: 'requirements' in changes,
+          split: selectedOption.fit === 'split',
+        } : null}
+        onCancel={() => setConfirming(false)} onConfirm={() => void persistChanges()} />
     </form>
   );
 }

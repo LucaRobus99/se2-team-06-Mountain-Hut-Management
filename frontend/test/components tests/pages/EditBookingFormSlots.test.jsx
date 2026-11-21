@@ -55,7 +55,32 @@ describe('Edit booking — photographic availability slots', () => {
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
     await user.click(await screen.findByRole('button', { name: /13:00.*3 tables available/i }));
     await user.click(screen.getByRole('button', { name: /save changes/i }));
+    await user.click(await screen.findByRole('button', { name: 'Confirm changes' }));
     await waitFor(() => expect(updateBooking).toHaveBeenCalledWith(8, { slotId: 4, partySize: 3, expectedSeating: 'single_table' }));
+    expect(saved).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for confirmation before saving and keeps editing when the hiker goes back', async () => {
+    const user = userEvent.setup();
+    const saved = vi.fn();
+    render(<EditBookingForm booking={booking} onCancel={vi.fn()} onSaved={saved} />);
+    await user.click(await screen.findByRole('button', { name: /13:00.*3 tables available/i }));
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Save these changes?' });
+    expect(dialog).toHaveTextContent(/Current.*12:00–13:00 · 2 guests/);
+    expect(dialog).toHaveTextContent(/New.*13:00–14:00 · 2 guests/);
+    expect(dialog).not.toHaveTextContent('Dietary requirements');
+    expect(updateBooking).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(updateBooking).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /13:00.*3 tables available/i })).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+    await user.click(await screen.findByRole('button', { name: 'Confirm changes' }));
+    await waitFor(() => expect(updateBooking).toHaveBeenCalledExactlyOnceWith(8, { slotId: 4, expectedSeating: 'single_table' }));
     expect(saved).toHaveBeenCalledTimes(1);
   });
 
@@ -89,6 +114,7 @@ describe('Edit booking — photographic availability slots', () => {
     expect(screen.queryByText(/Table split:/i)).not.toBeInTheDocument();
     expect(updateBooking).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: /save changes/i }));
+    await user.click(await screen.findByRole('button', { name: 'Confirm changes' }));
     await waitFor(() => expect(updateBooking).toHaveBeenCalledExactlyOnceWith(8, { slotId: 4, expectedSeating: 'split' }));
     expect(saved).toHaveBeenCalledTimes(1);
   });
@@ -111,6 +137,7 @@ describe('Edit booking — photographic availability slots', () => {
     expect(updateBooking).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Continue with split seating' }));
     await user.click(screen.getByRole('button', { name: /save changes/i }));
+    await user.click(await screen.findByRole('button', { name: 'Confirm changes' }));
     await waitFor(() => expect(updateBooking).toHaveBeenCalledExactlyOnceWith(8, { partySize: 3, expectedSeating: 'split' }));
   });
 
@@ -154,6 +181,7 @@ describe('Edit booking — photographic availability slots', () => {
     await user.type(screen.getByLabelText('Requirement 1'), 'Vegetarian');
     getModificationSlots.mockResolvedValueOnce({ slots: [original] });
     await user.click(screen.getByRole('button', { name: /save changes/i }));
+    await user.click(await screen.findByRole('button', { name: 'Confirm changes' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Not enough seats.');
     await waitFor(() => expect(getModificationSlots).toHaveBeenCalledTimes(2));
     expect(await screen.findByRole('button', { name: /12:00/i })).toHaveAttribute('aria-pressed', 'false');
@@ -178,6 +206,9 @@ describe('Edit booking — photographic availability slots', () => {
     expect(screen.queryByLabelText('Requirement 2')).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /save changes/i }));
+    expect(await screen.findByRole('dialog', { name: 'Save these changes?' }))
+      .toHaveTextContent('Dietary requirements1 requirement, 1 with an allergy');
+    await user.click(screen.getByRole('button', { name: 'Confirm changes' }));
     await waitFor(() => expect(updateBooking).toHaveBeenCalledWith(8, {
       requirements: [{ description: '1 guest allergic to peanuts', allergies: true }], expectedSeating: 'single_table',
     }));
