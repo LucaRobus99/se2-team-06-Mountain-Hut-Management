@@ -223,7 +223,7 @@ describe('emailService - Black-Box Tests', () => {
         mailgunTemplate: 'booking-confirmation',
         mailgunUpdatedTemplate: 'booking-modification',
         mailgunCancelledTemplate: 'booking-cancelled',
-        mailgunResetTemplate: 'password reset',
+        mailgunResetTemplate: 'password-reset',
         mailgunUrl: 'https://api.mailgun.net',
       });
 

@@ -6,7 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "e2e": "start-server-and-test e2e:backend http://127.0.0.1:8090/api/e2e e2e:frontend http://127.0.0.1:5174 cy:run",
+    "e2e:open": "start-server-and-test e2e:backend http://127.0.0.1:8090/api/e2e e2e:frontend http://127.0.0.1:5174 cy:open",
+    "e2e:backend": "node --disable-warning=ExperimentalWarning ../backend/scripts/start-e2e-server.mjs",
+    "e2e:frontend": "vite --mode e2e --host 127.0.0.1 --port 5174 --strictPort",
+    "cy:run": "cypress run",
+    "cy:open": "cypress open"
   },
   "dependencies": {
     "bootstrap": "^5.3.3",
@@ -24,6 +30,7 @@
     "@vitejs/plugin-react": "^5.0.0",
     "@vitest/coverage-v8": "^5.0.5",
     "jsdom": "^29.1.1",
+    "start-server-and-test": "^3.0.13",
     "vite": "^7.0.0"
   }
 }

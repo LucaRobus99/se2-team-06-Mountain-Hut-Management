@@ -1,4 +1,4 @@
-import { EXPECTED, invalid, invalidFields, isMissing, isValidEmail, required, tooLong, unknown } from '../utils/validation.js';
+import { EXPECTED, invalid, invalidFields, isMissing, isValidEmail, isValidPhone, required, tooLong, unknown } from '../utils/validation.js';
 
 // Hiker registration follows context.md and the professor's clarification in issue #22.
 // Roles are never accepted from clients: public registration always creates a Hiker.
@@ -26,10 +26,7 @@ export function validateRegistration(body) {
   if (typeof body.email === 'string' && body.email.trim() && !isValidEmail(body.email.trim())) {
     details.push(invalid('email', EXPECTED.email));
   }
-  // International mobile numbers can contain +, spaces, dashes and parentheses.
-  // Require at least 6 digits, without imposing an Italian-only prefix.
-  if (typeof body.phone === 'string' && body.phone.trim() &&
-      (!/^[+\d\s().-]+$/.test(body.phone.trim()) || body.phone.replace(/\D/g, '').length < 6)) {
+  if (typeof body.phone === 'string' && body.phone.trim() && !isValidPhone(body.phone.trim())) {
     details.push(invalid('phone', 'a valid mobile number (at least 6 digits)'));
   }
 

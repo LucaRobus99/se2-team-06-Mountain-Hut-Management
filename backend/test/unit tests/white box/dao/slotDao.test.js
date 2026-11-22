@@ -152,8 +152,8 @@ describe('slotDao - White-Box Tests', () => {
     it('should insert the label and return the new id', async () => {
       db.query.mockResolvedValue({ rows: [{ id: 4 }] });
 
-      await expect(dao.createTable({ label: 'T4' })).resolves.toBe(4);
-      expect(db.query.mock.calls[0][1]).toEqual(['T4']);
+      await expect(dao.createTable({ label: 'T4', seats: 6 })).resolves.toBe(4);
+      expect(db.query.mock.calls[0][1]).toEqual(['T4', 6]);
     });
   });
 });

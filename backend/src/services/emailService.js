@@ -10,7 +10,7 @@ export function createEmailService({
   updatedTemplate = 'booking-modification',
   // MH-08 (#41): cancellation notice.
   cancelledTemplate = 'booking-cancelled',
-  resetTemplate = 'password reset',
+  resetTemplate = 'password-reset',
   url = null,
   // Retry only transient failures (network, 429, 5xx). Permanent 4xx errors
   // (invalid recipient, missing template, ...) fail immediately.
@@ -313,7 +313,11 @@ export function createEmailService({
           },
         });
       } catch (err) {
-        console.error('Failed to send password reset email:', err);
+        // Provider errors can contain the request, including the reset token.
+        console.error('Failed to send password reset email:', {
+          status: err?.status ?? err?.statusCode ?? null,
+          code: err?.code ?? null,
+        });
         throw err;
       }
     },

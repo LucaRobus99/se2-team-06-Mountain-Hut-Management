@@ -2,7 +2,7 @@ describe('Mountain Hut - Basic Navigation & Smoke Tests', () => {
   
   it('should load the availability page successfully', () => {
     // 1. Visit the availability page
-    cy.visit('http://localhost:5173/availability');
+    cy.visit('/availability');
 
     // 2. Verify that the page header or main container is visible
     cy.get('h1, .eh-navbar').should('be.visible');
@@ -10,7 +10,7 @@ describe('Mountain Hut - Basic Navigation & Smoke Tests', () => {
 
   it('should navigate between public pages using the navbar links', () => {
     // 1. Start from the availability page
-    cy.visit('http://localhost:5173/availability');
+    cy.visit('/availability');
 
     // 2. Click on the login link using its specific href attribute (selecting the first one if duplicated)
     cy.get('a[href="/login"]').first().click();

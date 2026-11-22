@@ -13,7 +13,7 @@ npm start
 
 The API listens on `http://localhost:8080` by default. Use `npm run dev` for watch-mode development (restarting the process also resets its in-memory login sessions). Both start scripts read an optional `.env` file; copy `.env.example` when configuring local overrides.
 
-**Database.** With `DATABASE_URL` set (Docker), the service connects to that PostgreSQL server. Without it, it uses an embedded PostgreSQL (PGlite) in `database/pglite` (`PGLITE_DIR`). On first start against an empty database it runs `scripts/01-schema.sql` and `scripts/02-seed.sql`. Existing databases are **never migrated**: after changing the SQL scripts, reset the database (`npm run db:reset` locally, `docker compose down -v` in Docker), and say so in the release notes (the release workflow detects it automatically).
+**Database.** With `DATABASE_URL` set (Docker), the service connects to that PostgreSQL server. Without it, it uses an embedded PostgreSQL (PGlite) in `database/pglite` (`PGLITE_DIR`). On first start against an empty database it runs `scripts/01-schema.sql` and `scripts/02-seed.sql`. For the #47 update, compatible databases migrate in place; inconsistent historical table capacities require explicit review. For other schema updates follow the release notes and back up before any reset.
 
 The connection layer is `src/db/postgres.js`: `query(sql, params)` returns `{ rows, rowCount }`, with `$1, $2…` placeholders. `transaction(fn)` takes one global advisory lock, so transactions run one at a time (the first booking saved wins, AC-01.9). `bigint` results (`COUNT`, `SUM`) are parsed as numbers. Quote camelCase column aliases (`AS "tableId"`): PostgreSQL lowercases unquoted names.
 
@@ -50,9 +50,13 @@ The connection layer is `src/db/postgres.js`: `query(sql, params)` returns `{ ro
 | POST | `/api/staff/bookings` | Employee/Warden | Book for an existing hiker, a temporary guest or a new hiker account (MH-07) |
 | GET | `/api/slots` | Employee/Warden | List slots, optionally filtering by date/meal |
 | GET | `/api/slots/:slotId` | Employee/Warden | Slot details |
-| POST | `/api/slots` | Employee/Warden | Create a slot and configure its table capacity |
+| GET | `/api/slots/catalog` | Employee/Warden | List physical tables and reusable time patterns |
+| POST | `/api/slots/tables` | Employee/Warden | Define a new physical table with fixed seats |
+| POST | `/api/slots` | Employee/Warden | Create a slot and choose its tables |
 
-The application serves one hut. Slot creation uses explicit `startTime` and `endTime` values, not `durationMinutes`; routes containing `/api/huts/:hutId/slots` are not part of the current API. The literal route `/api/bookings/slot-status` is registered before `/api/bookings/:bookingId` so it is not parsed as an ID. MH-07 currently provides the backend API only (the staff page is a frontend task).
+MH-02 (#47): `dining_tables.seats` is fixed for a physical table. Each slot has a subset of tables; the API rejects an existing label with a different seat count (`409 TABLE_CAPACITY_MISMATCH`). A duplicate catalog label returns `409 TABLE_ALREADY_EXISTS`. The composite foreign key also rejects a mismatched slot capacity outside the API. Creating a slot remains atomic.
+
+The application serves one hut. Slot creation uses explicit `startTime` and `endTime` values, not `durationMinutes`; routes containing `/api/huts/:hutId/slots` are not part of the current API. The literal route `/api/bookings/slot-status` is registered before `/api/bookings/:bookingId` so it is not parsed as an ID. MH-07 uses separate staff-only endpoints from the staff Reservations UI.
 
 ## Accounts, password changes and avatars
 
@@ -67,7 +71,7 @@ All profile, password and photo endpoints enforce authentication; changing a hik
 
 ## Booking and confirmation behavior
 
-The backend enforces table capacity and seating transactionally, even when the UI has already shown an availability preview. A hiker cannot create a second confirmed booking in the same slot. Party requirements (MH-05) include separate dietary/allergy entries and affected guest counts; they are stored with the reservation and returned in booking details.
+The backend enforces table capacity and seating transactionally, even when the UI has already shown an availability preview. A hiker cannot create a second confirmed booking in the same slot. Party requirements (MH-05) are a list of entries, each with a `description` (up to 500 characters) and an `allergies` boolean; they are stored with the reservation and returned in booking details.
 
 When Mailgun is configured, creating, updating or cancelling a booking attempts an email. Successful **POST** and **PATCH** responses include `confirmationEmail.status`; **DELETE** returns the same information as `cancellationEmail.status`:
 
@@ -101,7 +105,7 @@ npm run mailgun:templates -- --test --only=created,updated,cancelled
 
 The default is non-destructive: a template that already has an active version is skipped. Use `--force` to upload and activate a new version, e.g. for the reset template in `email-templates/password-reset.html`. The script honours `MAILGUN_URL`, so it works with the EU endpoint (`https://api.eu.mailgun.net`).
 
-Mailgun's templates API rejects template names that contain spaces (it returns a generic `500 Internal Server Error`). The booking templates therefore use hyphenated names (`booking-confirmation`, `booking-modification`, `booking-cancelled`) in both `.env` and the defaults. The existing `password reset` template was created from the dashboard and keeps its name; the script never overwrites an active version unless `--force` is used.
+Mailgun's templates API rejects template names that contain spaces (it returns a generic `500 Internal Server Error`). All templates therefore use hyphenated names (`booking-confirmation`, `booking-modification`, `booking-cancelled`, `password-reset`) in both `.env` and the defaults. The script never overwrites an active version unless `--force` is used.
 
 ### Delivery reliability
 
@@ -227,6 +231,8 @@ A successful change returns the updated booking in the same shape as a list item
 
 `#35`: staff may book **until the slot starts**; afterwards the request fails with `422 SLOT_ALREADY_STARTED`. Hikers keep the two-hour cut-off (`422 SLOT_TOO_LATE`). `GET /api/staff/availability` returns the same slots as the public availability plus those starting within two hours.
 
+The optional `expectedSeating` field (`single_table` or `split`) protects the staff preview: if a single-table selection is no longer possible, the transaction returns `409 SEATING_CHANGED` without creating a booking or account. Review the new availability before retrying.
+
 While `passwordChangeRequired` is true, every authenticated endpoint except `/api/auth/me`, `/api/auth/change-password`, `/api/auth/logout` returns `403 PASSWORD_CHANGE_REQUIRED`; changing the password clears the flag.
 
 ### Password recovery (#44)
@@ -261,10 +267,10 @@ The actual number of inserted slots depends on the current database. Re-running 
 
 - HTTP session cookie `sid` is HttpOnly/SameSite=Lax; Secure cookies apply in production (override with `COOKIE_SECURE=false` when serving over plain HTTP, as the Docker demo does). Express trusts only private-network proxies (`trust proxy`), i.e. the nginx frontend container. Sessions are stored in process memory during development and are lost when the server restarts. Use a durable session store for a deployed multi-instance service.
 - Booking and seat allocation run inside serialized PostgreSQL transactions (global advisory lock); availability and seating previews do not reserve seats.
-- Slot capacity can vary by meal, date and time. Slot overlap is currently prohibited, pending the Product Owner's response to issue #31.
+- Slot capacity can vary by meal, date and time because different subsets of tables may be selected; a table's own capacity never changes (#47). Slots may be contiguous but cannot overlap (#31) or cross midnight (#34).
 - `HUT_TIMEZONE` defaults to `Europe/Rome` and is used for slot dates, booking cutoffs and the 48-hour modification window.
 - Production requires a strong `SESSION_SECRET`; never commit secrets.
-- Releases never migrate existing databases; a schema change requires `docker compose down -v` (demo data is lost).
+- The fixed-capacity update (#47) migrates compatible legacy databases transactionally. If any label has different historical seat counts, or has no historical capacity, startup refuses migration without changing the data. Make a backup and resolve the physical-table inventory deliberately, or use an independent Compose project for clean test data. Other schema changes still follow release-specific migration/reset instructions.
 
 ## Testing
 

@@ -27,8 +27,8 @@ const TRANSACTION_LOCK_KEY = 6_000_601;
  *   close()
  *
  * On first use, if the database has no `users` table, scripts/*.sql create the
- * schema and seed data. Existing databases are never altered: a release that
- * changes the schema requires a reset (`docker compose down -v`).
+ * schema and seed data. The #47 compatible-capacity migration also runs on
+ * older databases; any inconsistent legacy capacities are rejected.
  */
 
 /** Server PostgreSQL (Docker / production), via a `pg` connection pool. */
@@ -167,7 +167,32 @@ function toResult(res) {
 async function initialiseIfEmpty(exec) {
   const result = await exec("SELECT to_regclass('public.users') IS NOT NULL AS present");
   const present = (Array.isArray(result) ? result[0] : result).rows[0].present;
-  if (present) return;
+  if (present) {
+    // #47: preserve existing reservations and assignments. A legacy label
+    // with conflicting capacities needs a deliberate physical-table decision;
+    // do not silently increase/reduce past capacity or discard bookings.
+    const column = await exec("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'dining_tables' AND column_name = 'seats') AS present");
+    if (!(Array.isArray(column) ? column[0] : column).rows[0].present) {
+      try { await exec(`BEGIN;
+        DO $$ BEGIN
+          IF EXISTS (
+            SELECT dt.id FROM dining_tables dt LEFT JOIN slot_tables st ON st.table_id = dt.id
+            GROUP BY dt.id HAVING COUNT(DISTINCT st.seats) <> 1
+          ) THEN
+            RAISE EXCEPTION 'Legacy table capacities are inconsistent or unknown. Resolve them explicitly or use a fresh test database; existing data was not changed.';
+          END IF;
+        END $$;
+        ALTER TABLE dining_tables ADD COLUMN seats INTEGER;
+        UPDATE dining_tables dt SET seats = (SELECT MIN(st.seats) FROM slot_tables st WHERE st.table_id = dt.id);
+        ALTER TABLE dining_tables ALTER COLUMN seats SET NOT NULL;
+        ALTER TABLE dining_tables ADD CHECK (seats > 0);
+        ALTER TABLE dining_tables ADD UNIQUE (id, seats);
+        ALTER TABLE slot_tables ADD FOREIGN KEY (table_id, seats) REFERENCES dining_tables(id, seats);
+        COMMIT;`); }
+      catch (error) { await exec('ROLLBACK;').catch(() => {}); throw error; }
+    }
+    return;
+  }
 
   const scripts = fs.readdirSync(SCRIPTS_DIR).filter((f) => f.endsWith('.sql')).sort();
   const sql = scripts.map((f) => fs.readFileSync(path.join(SCRIPTS_DIR, f), 'utf8')).join('\n');

@@ -6,6 +6,7 @@ import { savePendingBooking, clearPendingBooking } from '../utils/pendingBooking
 import { getAvailableSlots, getSlotSeating, checkSlotBooking } from '../api/booking.js';
 import { AlpineDatePicker, AlpineMealSelect, MEAL_OPTIONS } from '../components/AlpineBookingFields.jsx';
 import AvailabilitySlotCard from '../components/AvailabilitySlotCard.jsx';
+import SlotAvailabilityState from '../components/SlotAvailabilityState.jsx';
 import SplitSeatingModal from '../components/SplitSeatingModal.jsx';
 import landscape from '../assets/edelweiss-booking-banner.png';
 
@@ -41,10 +42,18 @@ export default function AvailabilityPage() {
   const [checkingSeating, setCheckingSeating] = useState(false);
   const searchRequest = useRef(0);
   const selectionRequest = useRef(0);
+  const searched = useRef(false);
+  const liveTimer = useRef(null);
+  const resultsRef = useRef(null);
+  const [reservedHeight, setReservedHeight] = useState(0);
   const searchReady = useMemo(() => Boolean(date && meal && /^\d+$/.test(partySize) && Number(partySize) > 0), [date, meal, partySize]);
 
-  function resetSelection() { selectionRequest.current += 1; setSelectedSlotId(null); setSeating(null); setPendingSplit(null); }
+  function resetSelection() { selectionRequest.current += 1; setSelectedSlotId(null); setSeating(null); setPendingSplit(null); setCheckingSeating(false); }
+  function preserveResultsSpace() {
+    if (resultsRef.current) setReservedHeight(resultsRef.current.offsetHeight);
+  }
   function onFieldChange(setter, value) {
+    preserveResultsSpace();
     setter(value);
     resetSelection();
     searchRequest.current += 1; // Ignore responses for an earlier form selection.
@@ -53,9 +62,21 @@ export default function AvailabilityPage() {
     setError('');
     setBookingNotice('');
     setSlotNotice('');
+    clearTimeout(liveTimer.current);
+    const next = { date: setter === setDate ? value : date, meal: setter === setMeal ? value : meal,
+      partySize: setter === setPartySize ? value : partySize };
+    if (searched.current && next.date && next.meal && /^\d+$/.test(next.partySize) && Number(next.partySize) > 0) {
+      liveTimer.current = setTimeout(() => {
+        const params = new URLSearchParams({ date: next.date, meal: next.meal, guests: next.partySize });
+        if (params.toString() === searchParams.toString()) void performSearch(next);
+        else setSearchParams(params, { replace: true });
+      }, 220);
+    }
   }
 
   async function performSearch(values) {
+    preserveResultsSpace();
+    searched.current = true;
     const request = ++searchRequest.current;
     setLoading(true);
     setResult(null);
@@ -64,11 +85,12 @@ export default function AvailabilityPage() {
     resetSelection();
     try {
       const data = await getAvailableSlots({ date: values.date, meal: values.meal, partySize: Number(values.partySize) });
-      if (request === searchRequest.current) setResult(data);
+      if (request === searchRequest.current) { setResult(data); setReservedHeight(0); }
     } catch (err) {
       if (request === searchRequest.current) {
         setError(err.message || 'Unable to check availability.');
         setResult(null);
+        setReservedHeight(0);
       }
     } finally {
       if (request === searchRequest.current) setLoading(false);
@@ -76,6 +98,7 @@ export default function AvailabilityPage() {
   }
 
   useEffect(() => {
+    clearTimeout(liveTimer.current);
     // A new Availability search must never accidentally reuse an old draft.
     clearPendingBooking();
     const params = new URLSearchParams(location.search);
@@ -87,13 +110,15 @@ export default function AvailabilityPage() {
     setDate(next.date);
     setMeal(next.meal);
     setPartySize(next.partySize);
-    setResult(null);
     resetSelection();
     if (params.has('date')) {
       // This runs on initial load AND internal navigation/back/forward when
       // search parameters change, not just once when the component mounts.
       performSearch(next);
     } else {
+      searched.current = false;
+      setResult(null);
+      setReservedHeight(0);
       searchRequest.current += 1;
       setLoading(false);
       setError('');
@@ -102,6 +127,8 @@ export default function AvailabilityPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 
+  useEffect(() => () => clearTimeout(liveTimer.current), []);
+
   useEffect(() => {
     setBookingNotice(location.state?.bookingNotice || '');
     setBookingNoticeType(location.state?.bookingNoticeType || 'info');
@@ -109,6 +136,7 @@ export default function AvailabilityPage() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    clearTimeout(liveTimer.current);
     if (!searchReady || loading || checkingSeating) return;
     const newParams = new URLSearchParams({ date, meal, guests: partySize });
     if (newParams.toString() === searchParams.toString()) {
@@ -122,11 +150,12 @@ export default function AvailabilityPage() {
 
   async function handleSelectSlot(slot) {
     if (checkingSeating || loading) return;
-    setCheckingSeating(true);
+    if (selectedSlotId === slot.id && seating) return;
     setError('');
     setBookingNotice('');
     setSlotNotice('');
     resetSelection();
+    setCheckingSeating(true);
     const request = selectionRequest.current;
     try {
       // Warn on this page, before navigating to Review Booking or entering allergies.
@@ -152,7 +181,7 @@ export default function AvailabilityPage() {
         setSlotNotice('');
         setError(err.message || 'Unable to check seating.');
       }
-    } finally { setCheckingSeating(false); }
+    } finally { if (request === selectionRequest.current) setCheckingSeating(false); }
   }
 
   function acceptSplit() {
@@ -185,15 +214,15 @@ export default function AvailabilityPage() {
         <form className="eh-availability-search" onSubmit={handleSubmit}>
           <div className="eh-availability-field">
             <label htmlFor="availability-date">Date</label>
-            <AlpineDatePicker id="availability-date" value={date} minDate={todayInHut()} onChange={value => onFieldChange(setDate, value)} required disabled={loading || checkingSeating} />
+            <AlpineDatePicker id="availability-date" value={date} minDate={todayInHut()} onChange={value => onFieldChange(setDate, value)} required disabled={checkingSeating} />
           </div>
           <div className="eh-availability-field">
             <label htmlFor="availability-meal">Meal</label>
-            <AlpineMealSelect id="availability-meal" value={meal} onChange={value => onFieldChange(setMeal, value)} required disabled={loading || checkingSeating} />
+            <AlpineMealSelect id="availability-meal" value={meal} onChange={value => onFieldChange(setMeal, value)} required disabled={checkingSeating} />
           </div>
           <div className="eh-availability-field eh-availability-guests">
             <label htmlFor="availability-guests">Guests</label>
-            <input id="availability-guests" type="number" min="1" step="1" value={partySize} onChange={event => onFieldChange(setPartySize, event.target.value)} required disabled={loading || checkingSeating} />
+            <input id="availability-guests" type="number" min="1" step="1" value={partySize} onChange={event => onFieldChange(setPartySize, event.target.value)} required disabled={checkingSeating} />
           </div>
           <button type="submit" className="eh-button eh-button--green eh-availability-submit" disabled={!searchReady || loading || checkingSeating}>
             {loading ? 'Searching...' : 'Search'} <span aria-hidden="true">↗</span>
@@ -203,16 +232,17 @@ export default function AvailabilityPage() {
         {bookingNotice && <Alert variant={bookingNoticeType} role={bookingNoticeType === 'danger' ? 'alert' : 'status'}
           className={`eh-availability-error${bookingNoticeType === 'danger' ? ' eh-slot-duplicate-notice' : ''}`}>{bookingNotice}</Alert>}
         {error && <Alert variant="danger" role="alert" className="eh-availability-error">{error}</Alert>}
+        <div style={!result && reservedHeight ? { minHeight: reservedHeight } : undefined}>
         {loading && <p className="eh-search-message" role="status">Looking for available times...</p>}
 
         {result ? (
-          <section className="eh-availability-results" aria-label="Available meal slots">
+          <section ref={resultsRef} className="eh-availability-results" aria-label="Available meal slots">
             <div className="eh-results-heading">
               <div><p className="eh-page-eyebrow">Your visit</p><h2>Available meal slots</h2></div>
               <p>{formatDate(result.date)} · {MEAL_OPTIONS.find(item => item.value === result.meal)?.label || result.meal} · {result.partySize} {result.partySize === 1 ? 'guest' : 'guests'}</p>
             </div>
             {result.slots.length === 0 ? (
-              <div className="eh-empty-results"><h3>No tables available for this search.</h3><p>Try a different meal, date or number of guests.</p></div>
+              <SlotAvailabilityState empty />
             ) : (
               <div className="eh-slot-cards">
                 {result.slots.map((slot, index) => (
@@ -244,6 +274,7 @@ export default function AvailabilityPage() {
         ) : !loading && !error ? (
           <div className="eh-availability-prompt"><h2>Your table is one search away.</h2><p>Choose a date, a meal and your group size to see available times.</p></div>
         ) : null}
+        </div>
       </div>
       <SplitSeatingModal
         show={Boolean(pendingSplit)}

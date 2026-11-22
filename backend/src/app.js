@@ -94,62 +94,6 @@ export function createApp({ db, timeZone = config.hutTimeZone, now = () => new D
   // MH-07: staff-only search, availability and bookings on someone's behalf.
   app.use('/api/staff', createStaffRouter({ bookingService, slotService, requireAuth }));
 
-  //used for e2e test for cleaning bookings
-  if (process.env.NODE_ENV !== 'production') {
-    app.post('/api/test/reset', async (req, res, next) => {
-      try {
-        
-        await db.query(
-          `DELETE FROM booking_requirements
-           WHERE booking_id IN (
-             SELECT b.id FROM bookings b
-             JOIN slots s ON s.id = b.slot_id
-             WHERE s.date = '2027-03-14'
-               AND s.start_time = '13:00'
-               AND s.end_time = '14:00'
-           )`
-        );
-        await db.query(
-          `DELETE FROM booking_seats
-           WHERE booking_id IN (
-             SELECT b.id FROM bookings b
-             JOIN slots s ON s.id = b.slot_id
-             WHERE s.date = '2027-03-14'
-               AND s.start_time = '13:00'
-               AND s.end_time = '14:00'
-           )`
-        );
-        await db.query(
-          `DELETE FROM bookings
-           WHERE slot_id IN (
-             SELECT id FROM slots
-             WHERE date = '2027-03-14'
-               AND start_time = '13:00'
-               AND end_time = '14:00'
-           )`
-        );
-
-        
-        await db.query('DELETE FROM booking_requirements');
-        await db.query('DELETE FROM booking_seats');
-        await db.query('DELETE FROM bookings');
-
-        
-        await db.query(
-          `DELETE FROM slots
-           WHERE date = '2027-03-14'
-             AND start_time = '13:00'
-             AND end_time = '14:00'`
-        );
-
-        res.status(204).end();
-      } catch (err) {
-        next(err);
-      }
-    });
-  }
-  
-
   // Error handling (must stay last)
   app.use(notFoundHandler);
   app.use(errorHandler);

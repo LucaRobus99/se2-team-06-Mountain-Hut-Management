@@ -387,6 +387,7 @@ export function createBookingService({
           partySize: data.partySize,
           contact: owner.contact,
           requirements: data.requirements,
+          expectedSeating: data.expectedSeating,
         });
 
         const loaded = await core.loadBookingView(tx, bookingId, { assignments });

@@ -5,6 +5,7 @@ import {
   isMissing,
   isPositiveInt,
   isValidEmail,
+  isValidPhone,
   required,
   tooLong,
   unknown,
@@ -20,9 +21,9 @@ import { parseRequirements } from './requirements.js';
 export const STAFF_BOOKING_MODES = ['existingHiker', 'guest', 'newHiker'];
 
 const PAYLOAD_FIELDS = {
-  existingHiker: ['mode', 'hikerId', 'slotId', 'partySize', 'requirements'],
-  guest: ['mode', 'slotId', 'partySize', 'contactName', 'contactNumber', 'email', 'requirements'],
-  newHiker: ['mode', 'slotId', 'partySize', 'name', 'email', 'phone', 'notes', 'emergencyContact', 'requirements'],
+  existingHiker: ['mode', 'hikerId', 'slotId', 'partySize', 'requirements', 'expectedSeating'],
+  guest: ['mode', 'slotId', 'partySize', 'contactName', 'contactNumber', 'email', 'requirements', 'expectedSeating'],
+  newHiker: ['mode', 'slotId', 'partySize', 'name', 'email', 'phone', 'notes', 'emergencyContact', 'requirements', 'expectedSeating'],
 };
 
 const ANY_MODE_FIELDS = [...new Set(Object.values(PAYLOAD_FIELDS).flat())];
@@ -72,11 +73,6 @@ function optionalText(body, field, max, details) {
   return text;
 }
 
-/** Same rule as registration/account: international numbers, at least 6 digits. */
-function isValidPhone(value) {
-  return /^[+\d\s().-]+$/.test(value) && value.replace(/\D/g, '').length >= 6;
-}
-
 export function validateStaffBookingBody(body) {
   const details = [];
 
@@ -121,6 +117,10 @@ export function validateStaffBookingBody(body) {
 
   // MH-05: same rules as the hiker booking and the MH-06 change.
   const requirements = parseRequirements(body.requirements, details) ?? [];
+  const expectedSeating = body.expectedSeating;
+  if ('expectedSeating' in body && !['single_table', 'split'].includes(expectedSeating)) {
+    details.push(invalid('expectedSeating', 'single_table or split'));
+  }
 
   let hikerId = null;
   let contact = null;
@@ -168,6 +168,6 @@ export function validateStaffBookingBody(body) {
     throw invalidFields(details);
   }
 
-  return { mode, slotId, partySize, requirements, hikerId, contact, account };
+  return { mode, slotId, partySize, requirements, hikerId, contact, account, ...(expectedSeating ? { expectedSeating } : {}) };
 }
 

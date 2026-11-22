@@ -370,10 +370,14 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
             await slotDao.addTableToSlot(exec, id, t.tableId, t.seats);
           }
         } else {
-          // A label is a table of the hut (created on first use); its seats belong to this slot only.
+          // Explicitly defining a new physical table is supported for existing API clients.
+          // An existing label must always retain its catalog capacity (#47).
           for (const t of value.tables) {
             const table = await slotDao.findTableByLabel(exec, t.tableIdentifier);
-            const tableId = table ? table.id : await slotDao.createTable(exec, { label: t.tableIdentifier });
+            if (table && Number(table.seats) !== t.seats) {
+              throw new ConflictError(`${t.tableIdentifier} has a fixed capacity of ${table.seats} seats. Choose that capacity or define a different table.`, 'TABLE_CAPACITY_MISMATCH');
+            }
+            const tableId = table ? table.id : await slotDao.createTable(exec, { label: t.tableIdentifier, seats: t.seats });
             await slotDao.addTableToSlot(exec, id, tableId, t.seats);
           }
         }
@@ -399,6 +403,30 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
       }
 
       return this.getSlot(user, slotId);
+    },
+
+    async listCatalog(user) {
+      assertStaff(user);
+      const [tables, timePatterns] = await Promise.all([slotDao.listTables(), slotDao.listTimePatterns()]);
+      return { tables: tables.map(t => ({ tableId: t.id, tableIdentifier: t.label, seats: Number(t.seats) })), timePatterns };
+    },
+
+    async createCatalogTable(user, body) {
+      assertStaff(user);
+      const label = typeof body?.tableIdentifier === 'string' ? body.tableIdentifier.trim() : '';
+      const seats = body?.seats;
+      const details = [];
+      if (!label) details.push(required('tableIdentifier'));
+      else if (label.length > MAX_TABLE_LABEL_LENGTH) details.push(tooLong('tableIdentifier', MAX_TABLE_LABEL_LENGTH));
+      if (!isPositiveInt(seats)) details.push(invalid('seats', EXPECTED.positiveInt));
+      if (details.length) throw invalidFields(details);
+      return db.transaction(async exec => {
+        if (await slotDao.findTableByLabel(exec, label)) {
+          throw new ConflictError('A table with this identifier already exists.', 'TABLE_ALREADY_EXISTS');
+        }
+        const tableId = await slotDao.createTable(exec, { label, seats });
+        return { tableId, tableIdentifier: label, seats };
+      });
     },
 
     async getSlot(user, slotIdRaw) {

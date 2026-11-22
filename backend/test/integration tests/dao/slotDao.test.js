@@ -140,7 +140,7 @@ describe('SlotDao - Integration Tests', () => {
       let table = await slotDao.findTableByLabel(label);
       expect(table).toBeNull();
 
-      const newTableId = await slotDao.createTable({ label });
+      const newTableId = await slotDao.createTable({ label, seats: 4 });
       expect(newTableId).toBeDefined();
 
       table = await slotDao.findTableByLabel(label);
@@ -157,7 +157,7 @@ describe('SlotDao - Integration Tests', () => {
         endTime: '11:00',
         mealId: meal.id,
       });
-      const tableId = await slotDao.createTable({ label: 'SlotTestTable' });
+      const tableId = await slotDao.createTable({ label: 'SlotTestTable', seats: 4 });
 
       // Should not throw
       await expect(slotDao.addTableToSlot(slotId, tableId, 4)).resolves.not.toThrow();

@@ -123,7 +123,8 @@ describe('StaffRoutes - Integration Tests', () => {
     it('should create an existingHiker staff booking with 201 and Location header', async () => {
       const response = await agent.post('/api/staff/bookings').send({
         mode: 'existingHiker',
-        slotId: 11,
+        // Seed slot 3 (2026-11-15 12:00) is still open at the fixed "now".
+        slotId: 3,
         partySize: 2,
         hikerId: 3,
       });

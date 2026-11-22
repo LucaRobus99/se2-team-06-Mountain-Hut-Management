@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { getPendingBooking } from '../utils/pendingBooking.js';
 import EdelweissBrand from '../components/EdelweissBrand.jsx';
 import interiorBackground from '../assets/edelweiss-login-interior.png';
+import { isValidEmail, isValidPhone } from '../utils/contactValidation.js';
 
 const EMPTY_FORM = {
   name: '', email: '', phone: '', password: '', confirmPassword: '',
@@ -22,9 +23,9 @@ function validate(form) {
   if (!name) errors.name = 'Enter your full name.';
   else if (name.length > 100) errors.name = 'Use 100 characters or fewer.';
   if (!email) errors.email = 'Enter your email address.';
-  else if (email.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = 'Enter a valid email address.';
+  else if (email.length > 255 || !isValidEmail(email)) errors.email = 'Enter a valid email address.';
   if (!phone) errors.phone = 'Enter your mobile number.';
-  else if (phone.length > 30 || !/^[+\d\s().-]+$/.test(phone) || phone.replace(/\D/g, '').length < 6) {
+  else if (phone.length > 30 || !isValidPhone(phone)) {
     errors.phone = 'Enter a valid number with at least 6 digits.';
   }
   if (!form.password) errors.password = 'Choose a password.';
@@ -183,7 +184,7 @@ export default function RegisterPage() {
             </div>
             <div className="eh-register-field eh-register-field--full">
               <label htmlFor="register-notes">Notes <span className="eh-register-optional">(optional)</span></label>
-              <textarea {...fieldProps('notes')} maxLength="1000" rows="2" placeholder="E.g. registered mountain guide" />
+              <textarea {...fieldProps('notes')} maxLength="1000" rows="2" placeholder="e.g. mountain guide, preferred contact time, helpful details for bookings" />
               {message('notes')}
             </div>
             <div className="eh-register-field eh-register-field--full">

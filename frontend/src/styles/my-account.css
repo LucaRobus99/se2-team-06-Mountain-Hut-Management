@@ -131,6 +131,13 @@
   height: 100%;
   object-fit: cover;
 }
+.eh-account-default-avatar {
+  display:block;
+  width:100%;
+  height:100%;
+  color:#a0a6a3;
+  background:#e3e5e3;
+}
 .eh-account-photo-edit-icon {
   position: absolute;
   right: 0;

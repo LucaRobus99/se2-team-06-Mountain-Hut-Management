@@ -360,7 +360,7 @@ describe('emailService - White-Box Tests', () => {
           status: null,
           error: 'Network error',
         },
-        { name: 'password reset', ok: true, active: 'v2', status: 200 },
+        { name: 'password-reset', ok: true, active: 'v2', status: 200 },
       ]);
     });
 
@@ -407,7 +407,8 @@ describe('emailService - White-Box Tests', () => {
       ).rejects.toThrow('Reset failed');
       expect(errSpy).toHaveBeenCalledWith(
         'Failed to send password reset email:',
-        expect.any(Error)
+        // Only provider metadata is logged, never the error body or recipient.
+        { status: null, code: null }
       );
       errSpy.mockRestore();
     });

@@ -9,13 +9,13 @@ INSERT INTO users (id, role, name, email, password_hash) VALUES
     (2, 'employee', 'Eric Employee',  'employee@hut.test', 'scrypt$cf8193e68c0f3e29e8e57477e4e586f8$065cbda19286dc583bf8f9a370f8fe1d8ba8d5296d9eb9af7ef24c18f4fce9a9ac25af63a48bf0006c76b06a6f603d56d58f2cb1e4351ca81b9ed721d1b77d50'),
     (3, 'hiker',    'Hanna Hiker',    'hiker@hut.test',    'scrypt$df80fa39d3fb605f025f7eaf4e76049f$c49784da2563ba3a995bad42f8c7da499fc9945bcc30d1c8604488648de2d65d1e81a83957713b2a846ea752e9dac1140023ae6fafb034719ae3cc00c59da855');
 
--- Table labels only; the seats of each table are set per slot below.
-INSERT INTO dining_tables (id, label) VALUES
-    (1, 'T1'),
-    (2, 'T2'),
-    (3, 'T3'),
-    (4, 'T4'),
-    (5, 'T5');
+-- Physical table catalog: capacity does not change between slots.
+INSERT INTO dining_tables (id, label, seats) VALUES
+    (1, 'T1', 2),
+    (2, 'T2', 4),
+    (3, 'T3', 4),
+    (4, 'T4', 6),
+    (5, 'T5', 8);
 
 -- Employee-selected meal categories; they do not impose a timetable.
 INSERT INTO meals (id, meal_type) VALUES
@@ -43,9 +43,7 @@ INSERT INTO slots (id, meal_id, date, start_time, end_time, status) VALUES
     (7,  4, '2026-11-15', '20:00', '21:00', 'off'),
     (8,  1, '2026-11-16', '09:00', '09:30', 'available'),
     (9,  2, '2026-11-16', '12:00', '13:00', 'available'),
-    (10, 4, '2026-11-16', '19:00', '20:00', 'available'),
-    (11, 2, '2027-03-15', '12:00', '13:00', 'available'),
-    (12, 2, '2027-03-16', '12:00', '13:00', 'available');
+    (10, 4, '2026-11-16', '19:00', '20:00', 'available');
 
 -- Table set of each slot: table and its seats in that slot (T1 = 2, T2/T3 = 4,
 -- T4 = 6, T5 = 8). Slot 7 is off and slot 8 has no tables (zero capacity, issue #17).
@@ -58,8 +56,7 @@ INSERT INTO slot_tables (slot_id, table_id, seats) VALUES
     (6, 1, 2), (6, 2, 4), (6, 3, 4), (6, 4, 6), (6, 5, 8),
     (7, 4, 6), (7, 5, 8),
     (9, 2, 4), (9, 4, 6),
-    (10, 3, 4), (10, 4, 6), (10, 5, 8),
-    (11, 1, 4), (11, 2, 2);
+    (10, 3, 4), (10, 4, 6), (10, 5, 8);
 
 -- The rows above use explicit ids, which do not advance the identity
 -- sequences. Move each sequence past the seeded ids so the next INSERT

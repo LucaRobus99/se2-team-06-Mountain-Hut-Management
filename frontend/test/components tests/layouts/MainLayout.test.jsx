@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router';
 import MainLayout from '../../../src/layouts/MainLayout.jsx';
 
@@ -9,6 +9,15 @@ vi.mock('../../../src/components/AppNavbar.jsx', () => ({
 }));
 
 describe('MainLayout Component Integration Tests', () => {
+  it('scrolls to the top when Directions is clicked again on Find us', () => {
+    const scroll = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    render(<MemoryRouter initialEntries={['/find-us#getting-here']}><Routes>
+      <Route element={<MainLayout />}><Route path="/find-us" element={<p>Find us page</p>} /></Route>
+    </Routes></MemoryRouter>);
+    fireEvent.click(screen.getByRole('link', { name: /directions/i }));
+    expect(scroll).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'smooth' });
+    scroll.mockRestore();
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();

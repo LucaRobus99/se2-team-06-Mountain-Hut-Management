@@ -71,6 +71,20 @@ export async function changeMyPassword({ currentPassword, newPassword }) {
     });
 }
 
+export async function requestPasswordReset(email) {
+    return request('/api/auth/forgot-password', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+    });
+}
+
+export async function resetPassword(token, newPassword) {
+    return request('/api/auth/reset-password', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, newPassword }),
+    });
+}
+
 export async function uploadMyAvatar(imageData) {
     const data = await request('/api/auth/avatar', {
         method: 'PATCH',

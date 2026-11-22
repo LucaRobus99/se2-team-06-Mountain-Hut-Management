@@ -1,113 +1,88 @@
-const API_URL = 'http://localhost:8080'; // sostituisci con la porta del tuo backend se diversa
-const APP_URL = 'http://localhost:5173';
+const api = (path, options = {}) => cy.request({
+  url: `/api${path}`,
+  // Do not repeat a write if its HTTP response is interrupted.
+  retryOnNetworkFailure: !options.method || options.method === 'GET',
+  ...options,
+});
 
-describe('Change a Booking', () => {
-  beforeEach(() => {
-    // Pulisce le prenotazioni di test tramite l'endpoint del backend già attivo
-    cy.request('POST', `${API_URL}/api/test/reset`);
-
-    // 1. Visit login page and ensure form is visible
-    cy.visit(`${APP_URL}/login`);
-    cy.get('form.eh-login-form', { timeout: 10000 }).should('be.visible');
-
-    // 2. Fill in valid test credentials using the seed data
-    cy.get('input#login-email').should('be.visible').clear().type('hiker@hut.test');
-    cy.get('input#login-password').should('be.visible').clear().type('password');
-
-    // 3. Submit login form
-    cy.get('button[type="submit"]').click();
-
-    // 4. Assert successful authentication by checking URL change
-    cy.url({ timeout: 10000 }).should('not.include', '/login');
+// Each run needs a date without any slots, including disabled ones.
+// Check as staff, so existing test or seed slots cannot overlap our fixtures.
+function findFreeDate(daysAhead = 7) {
+  if (daysAhead > 60) throw new Error('No empty date found for MH-06 E2E fixtures.');
+  const date = new Date(Date.now() + daysAhead * 86400000).toISOString().slice(0, 10);
+  return api('/slots', { qs: { date } }).then(({ body }) => {
+    expect(body.slots).to.be.an('array');
+    return body.slots.length === 0 ? date : findFreeDate(daysAhead + 1);
   });
+}
 
-  afterEach(() => {
-    // Pulisce anche al termine del test per lasciare il DB pronto al giro successivo
-    cy.request('POST', `${API_URL}/api/test/reset`);
-  });
-
-  it('creates a booking for 1 guest on 15 March 2027, updates guests to 2, and verifies notice', () => {
-    // 1. Navigate to availability search page
-    cy.visit(`${APP_URL}/availability`);
-    cy.get('form.eh-availability-search', { timeout: 10000 }).should('be.visible');
-
-    // 2. Select target date (15 March 2027 -> +4 months from Nov 2026)
-    cy.get('#availability-date').click();
-    for (let i = 0; i < 4; i++) {
-      cy.get('button[aria-label*="Next month"], button.ea-calendar-next, .react-datepicker__navigation--next')
-        .first()
-        .click();
-    }
-    cy.get('button.ea-calendar-day:not([disabled])').contains(/^15$/).click();
-
-    // 3. Select meal (lunch)
-    cy.get('#availability-meal', { timeout: 10000 }).should('be.visible').click();
-    cy.contains('div, span, li, option', /^lunch$/i).click();
-
-    // 4. Select party size (1 guest initially)
-    cy.get('select#availability-guests, input#availability-guests, #availability-guests', { timeout: 10000 })
-      .should('be.visible')
-      .then(($el) => {
-        if ($el.is('select')) {
-          cy.wrap($el).select('1');
-        } else {
-          cy.wrap($el).click().type('{selectall}1');
-        }
-      });
-
-    // 5. Submit search and pick slot
-    cy.get('button.search-submit-btn, button:contains("Search")').click();
-    cy.get('.eh-slot-tile', { timeout: 10000 }).should('be.visible').first().click();
-    cy.get('.eh-selection-summary', { timeout: 10000 }).should('be.visible');
-
-    // 6. Click "Continue to booking" button from the summary panel
-    cy.contains('button', /continue to booking/i, { timeout: 10000 }).should('be.visible').click();
-
-    // 7. Click "Confirm booking" using the exact green action button
-    cy.get('.eh-booking-actions > .eh-button--green', { timeout: 10000 })
-      .should('be.visible')
-      .click();
-
-    // 8. Assert successful booking confirmation screen
-    cy.contains(/reservation confirmed|booking successful|confirmed|success/i, { timeout: 10000 }).should('be.visible');
-
-    // 9. Return to My Bookings via the green action button
-    cy.get('.eh-booking-actions > .eh-button--green', { timeout: 10000 })
-      .should('be.visible')
-      .click();
-    cy.url({ timeout: 10000 }).should('include', '/my-bookings');
-
-    // 10. Expand the booking card and click "Change booking"
-    cy.get('.eh-manage-arrow-button', { timeout: 10000 })
-      .first()
-      .should('be.visible')
-      .click();
-
-    cy.get('.eh-edit-actions > .eh-button', { timeout: 10000 })
-      .should('be.visible')
-      .click();
-
-    // 11. Change guests from 1 to 2 in #edit-guests and click "Save changes"
-    cy.get('select#edit-guests, input#edit-guests, #edit-guests', { timeout: 10000 })
-      .should('be.visible')
-      .then(($el) => {
-        if ($el.is('select')) {
-          cy.wrap($el).select('2');
-        } else {
-          cy.wrap($el).click().type('{selectall}2');
-        }
-      });
-
-    cy.get('.eh-edit-actions > .eh-button', { timeout: 10000 })
-      .should('be.visible')
-      .click();
-
-    // 12. Verify confirmation notice in .eh-manage-notice
-    cy.get('.eh-manage-notice', { timeout: 10000 })
-      .should('be.visible')
-      .and(($el) => {
-        const normalizedText = $el.text().replace(/\s+/g, ' ').trim();
-        expect(normalizedText).to.include('Booking updated successfully. Email delivery was not confirmed.');
+describe('MH-06 — change a booking', () => {
+  it('updates a booking, rechecks available times and preserves it when capacity is insufficient', () => {
+    // Refuse to run against anyone's regular database.
+    api('/e2e').its('body').should('deep.equal', { isolated: true });
+    cy.viewport(390, 844);
+    let date;
+    const tables = [{ tableIdentifier: 'E2E table', seats: 2 }];
+    const unique = Date.now();
+    const email = `mh06-${unique}@hut.test`;
+    api('/auth/login', { method: 'POST', body: { email: 'warden@hut.test', password: 'password' } });
+    // Keep fixtures separate even if the isolated server has not been restarted.
+    findFreeDate().then(freeDate => {
+      date = freeDate;
+      return api('/slots', { method: 'POST', body: { date, meal: 'lunch', startTime: '12:00', endTime: '13:00', tables } });
+    })
+      .its('body.id').then(original => {
+        api('/slots', { method: 'POST', body: { date, meal: 'lunch', startTime: '13:00', endTime: '14:00',
+          tables: [{ tableIdentifier: 'E2E table four seats', seats: 4 }] } }).its('body.id').then(target => {
+          api('/auth/logout', { method: 'POST' });
+          api('/auth/register', { method: 'POST', body: {
+            name: 'E2E Hiker', email, phone: '+39012345678', password: 'password',
+          } });
+          api('/bookings', { method: 'POST', body: { slotId: original, partySize: 2 } })
+            .its('body.id').then(id => {
+              cy.visit('/my-bookings');
+              cy.get('[aria-label="Reservation details"]').should('not.exist');
+              cy.get(`button[aria-label^="Open booking #${id}:"]`).click();
+              cy.contains('button', 'Change booking').click();
+              cy.get('.eh-edit-panel').should('be.visible');
+              cy.get('.eh-slot-tile').contains('12:00').should('be.visible');
+              cy.get('#edit-guests').clear().type('3');
+              cy.contains('Your original time is unavailable').should('be.visible');
+              cy.contains('button.eh-slot-tile', '12:00').should('not.exist');
+              cy.contains('button', 'Save changes').should('be.disabled');
+              cy.contains('button.eh-slot-tile', '13:00').click();
+              cy.contains('button', 'Save changes').click();
+              // Nothing is sent until the hiker confirms the summary.
+              cy.get('[role="dialog"]').should('contain.text', 'Save these changes?').and('contain.text', '3 guests');
+              cy.contains('button', 'Confirm changes').click();
+              cy.contains('Booking updated successfully').should('be.visible');
+              cy.reload();
+              cy.get(`button[aria-label^="Open booking #${id}:"]`).click();
+              cy.contains('Your reservation').should('be.visible');
+              cy.contains('3 people').should('be.visible');
+              cy.contains('button', 'Change booking').click();
+              cy.get('#edit-guests').clear().type('4');
+              cy.contains('button.eh-slot-tile', '13:00').should('be.visible').click();
+              cy.contains('button', 'Save changes').should('be.enabled');
+              // Another hiker books the last free seat after the preview.
+              api('/auth/logout', { method: 'POST' });
+              api('/auth/register', { method: 'POST', body: {
+                name: 'Competing hiker', email: `mh06-other-${unique}@hut.test`, phone: '+39012345678', password: 'password',
+              } });
+              api('/bookings', { method: 'POST', body: { slotId: target, partySize: 1 } });
+              api('/auth/logout', { method: 'POST' });
+              api('/auth/login', { method: 'POST', body: { email, password: 'password' } });
+              cy.intercept('PATCH', `/api/bookings/${id}`).as('updateBooking');
+              cy.contains('button', 'Save changes').click();
+              cy.contains('button', 'Confirm changes').click();
+              cy.wait('@updateBooking').its('response.statusCode').should('equal', 409);
+              cy.contains('Your original booking has not changed').should('be.visible');
+              cy.get('#edit-guests').should('have.value', '4');
+              cy.contains('button', 'Save changes').should('be.disabled');
+              api(`/bookings/${id}`).its('body').should('include', { id, partySize: 3 });
+              api(`/bookings/${id}`).its('body.slot.id').should('equal', target);
+            });
+        });
       });
   });
 });

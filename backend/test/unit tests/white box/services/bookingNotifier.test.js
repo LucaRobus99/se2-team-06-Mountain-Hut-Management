@@ -153,10 +153,13 @@ describe('bookingNotifier - White-Box Tests', () => {
       expect(bookingEmailFields(baseBooking, 'Fallback')).toEqual({
         name: 'Mario Rossi',
         date: '2027-06-15',
+        display_date: '15 June 2027',
         start_time: '12:00',
         end_time: '13:00',
         meal: 'lunch',
+        display_meal: 'Lunch',
         guests: 2,
+        guest_label: '2 people',
         split: false,
         booking_id: 42,
         party_requirements: [{ description: 'Vegetarian', allergies: false }],
@@ -174,6 +177,15 @@ describe('bookingNotifier - White-Box Tests', () => {
         meal: undefined,
       });
       expect(bookingEmailFields(withoutContact, null).name).toBeNull();
+    });
+
+    it('formats the date, meal and party size exactly as in the booking receipt, retaining raw values', () => {
+      const fields = bookingEmailFields({ ...baseBooking, partySize: 1, slot: { ...baseBooking.slot, meal: 'aperitivo' } });
+      expect(fields).toMatchObject({
+        date: '2027-06-15', display_date: '15 June 2027',
+        meal: 'aperitivo', display_meal: 'Aperitif',
+        guests: 1, guest_label: '1 person',
+      });
     });
   });
 });

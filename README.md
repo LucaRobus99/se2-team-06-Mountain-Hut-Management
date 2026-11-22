@@ -13,16 +13,17 @@ A web application for managing meals, table availability and reservations at a s
 ## Implemented functionality
 
 - **MH-01 — Book a table:** authenticated hikers select a meal time and party size. The backend assigns tables and seats inside a transaction, preferring one table when possible.
-- **MH-02 — Define slot capacity:** staff can create meal slots and configure the tables and seats available for each one.
+- **MH-02 — Define slot capacity:** staff select reusable service times (or define new ones) and choose physical tables with fixed seats; each slot has its own subset of tables (#47).
 - **MH-03 — Receive confirmation:** booking confirmation is displayed immediately; a confirmation email is attempted when Mailgun is configured. Email delivery failures do not cancel confirmed bookings.
 - **MH-04 — Check availability:** public search by date, meal and number of guests; eligible time slots show their availability.
-- **MH-05 — Provide party requirements:** hikers can enter separate dietary/allergy requirements, including the number of affected guests, when confirming a booking. The confirmation page shows the saved information.
+- **MH-05 — Provide party requirements:** hikers can enter a list of dietary requirements when confirming a booking, each with a free-text description (e.g. "1 vegan, peanut allergy") and an allergy checkbox. The confirmation page shows the saved information.
 - **MH-06 — Change a booking:** authenticated hikers can review upcoming, past and cancelled bookings. Eligible confirmed bookings can be edited (date, meal/time slot, party size and dietary requirements) at least 48 hours before both the original and new slot. The edit form checks availability for the current reservation; the backend validates and reallocates seats transactionally on save.
+- **MH-07 — Reserve for an hiker:** employees and wardens can book for an existing hiker, temporary guest or a newly created account. Staff can reserve until the slot starts. New accounts have a generated temporary password that must be replaced before normal use; password recovery uses single-use email links.
 - **MH-08 — Cancel a booking:** hikers can cancel their own confirmed reservations at any time from My Bookings, after explicit confirmation in a blocking dialog. Seats are released, cancelled reservations remain in history, and a cancellation email is attempted after the database transaction.
 - **My Account (team extension):** hikers can update their name, phone, optional notes and emergency contact, change their password by supplying the current password, and upload/change/remove a profile photo. Changes persist in the database. The email address is shown read-only.
 - **Authentication:** hiker registration and login/logout; access to staff and hiker endpoints is protected by the backend. A hiker cannot create a second confirmed booking for the same slot.
 
-The staff **Reservations** page remains a placeholder. MH-07 has backend endpoints but its user-facing workflow is not yet complete. Story completion requires passing tests, review and verification against the team Definition of Done.
+The staff **Reservations** page connects the three MH-07 workflows to the staff-only API. Story completion requires passing tests, review and verification against the team Definition of Done.
 
 ## Start locally
 
@@ -48,7 +49,7 @@ Open **http://localhost:5173**. The backend listens on **http://localhost:8080**
 
 Use `npm run dev` inside `backend/` for auto-restart during backend development. `npm start` is preferable for manual booking/account tests because a watch-mode restart also loses the in-memory session.
 
-Without `DATABASE_URL`, the backend uses an **embedded PostgreSQL (PGlite)** stored in `backend/database/pglite`, so no database server is needed. On first startup it creates the schema and demo records. Existing databases are **not migrated**: after a schema change, reset with `npm run db:reset` (deletes your local data).
+Without `DATABASE_URL`, the backend uses an **embedded PostgreSQL (PGlite)** stored in `backend/database/pglite`, so no database server is needed. On first startup it creates the schema and demo records. The MH-02 fixed-capacity update migrates existing databases only when every table label has exactly one historical capacity; inconsistent legacy data is rejected without changing bookings. Back up before updating. For a clean demo use a new Compose project and volume rather than deleting existing data.
 
 ## Run with Docker
 
@@ -127,7 +128,7 @@ npx vitest run
 npm run build
 ```
 
-Run these checks on the branch you intend to merge. See [frontend/README.md](frontend/README.md) for the isolated MH-06 Cypress scenario. It uses a disposable in-memory PostgreSQL database and does not modify personal or demo reservations.
+Run these checks on the branch you intend to merge. For the Cypress end-to-end tests run `npm run e2e` from `frontend/`; it starts its own disposable backend and frontend on separate ports and never modifies personal or demo reservations (see [frontend/README.md](frontend/README.md#end-to-end-tests-cypress)).
 
 ## Project structure
 

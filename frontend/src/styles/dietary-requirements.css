@@ -1,0 +1,66 @@
+/* Warm Alpine: a single visual vocabulary for all reservation dietary details. */
+.eh-diet-list {
+  display: grid;
+  gap: .65rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.eh-diet-card {
+  display: grid;
+  gap: .3rem;
+  padding: .8rem 1rem;
+  min-width: 0;
+  border: 1px solid #e0d4c3;
+  border-radius: .65rem;
+  background: #f4eee5;
+  overflow-wrap: anywhere;
+}
+.eh-diet-card.is-allergy {
+  border-color: #e8baaa;
+  border-left: 3px solid #b4442f;
+  background: #fcf0e9;
+}
+.eh-diet-label {
+  color: #242424;
+  font: 700 .69rem/1.4 system-ui, sans-serif;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+.eh-diet-card.is-allergy .eh-diet-label { color: #963a2b; }
+.eh-diet-description {
+  color: #242424;
+  font: 700 1rem/1.5 Georgia, 'Palatino Linotype', serif;
+  white-space: pre-wrap;
+}
+.eh-diet-empty { color: #6b7066; font: italic .9rem/1.5 Georgia, serif; margin: 0; }
+.eh-confirmation-dietary .eh-confirmation-dietary-heading h2,
+.eh-manage-dietary h4,
+.sr-receipt .sr-receipt-requirements h3,
+.sr-dietary-section .sr-section-heading h2,
+.eh-edit-requirements-title h4,
+.eh-party-requirements .eh-party-requirements-heading h2 {
+  color: #242424;
+}
+.eh-confirmation-dietary-heading { margin-bottom: 1rem; }
+.eh-party-requirements .eh-party-optional { color: #765034; background: #efe6d9; }
+.eh-party-requirements .eh-party-entry,
+.eh-edit-requirement {
+  background: #f4eee5;
+  border-color: #e0d4c3;
+}
+.eh-party-entry:has(input:checked),
+.eh-edit-requirement:has(input:checked) {
+  background: #fcf0e9;
+  border-color: #e8baaa;
+}
+.eh-party-entry h3,
+.eh-party-entry .eh-party-label,
+.eh-edit-requirement .eh-edit-requirement-head label { color: #242424; }
+.eh-party-allergy input,
+.eh-edit-allergy input { accent-color: #b4442f; }
+.eh-party-allergy:has(input:checked) strong,
+.eh-edit-allergy.is-checked { color: #963a2b; }
+@media (max-width: 480px) {
+  .eh-diet-card { padding: .75rem .85rem; }
+}

@@ -3,9 +3,9 @@ import { Modal } from 'react-bootstrap';
 export default function SlotConfirmModal({ show, summary, onCancel, onConfirm, busy = false }) {
   const tables = summary?.tables || [];
   return (
-    <Modal show={show} onHide={() => { if (!busy) onCancel(); }} centered scrollable backdrop="static" keyboard={!busy} aria-labelledby="slot-confirm-title" dialogClassName="staff-confirm-modal">
+    <Modal show={show} onHide={() => { if (!busy) onCancel(); }} centered scrollable backdrop="static" keyboard={!busy} aria-labelledby="slot-confirm-title" dialogClassName="staff-confirm-modal eh-dialog" backdropClassName="eh-cancel-backdrop">
       <Modal.Header closeButton={!busy}>
-        <Modal.Title id="slot-confirm-title">Confirm new slot</Modal.Title>
+        <div><p className="eh-dialog-eyebrow">Service planning</p><Modal.Title as="h2" id="slot-confirm-title">Confirm new slot</Modal.Title></div>
       </Modal.Header>
       <Modal.Body>
         <p className="staff-confirm-intro">Check the details before creating this slot.</p>

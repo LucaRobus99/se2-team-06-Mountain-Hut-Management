@@ -4,7 +4,7 @@ import { createApp } from '../src/app.js';
 import { createTestDb } from './helpers/testDb.js';
 
 const fixedNow = () => new Date('2026-11-02T10:00:00Z');
-const payload = { date: '2026-11-18', startTime: '11:30', endTime: '12:15', meal: 'dinner', tables: [{ tableIdentifier: 'T1', seats: 3 }, { tableIdentifier: 'T6', seats: 5 }] };
+const payload = { date: '2026-11-18', startTime: '11:30', endTime: '12:15', meal: 'dinner', tables: [{ tableIdentifier: 'T1', seats: 2 }, { tableIdentifier: 'T6', seats: 6 }] };
 
 async function context(role = 'employee') {
   const db = createTestDb();
@@ -22,7 +22,7 @@ describe('MH-02 staff slot configuration', () => {
       const created = await agent.post('/api/slots').send(payload);
       expect(created.status).toBe(201);
       expect(created.body).toMatchObject({ meal: 'dinner', startTime: '11:30', endTime: '12:15' });
-      expect(created.body.tables.map((t) => t.seats)).toEqual([3, 5]);
+      expect(created.body.tables.map((t) => t.seats)).toEqual([2, 6]);
       const publicAvailability = await request(app).get('/api/availability').query({ date: payload.date, meal: 'dinner', partySize: 8 });
       expect(publicAvailability.status).toBe(200);
       expect(publicAvailability.body.slots.some((slot) => slot.id === created.body.id)).toBe(true);

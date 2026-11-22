@@ -146,9 +146,12 @@ export function createBookingCore({ bookingDao, slotDao, timeZone, now = () => n
      * (staff) identifies who made it; `contact` is stored on the booking.
      * @returns {{ bookingId: number, assignments: Array }}
      */
-    async placeBooking(tx, { slot, hikerId = null, createdBy = null, partySize, contact, requirements }) {
+    async placeBooking(tx, { slot, hikerId = null, createdBy = null, partySize, contact, requirements, expectedSeating }) {
       const tables = await slotDao.getTablesWithFreeForSlot(tx, slot.id);
       const seating = seatOrFail(partySize, tables);
+      if (expectedSeating === 'single_table' && seating.fit === 'split') {
+        throw new ConflictError('Seating has changed. Please review the split arrangement before confirming.', 'SEATING_CHANGED');
+      }
 
       const bookingId = await bookingDao.create(tx, {
         slotId: slot.id,

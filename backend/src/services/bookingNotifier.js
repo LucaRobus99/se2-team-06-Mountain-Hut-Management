@@ -10,13 +10,21 @@ export const BOOKING_EMAIL_KINDS = ['created', 'updated', 'cancelled'];
 
 /** Template variables shared by every booking email. */
 export function bookingEmailFields(view, fallbackName = null) {
+  const date = view.slot.date;
+  const parsedDate = new Date(`${date}T00:00:00Z`);
+  const meal = view.slot.meal;
   return {
     name: view.contactName ?? fallbackName ?? null,
-    date: view.slot.date,
+    date,
+    display_date: Number.isNaN(parsedDate.getTime()) ? date : new Intl.DateTimeFormat('en-GB', {
+      day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+    }).format(parsedDate),
     start_time: view.slot.startTime,
     end_time: view.slot.endTime,
-    meal: view.slot.meal,
+    meal,
+    display_meal: meal === 'aperitivo' ? 'Aperitif' : meal ? meal[0].toUpperCase() + meal.slice(1) : '',
     guests: view.partySize,
+    guest_label: `${view.partySize} ${view.partySize === 1 ? 'person' : 'people'}`,
     split: view.split,
     booking_id: view.id,
     party_requirements: view.requirements,
@@ -32,7 +40,7 @@ export function createBookingNotifier(emailService) {
      * @returns {Promise<{status: 'sent'|'skipped'|'failed'}>}
      */
     async notify(kind, view, recipient, { fallbackName = null } = {}) {
-      if (typeof emailService?.sendBookingEmail !== 'function') {
+      if (!recipient || typeof emailService?.sendBookingEmail !== 'function') {
         return { status: 'skipped' };
       }
 

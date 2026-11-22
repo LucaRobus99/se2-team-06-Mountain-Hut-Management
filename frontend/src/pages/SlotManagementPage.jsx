@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Spinner } from 'react-bootstrap';
-import { createStaffSlot, listStaffSlots, mealLabel, todayInHut } from '../api/slots.js';
+import { createStaffSlot, listStaffSlots, listSlotCatalog, createCatalogTable, mealLabel, todayInHut } from '../api/slots.js';
 import SlotConfirmModal from '../components/SlotConfirmModal.jsx';
 import StaffDatePicker from '../components/StaffDatePicker.jsx';
 import StaffSelect from '../components/StaffSelect.jsx';
@@ -12,7 +12,6 @@ const MEALS = [
   { value: 'aperitivo', label: 'Aperitif' },
   { value: 'dinner', label: 'Dinner' },
 ];
-const emptyTable = (id) => ({ rowId: id, tableIdentifier: `T${id}`, seats: '4' });
 const isValidTime = (time) => /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
 const dayBefore = (date) => {
   const value = new Date(`${date}T12:00:00Z`);
@@ -44,8 +43,17 @@ export default function SlotManagementPage() {
   const [endTime, setEndTime] = useState('13:00');
   const [meal, setMeal] = useState('lunch');
   const [mode, setMode] = useState('manual');
-  const [tables, setTables] = useState([emptyTable(1), emptyTable(2)]);
-  const [nextRowId, setNextRowId] = useState(3);
+  const [tables, setTables] = useState([]);
+  const [catalog, setCatalog] = useState([]);
+  const [timePatterns, setTimePatterns] = useState([]);
+  const [pattern, setPattern] = useState('');
+  const [catalogError, setCatalogError] = useState('');
+  const [loadingCatalog, setLoadingCatalog] = useState(true);
+  const [newTableOpen, setNewTableOpen] = useState(false);
+  const [newTableName, setNewTableName] = useState('');
+  const [newTableSeats, setNewTableSeats] = useState('');
+  const [addingTable, setAddingTable] = useState(false);
+  const [newTableError, setNewTableError] = useState('');
   const [sourceDate, setSourceDate] = useState(() => dayBefore(todayInHut()));
   const [sourceSlots, setSourceSlots] = useState([]);
   const [sourceId, setSourceId] = useState('');
@@ -59,6 +67,17 @@ export default function SlotManagementPage() {
   const scheduleRef = useRef(null);
   const [formError, setFormError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
+
+  useEffect(() => {
+    let active = true;
+    setLoadingCatalog(true);
+    setCatalogError('');
+    listSlotCatalog().then(data => {
+      if (active) { setCatalog(data.tables); setTimePatterns(data.timePatterns); }
+    }).catch(error => { if (active) setCatalogError(error.message); })
+      .finally(() => { if (active) setLoadingCatalog(false); });
+    return () => { active = false; };
+  }, [refresh]);
 
   useEffect(() => {
     if (!viewDate) { setSlots([]); return; }
@@ -90,13 +109,32 @@ export default function SlotManagementPage() {
   const totalSeats = mode === 'manual' ? capacity(tables) : capacity(selectedSource?.tables || []);
   const tableCount = mode === 'manual' ? tables.length : selectedSource?.tables?.length || 0;
 
-  function updateTable(rowId, field, value) {
-    setTables((previous) => previous.map((table) => table.rowId === rowId ? { ...table, [field]: value } : table));
-    setFieldErrors({});
+  function toggleTable(table) {
+    setTables(previous => previous.some(t => t.tableId === table.tableId)
+      ? previous.filter(t => t.tableId !== table.tableId) : [...previous, table]);
   }
-  function addTable() {
-    setTables((previous) => [...previous, emptyTable(nextRowId)]);
-    setNextRowId((n) => n + 1);
+  function choosePattern(value) {
+    setPattern(value);
+    if (value === '') return;
+    const item = timePatterns[Number(value)];
+    if (item) { setMeal(item.meal); setStartTime(item.startTime); setEndTime(item.endTime); }
+  }
+  async function addTable() {
+    setNewTableError('');
+    const name = newTableName.trim();
+    const seats = Number(newTableSeats);
+    if (!name || name.length > 50 || !/^\d+$/.test(newTableSeats) || !Number.isSafeInteger(seats) || seats < 1) {
+      setNewTableError('Enter a table identifier and a positive whole number of seats.');
+      return;
+    }
+    setAddingTable(true);
+    try {
+      const table = await createCatalogTable(name, seats);
+      setCatalog(previous => [...previous, table].sort((a, b) => a.tableIdentifier.localeCompare(b.tableIdentifier)));
+      setTables(previous => [...previous, table]);
+      setNewTableOpen(false); setNewTableName(''); setNewTableSeats('');
+    } catch (error) { setNewTableError(error.message); }
+    finally { setAddingTable(false); }
   }
 
   function validate() {
@@ -107,19 +145,6 @@ export default function SlotManagementPage() {
     if (!isValidTime(startTime)) errors.startTime = 'Enter a valid time (HH:MM).';
     if (!isValidTime(endTime) || (isValidTime(startTime) && endTime <= startTime)) errors.endTime = 'The end must be after the start, on the same day.';
     if (mode === 'copy' && !selectedSource) errors.sourceId = 'Choose the slot whose tables you want to copy.';
-    if (mode === 'manual') {
-      const seen = new Set();
-      tables.forEach((table, index) => {
-        const name = table.tableIdentifier.trim();
-        if (!name) errors[`table-${table.rowId}`] = 'Enter a table identifier.';
-        else if (name.length > 50) errors[`table-${table.rowId}`] = 'Maximum 50 characters.';
-        else if (seen.has(name)) errors[`table-${table.rowId}`] = 'Table identifiers must be unique in a slot.';
-        seen.add(name);
-        if (!Number.isSafeInteger(Number(table.seats)) || Number(table.seats) < 1 || !/^\d+$/.test(table.seats)) {
-          errors[`seats-${table.rowId}`] = `Table ${index + 1}: enter a positive whole number.`;
-        }
-      });
-    }
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   }
@@ -127,7 +152,7 @@ export default function SlotManagementPage() {
   function handleSubmit(event) {
     event.preventDefault();
     setFormError('');
-    if (!validate() || saving) return;
+    if (!validate() || saving || (mode === 'manual' && newTableOpen)) return;
     const payload = { date, startTime, endTime, meal };
     if (mode === 'copy') payload.copyTablesFromSlotId = Number(sourceId);
     else payload.tables = tables.map((table) => ({
@@ -159,8 +184,8 @@ export default function SlotManagementPage() {
       setEndTime('13:00');
       setMeal('lunch');
       setMode('manual');
-      setTables([emptyTable(1), emptyTable(2)]);
-      setNextRowId(3);
+      setTables([]);
+      setPattern('');
       setSourceId('');
       setFieldErrors({});
       // Keep the selected date for consecutive services; reset all other fields.
@@ -220,41 +245,51 @@ export default function SlotManagementPage() {
         )}
         {formError && <Alert variant="danger" role="alert">{formError}</Alert>}
         <form onSubmit={handleSubmit} noValidate>
+          <div className="staff-pattern-choice">
+            <Field id="slot-pattern" label="Service time" hint="Reuse an existing time or define a new one.">
+              <StaffSelect id="slot-pattern" value={pattern} onChange={choosePattern}
+                options={[{ value: '', label: 'Define a new time' }, ...timePatterns.map((t, index) => ({ value: String(index), label: `${mealLabel(t.meal)} · ${t.startTime}–${t.endTime}` }))]}
+                placeholder="Define a new time" disabled={saving || loadingCatalog}/>
+            </Field>
+          </div>
           <div className="staff-form-grid">
             <Field id="slot-date" label="Service date" error={fieldErrors.date}>
               <StaffDatePicker id="slot-date" value={date} onChange={setDate} min={todayInHut()} disabled={saving} ariaLabel="Choose service date"/>
             </Field>
             <Field id="slot-meal" label="Meal type" error={fieldErrors.meal}>
-              <StaffSelect id="slot-meal" value={meal} onChange={setMeal} options={MEALS} disabled={saving} placeholder="Choose meal"/>
+              <StaffSelect id="slot-meal" value={meal} onChange={value => { setMeal(value); setPattern(''); }} options={MEALS} disabled={saving} placeholder="Choose meal"/>
             </Field>
             <Field id="slot-start" label="Start time" error={fieldErrors.startTime}>
-              <StaffTimePicker id="slot-start" label="Start time" value={startTime} onChange={setStartTime} disabled={saving}/>
+              <StaffTimePicker id="slot-start" label="Start time" value={startTime} onChange={value => { setStartTime(value); setPattern(''); }} disabled={saving}/>
             </Field>
             <Field id="slot-end" label="End time" error={fieldErrors.endTime}>
-              <StaffTimePicker id="slot-end" label="End time" value={endTime} onChange={setEndTime} disabled={saving}/>
+              <StaffTimePicker id="slot-end" label="End time" value={endTime} onChange={value => { setEndTime(value); setPattern(''); }} disabled={saving}/>
             </Field>
           </div>
           <div className="staff-section-divider" />
           <div className="staff-panel-heading staff-table-heading"><h3>Table configuration</h3></div>
           <fieldset className="staff-mode-picker" disabled={saving}>
             <legend className="visually-hidden">Choose a table configuration method</legend>
-            <label className={mode === 'manual' ? 'selected' : ''}><input type="radio" name="table-mode" value="manual" checked={mode === 'manual'} onChange={() => setMode('manual')} /> Enter tables manually</label>
+            <label className={mode === 'manual' ? 'selected' : ''}><input type="radio" name="table-mode" value="manual" checked={mode === 'manual'} onChange={() => setMode('manual')} /> Choose existing tables</label>
             <label className={mode === 'copy' ? 'selected' : ''}><input type="radio" name="table-mode" value="copy" checked={mode === 'copy'} onChange={() => setMode('copy')} /> Copy tables from another slot</label>
           </fieldset>
           {mode === 'manual' ? (
             <div className="staff-table-editor">
-              {tables.map((table) => (
-                <div className="staff-table-row" key={table.rowId}>
-                  <Field id={`table-name-${table.rowId}`} label="Table identifier" error={fieldErrors[`table-${table.rowId}`]}>
-                    <input id={`table-name-${table.rowId}`} type="text" maxLength={51} value={table.tableIdentifier} onChange={(e) => updateTable(table.rowId, 'tableIdentifier', e.target.value)} disabled={saving} placeholder="e.g. T1"/>
-                  </Field>
-                  <Field id={`table-seats-${table.rowId}`} label="Seats" error={fieldErrors[`seats-${table.rowId}`]}>
-                    <input id={`table-seats-${table.rowId}`} type="number" min="1" step="1" value={table.seats} onChange={(e) => updateTable(table.rowId, 'seats', e.target.value)} disabled={saving}/>
-                  </Field>
-                  <button className="staff-icon-button" type="button" aria-label={`Remove ${table.tableIdentifier || 'table'}`} disabled={saving} onClick={() => setTables((previous) => previous.filter((item) => item.rowId !== table.rowId))}>×</button>
-                </div>
-              ))}
-              <button className="staff-outline-button" type="button" disabled={saving} onClick={addTable}>+ Add another table</button>
+              <p className="staff-hint">Select which physical tables are available for this service. Each table has a fixed number of seats.</p>
+              {catalogError && <Alert variant="danger">{catalogError}</Alert>}
+              {loadingCatalog ? <p role="status">Loading tables…</p> : <div className="staff-catalog-grid">{catalog.map(table => (
+                <label className={`staff-catalog-table ${tables.some(t => t.tableId === table.tableId) ? 'selected' : ''}`} key={table.tableId}>
+                  <input type="checkbox" aria-label={`${table.tableIdentifier} ${table.seats} ${table.seats === 1 ? 'seat' : 'seats'}`} checked={tables.some(t => t.tableId === table.tableId)} onChange={() => toggleTable(table)} disabled={saving}/>
+                  <span><strong>{table.tableIdentifier}</strong><small>{table.seats} {table.seats === 1 ? 'seat' : 'seats'}</small></span>
+                </label>
+              ))}</div>}
+              <button className="staff-outline-button" type="button" disabled={saving || addingTable || loadingCatalog || Boolean(catalogError)} onClick={() => setNewTableOpen(v => !v)}>{newTableOpen ? 'Close new table form' : '+ Define a new table'}</button>
+              {newTableOpen && <div className="staff-new-table">
+                <Field id="new-table-name" label="Table identifier"><input id="new-table-name" value={newTableName} maxLength={50} onChange={e => setNewTableName(e.target.value)} disabled={addingTable} placeholder="e.g. Terrace 1"/></Field>
+                <Field id="new-table-seats" label="Fixed seats"><input id="new-table-seats" type="number" min="1" step="1" value={newTableSeats} onChange={e => setNewTableSeats(e.target.value)} disabled={addingTable}/></Field>
+                <button type="button" className="staff-primary-button" onClick={addTable} disabled={addingTable}>{addingTable ? 'Creating…' : 'Create table'}</button>
+                {newTableError && <p role="alert" className="staff-field-error">{newTableError}</p>}
+              </div>}
               {tables.length === 0 && <p className="staff-hint">A slot without tables is allowed, but has zero capacity and cannot receive bookings.</p>}
             </div>
           ) : (
@@ -284,7 +319,7 @@ export default function SlotManagementPage() {
                 <span><strong>{tableCount}</strong> {tableCount === 1 ? 'table' : 'tables'}</span>
               </div>
             </div>
-            <button className="staff-primary-button" type="submit" disabled={saving || (mode === 'copy' && !selectedSource)}>{saving ? 'Creating slot…' : 'Create slot'} <span aria-hidden="true">↗</span></button>
+            <button className="staff-primary-button" type="submit" disabled={saving || addingTable || (mode === 'copy' && !selectedSource) || (mode === 'manual' && (newTableOpen || loadingCatalog || Boolean(catalogError)))}>{saving ? 'Creating slot…' : 'Create slot'} <span aria-hidden="true">↗</span></button>
           </div>
 
         </form>

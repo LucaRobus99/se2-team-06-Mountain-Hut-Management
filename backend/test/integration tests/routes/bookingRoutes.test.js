@@ -27,7 +27,7 @@ describe('BookingRoutes - Integration Tests', () => {
 
     // Attach a dining table with sufficient capacity to the slot
     await db.query(
-      `INSERT INTO slot_tables (slot_id, table_id, seats) VALUES ($1, 1, 6)`,
+      `INSERT INTO slot_tables (slot_id, table_id, seats) VALUES ($1, 4, 6)`,
       [futureSlotId]
     );
 
@@ -39,7 +39,7 @@ describe('BookingRoutes - Integration Tests', () => {
     secondFutureSlotId = slotRes2.rows[0].id;
 
     await db.query(
-      `INSERT INTO slot_tables (slot_id, table_id, seats) VALUES ($1, 2, 6)`,
+      `INSERT INTO slot_tables (slot_id, table_id, seats) VALUES ($1, 4, 6)`,
       [secondFutureSlotId]
     );
   });

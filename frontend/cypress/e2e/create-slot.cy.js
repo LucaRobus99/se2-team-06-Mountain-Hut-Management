@@ -1,96 +1,63 @@
-const API_URL = 'http://localhost:8080';
+import { api, assertIsolatedServer, findFreeDate } from '../support/hutFixtures.js';
 
-describe('Mountain Hut - Employee Slot Creation Flow', () => {
+// Staff date picker buttons are labelled like "14 Mar 2027".
+const dayLabel = date => new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC',
+}).format(new Date(`${date}T00:00:00Z`));
 
-  beforeEach(() => {
-    // Pulisce prenotazioni di test e lo slot di test creato (senza toccare il seed)
-    cy.request('POST', `${API_URL}/api/test/reset`);
+function pickStaffDate(trigger, date) {
+  cy.get(trigger).click();
+  function pick(monthsLeft = 4) {
+    cy.get('.staff-calendar').then(calendar => {
+      const day = calendar.find(`button[aria-label="${dayLabel(date)}"]`);
+      if (day.length) {
+        cy.wrap(day).click();
+      } else {
+        if (!monthsLeft) throw new Error(`Date ${date} not present in staff calendar.`);
+        cy.get('.staff-calendar button[aria-label="Next month"]').click();
+        pick(monthsLeft - 1);
+      }
+    });
+  }
+  pick();
+}
 
-    // 1. Apri la pagina di login e verifica che il form sia visibile
-    cy.visit('http://localhost:5173/login');
-    cy.get('form.eh-login-form', { timeout: 10000 }).should('be.visible');
-
-    // 2. Inserisci le credenziali di employee dal seed
-    cy.get('input#login-email').should('be.visible').clear().type('employee@hut.test');
-    cy.get('input#login-password').should('be.visible').clear().type('password');
-
-    // 3. Invia il form di login
-    cy.get('button[type="submit"]').click();
-
-    // 4. Verifica che l'autenticazione sia andata a buon fine uscendo da /login
-    cy.url({ timeout: 10000 }).should('not.include', '/login');
+function pickTime(trigger, label, hour, minute) {
+  cy.get(trigger).click();
+  cy.get(`[role="dialog"][aria-label="${label} picker"]`).within(() => {
+    cy.get('[aria-label="Hours"]').contains('[role="option"]', hour).click();
+    cy.get('[aria-label="Minutes"]').contains('[role="option"]', minute).click();
+    cy.contains('button', 'Done').click();
   });
+}
 
-  afterEach(() => {
-    // Ripulisce anche a fine test per lasciare il DB pronto al giro successivo
-    cy.request('POST', `${API_URL}/api/test/reset`);
-  });
+describe('Mountain Hut - Employee Slot Creation Flow (MH-02)', () => {
+  it('should allow an employee to create a new slot with a newly defined table', () => {
+    assertIsolatedServer();
+    const tableName = `E2E terrace ${Date.now()}`;
+    api('/auth/login', { method: 'POST', body: { email: 'employee@hut.test', password: 'password' } });
 
-  it('should allow an employee to create a new slot on 14 March 2027', () => {
-    // 1. Apri il form iniziale di creazione slot
-    cy.get('.staff-empty > .staff-primary-button', { timeout: 10000 })
-      .should('be.visible')
-      .click();
+    findFreeDate().then(date => {
+      cy.visit('/staff/slots');
+      pickStaffDate('#slot-date', date);
+      pickTime('#slot-start', 'Start time', '13', '00');
+      pickTime('#slot-end', 'End time', '14', '00');
 
-    // 2. Seleziona la data 14 marzo 2027 tramite #slot-date e conferma con [aria-label="14 Mar 2027"]
-    cy.get('#slot-date', { timeout: 10000 })
-      .should('be.visible')
-      .click();
-    for (let i = 0; i < 4; i++) {
-      cy.get('button[aria-label*="Next month"], button.ea-calendar-next, .react-datepicker__navigation--next')
-        .first()
-        .click();
-    }
-    cy.get('[aria-label="14 Mar 2027"]', { timeout: 10000 })
-      .should('be.visible')
-      .click();
+      // Fixed table catalog: define a new 6-seat table; it is selected for the slot.
+      cy.contains('button', '+ Define a new table').click();
+      cy.get('#new-table-name').type(tableName);
+      cy.get('#new-table-seats').clear().type('6');
+      cy.contains('.staff-new-table button', 'Create table').click();
+      cy.get(`input[aria-label="${tableName} 6 seats"]`, { timeout: 10000 }).should('be.checked');
 
-    // 3. Apri l'orario di inizio e seleziona 13:00
-    cy.get('#slot-start', { timeout: 10000 })
-      .should('be.visible')
-      .click();
-    cy.get(':nth-child(1) > .staff-time-list > :nth-child(14)', { timeout: 10000 })
-      .should('be.visible')
-      .click();
+      cy.get('button[type="submit"].staff-primary-button').click();
+      cy.get('.modal-footer').contains('button', 'Confirm').click();
 
-    // 4. Apri l'orario di fine e seleziona 14:00
-    cy.get('#slot-end', { timeout: 10000 })
-      .should('be.visible')
-      .click();
-    cy.get(':nth-child(1) > .staff-time-list > :nth-child(15)', { timeout: 10000 })
-      .should('be.visible')
-      .click();
-
-    // 5. Aggiungi un altro tavolo
-    cy.get('.staff-outline-button', { timeout: 10000 })
-      .should('be.visible')
-      .click();
-
-    // 6. Imposta i posti del tavolo #table-seats-3 da 4 a 6
-    cy.get('#table-seats-3', { timeout: 10000 })
-      .should('be.visible')
-      .then(($el) => {
-        if ($el.is('select')) {
-          cy.wrap($el).select('6');
-        } else {
-          cy.wrap($el).click().clear().type('6');
-        }
+      cy.get('.staff-created', { timeout: 10000 }).should('be.visible').and('contain.text', '13:00');
+      api('/slots', { qs: { date } }).its('body.slots').should(slots => {
+        expect(slots).to.have.length(1);
+        expect(slots[0]).to.include({ startTime: '13:00', endTime: '14:00' });
       });
-
-    // 7. Premi il pulsante per creare lo slot (.staff-primary-button)
-    cy.get('.staff-primary-button', { timeout: 10000 })
-      .filter(':visible')
-      .last()
-      .click();
-
-    // 8. Conferma nella modale (.modal-footer > .staff-primary-button)
-    cy.get('.modal-footer > .staff-primary-button', { timeout: 10000 })
-      .should('be.visible')
-      .click();
-
-    // 9. Verifica che appaia l'elemento .staff-created e l'orario 13:00
-    cy.get('.staff-created', { timeout: 10000 }).should('be.visible');
-    cy.contains(/13:00/, { timeout: 10000 }).should('be.visible');
+    });
   });
-
 });

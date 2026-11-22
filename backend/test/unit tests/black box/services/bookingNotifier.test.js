@@ -33,10 +33,13 @@ describe('bookingNotifier - Black-Box Tests', () => {
       expect(fields).toEqual({
         name: 'Mario Rossi',
         date: '2026-08-14',
+        display_date: '14 August 2026',
         start_time: '12:00',
         end_time: '14:00',
         meal: 'lunch',
+        display_meal: 'Lunch',
         guests: 3,
+        guest_label: '3 people',
         split: false,
         booking_id: 42,
         party_requirements: [{ description: 'Gluten-free', allergies: true }],
@@ -78,12 +81,12 @@ describe('bookingNotifier - Black-Box Tests', () => {
       };
       const notifier = createBookingNotifier(emailService);
 
-      const result = await notifier.notify('created', baseView, null);
+      const result = await notifier.notify('created', baseView, 'guest@example.test');
 
       expect(result).toEqual({ status: 'skipped' });
       expect(emailService.sendBookingEmail).toHaveBeenCalledWith(
         'created',
-        null,
+        'guest@example.test',
         expect.objectContaining({ booking_id: 42 })
       );
     });

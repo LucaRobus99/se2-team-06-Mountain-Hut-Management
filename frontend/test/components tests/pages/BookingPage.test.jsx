@@ -122,6 +122,20 @@ describe('BookingPage Component Integration Tests', () => {
     expect(getBooking).toHaveBeenCalledTimes(2);
   });
 
+  it.each(['sent', 'failed'])('shows the correct email notice when the provider status is %s', async status => {
+    useAuth.mockReturnValue({ user: { id: 1, role: 'hiker' }, loadingAuth: false });
+    getBooking.mockResolvedValueOnce({
+      id: 281, status: 'confirmed', partySize: 2, split: false, confirmationEmail: { status },
+      slot: { date: '2026-11-15', meal: 'lunch', startTime: '12:30', endTime: '14:00' },
+    });
+    render(<MemoryRouter initialEntries={['/book/confirmation/281']}>
+      <Routes><Route path="/book/confirmation/:bookingId" element={<BookingPage />} /></Routes>
+    </MemoryRouter>);
+    const title = await screen.findByText(status === 'sent' ? 'Confirmation email sent' : 'Email could not be sent');
+    expect(title.parentElement).toHaveClass(`eh-booking-email-notice--${status}`);
+    if (status === 'failed') expect(title.parentElement).toHaveTextContent('Please keep your booking reference: #281.');
+  });
+
   it('shows a cancelled receipt without a successful booking or email confirmation', async () => {
     useAuth.mockReturnValue({ user: { id: 1, role: 'hiker' }, loadingAuth: false });
     getBooking.mockResolvedValueOnce({
@@ -133,7 +147,7 @@ describe('BookingPage Component Integration Tests', () => {
     </MemoryRouter>);
     expect(await screen.findByRole('heading', { name: 'Your booking was cancelled' })).toBeInTheDocument();
     expect(screen.queryByText('Your table is booked!')).not.toBeInTheDocument();
-    expect(screen.queryByText('Confirmation email queued')).not.toBeInTheDocument();
+    expect(screen.queryByText('Confirmation email sent')).not.toBeInTheDocument();
     expect(screen.queryByText('Seating', { exact: true })).not.toBeInTheDocument();
     expect(screen.getByText('2 people')).toBeInTheDocument();
     const actions = screen.getByRole('link', { name: /Back to My Bookings/i }).parentElement;
@@ -293,20 +307,62 @@ describe('BookingPage Component Integration Tests', () => {
     expect(createBooking).not.toHaveBeenCalled();
   });
 
-  it('displays an alert error if loading a confirmation receipt fails', async () => {
+  it('redirects an inaccessible receipt to My Bookings without revealing booking details', async () => {
     useAuth.mockReturnValue({ user: { id: 1, role: 'hiker' }, loadingAuth: false });
-    getBooking.mockRejectedValueOnce(new Error('Booking not found.'));
+    getBooking.mockRejectedValueOnce(Object.assign(new Error('Booking not found.'), { status: 404, code: 'BOOKING_NOT_FOUND' }));
 
     render(
       <MemoryRouter initialEntries={['/book/confirmation/999']}>
         <Routes>
           <Route path="/book/confirmation/:bookingId" element={<BookingPage />} />
+          <Route path="/my-bookings" element={<div>My own bookings</div>} />
         </Routes>
       </MemoryRouter>
     );
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Booking not found.');
-    expect(screen.getByRole('link', { name: /check availability/i })).toBeInTheDocument();
+    expect(await screen.findByText('My own bookings')).toBeInTheDocument();
+    expect(screen.queryByText('Booking not found.')).not.toBeInTheDocument();
+  });
+
+  it('redirects malformed references without attempting a receipt request', async () => {
+    useAuth.mockReturnValue({ user: { id: 1, role: 'hiker' }, loadingAuth: false });
+    render(<MemoryRouter initialEntries={['/book/confirmation/invalid']}>
+      <Routes><Route path="/book/confirmation/:bookingId" element={<BookingPage />} />
+        <Route path="/my-bookings" element={<div>My own bookings</div>} /></Routes>
+    </MemoryRouter>);
+    expect(await screen.findByText('My own bookings')).toBeInTheDocument();
+    expect(getBooking).not.toHaveBeenCalled();
+  });
+
+  it('offers retry for a network failure instead of redirecting as if the booking were missing', async () => {
+    useAuth.mockReturnValue({ user: { id: 1, role: 'hiker' }, loadingAuth: false });
+    getBooking.mockRejectedValueOnce(new Error('Connection interrupted.'));
+    getBooking.mockResolvedValueOnce({ id: 999, status: 'confirmed', partySize: 2, split: false,
+      slot: { date: '2027-06-15', meal: 'lunch', startTime: '12:00', endTime: '13:00' } });
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={['/book/confirmation/999']}>
+      <Routes><Route path="/book/confirmation/:bookingId" element={<BookingPage />} /></Routes>
+    </MemoryRouter>);
+    expect(await screen.findByRole('alert')).toHaveTextContent("We couldn't load your reservation");
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('heading', { name: 'Your table is booked!' })).toBeInTheDocument();
+  });
+
+  it('revalidates the receipt if the signed-in hiker changes on the same URL', async () => {
+    useAuth.mockReturnValue({ user: { id: 1, role: 'hiker' }, loadingAuth: false });
+    getBooking.mockResolvedValueOnce({ id: 999, status: 'confirmed', partySize: 2, split: false,
+      slot: { date: '2027-06-15', meal: 'lunch', startTime: '12:00', endTime: '13:00' } });
+    const page = () => <MemoryRouter initialEntries={['/book/confirmation/999']}>
+      <Routes><Route path="/book/confirmation/:bookingId" element={<BookingPage />} />
+        <Route path="/my-bookings" element={<div>My own bookings</div>} /></Routes>
+    </MemoryRouter>;
+    const view = render(page());
+    expect(await screen.findByRole('heading', { name: 'Your table is booked!' })).toBeInTheDocument();
+    useAuth.mockReturnValue({ user: { id: 2, role: 'hiker' }, loadingAuth: false });
+    getBooking.mockRejectedValueOnce(Object.assign(new Error('Not found.'), { status: 404 }));
+    view.rerender(page());
+    expect(screen.queryByText('Your table is booked!')).not.toBeInTheDocument();
+    expect(await screen.findByText('My own bookings')).toBeInTheDocument();
   });
 
   it('handles stale slot selection errors and prompts to check availability again', async () => {

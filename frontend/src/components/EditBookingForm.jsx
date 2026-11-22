@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlpineDatePicker, AlpineMealSelect } from './AlpineBookingFields.jsx';
 import AvailabilitySlotCard from './AvailabilitySlotCard.jsx';
+import SlotAvailabilityState from './SlotAvailabilityState.jsx';
 import SplitSeatingModal from './SplitSeatingModal.jsx';
+import ConfirmBookingChangesModal from './ConfirmBookingChangesModal.jsx';
 import { getModificationSlots, updateBooking, bookingErrorMessage } from '../api/booking.js';
 import { validatePartyRequirements } from '../utils/partyRequirements.js';
 import { readableBookingDate, readableMeal } from '../utils/bookingList.js';
@@ -19,11 +21,13 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
   const [date, setDate] = useState(booking.slot.date);
   const [meal, setMeal] = useState(booking.slot.meal);
   const [guests, setGuests] = useState(String(booking.partySize));
-  const [selectedSlotId, setSelectedSlotId] = useState(booking.slot.id);
+  const [selectedSlotId, setSelectedSlotId] = useState(null);
   const [requirements, setRequirements] = useState(() => (booking.requirements || []).map((r, id) => ({ ...r, id: id + 1 })));
   const nextRequirementId = useRef(requirements.length);
   const [available, setAvailable] = useState({ key: '', slots: [], loading: true, error: '' });
   const [saving, setSaving] = useState(false);
+  // MH-06: the change is sent only after the hiker confirms it in a dialog.
+  const [confirming, setConfirming] = useState(false);
   const [pendingSplit, setPendingSplit] = useState(null);
   const [acceptedSplit, setAcceptedSplit] = useState(null);
   const [saveError, setSaveError] = useState('');
@@ -69,13 +73,13 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
   }, [freshResults, available.loading, available.error, choiceIds]);
 
   function changeSearch(setter, value) {
+    if ((setter === setDate && value === date) || (setter === setMeal && value === meal) ||
+        (setter === setGuests && value === guests)) return;
     setter(value);
     setPendingSplit(null);
     setAcceptedSplit(null);
     setSaveError('');
-    if (setter === setDate && value !== date) setSelectedSlotId(null);
-    if (setter === setMeal && value !== meal) setSelectedSlotId(null);
-    // Changing guests can keep the same slot; server rechecks the seats on PATCH.
+    setSelectedSlotId(null);
   }
 
   function addRequirement() {
@@ -99,6 +103,7 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
 
   function selectSlot(slot) {
     setSaveError('');
+    if (selectedSlotId === slot.id && (slot.fit !== 'split' || acceptedSplit === splitKey(slot))) return;
     if (slot.fit === 'split') {
       setPendingSplit({ slot, saveAfterConfirm: false });
     } else {
@@ -114,7 +119,7 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
       setPendingSplit({ slot: selectedOption, saveAfterConfirm: true });
       return;
     }
-    await persistChanges();
+    setConfirming(true);
   }
 
   async function persistChanges() {
@@ -129,10 +134,12 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
       });
       await onSaved(updated);
     } catch (err) {
+      setConfirming(false);
       setSaveError(bookingErrorMessage(err, { editing: true }));
       // A concurrent change may invalidate our preview; refresh without losing the draft.
       if (err.status === 409) {
         setAcceptedSplit(null);
+        setSelectedSlotId(null);
         setRefresh(value => value + 1);
       }
     } finally { setSaving(false); }
@@ -143,7 +150,7 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
     const { slot, saveAfterConfirm } = pendingSplit;
     setAcceptedSplit(splitKey(slot));
     setPendingSplit(null);
-    if (saveAfterConfirm) void persistChanges();
+    if (saveAfterConfirm) setConfirming(true);
     else setSelectedSlotId(slot.id);
   }
 
@@ -170,20 +177,8 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
       </div>
 
       <section className="eh-edit-times" aria-label="Available meal slots">
-        <div className="eh-edit-times-head">
-          <h4>Available times</h4>
-          <span>{checking ? 'Searching…' : !available.error ? `${choices.length} ${choices.length === 1 ? 'option' : 'options'}` : 'Check availability'}</span>
-        </div>
-        <div className={`eh-edit-availability${available.error ? ' is-warning' : ''}`} role="status" aria-live="polite">
-          {checking ? 'Checking availability for your selection…'
-            : available.error ? available.error
-            : !choices.length ? 'No times available. Try another date, meal or guest count.'
-            : <><span>Choose one of the available slots for {numberGuests} {numberGuests === 1 ? 'guest' : 'guests'}.</span><span className="eh-edit-availability-note">Final availability is checked when saving.</span></>}
-        </div>
-        {available.error && !checking &&
-          <button type="button" className="eh-edit-add" onClick={() => setRefresh(value => value + 1)} disabled={saving}>Try again</button>}
-        {currentUnavailable && !checking && !available.error &&
-          <p className="eh-edit-small-warning">Your current time is no longer available for this selection. Please choose another slot or change the guest count.</p>}
+        <SlotAvailabilityState checking={checking} error={available.error} empty={!choices.length}
+          onRetry={date && meal && validGuests && !saving ? () => setRefresh(value => value + 1) : undefined} />
         {!checking && choices.length > 0 &&
           <div className="eh-slot-cards eh-edit-slot-cards">
             {choices.map((slot, index) => (
@@ -192,6 +187,8 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
                 onClick={() => selectSlot(slot)} />
             ))}
           </div>}
+        {!checking && !available.error && choices.length > 0 && currentUnavailable &&
+          <p className="eh-slot-search-pending" role="status">Your original time is unavailable for this selection. Choose another available slot.</p>}
       </section>
 
       <div className="eh-edit-requirements-title"><h4>Dietary requirements</h4><span>Optional</span></div>
@@ -206,7 +203,7 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
             rows={2} placeholder="e.g. 2 vegetarian guests" disabled={saving}
             onChange={event => changeRequirement(requirement.id, { description: event.target.value })} />
           <label className={`eh-edit-allergy${requirement.allergies ? ' is-checked' : ''}`}><input type="checkbox" checked={Boolean(requirement.allergies)} disabled={saving}
-            onChange={event => changeRequirement(requirement.id, { allergies: event.target.checked })} /> <span>Allergy</span></label>
+            onChange={event => changeRequirement(requirement.id, { allergies: event.target.checked })} /> <span>Contains an allergy</span></label>
         </div>
       ))}
       <button type="button" className="eh-edit-add" disabled={saving} onClick={addRequirement}>+ Add dietary requirement</button>
@@ -220,6 +217,15 @@ export default function EditBookingForm({ booking, onCancel, onSaved }) {
       </div>
       <SplitSeatingModal show={Boolean(pendingSplit)} seating={pendingSplit?.slot}
         onCancel={() => setPendingSplit(null)} onContinue={acceptSplit} busy={saving} />
+      <ConfirmBookingChangesModal show={confirming && Boolean(selectedOption)} booking={booking} busy={saving}
+        next={selectedOption ? {
+          slot: { date, meal: selectedOption.meal ?? meal, startTime: selectedOption.startTime, endTime: selectedOption.endTime },
+          partySize: numberGuests,
+          requirements,
+          requirementsChanged: 'requirements' in changes,
+          split: selectedOption.fit === 'split',
+        } : null}
+        onCancel={() => setConfirming(false)} onConfirm={() => void persistChanges()} />
     </form>
   );
 }

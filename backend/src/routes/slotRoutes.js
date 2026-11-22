@@ -26,6 +26,19 @@ export function createSlotRouter(slotService, requireAuth) {
     }
   });
 
+  /** Fixed-capacity tables and reusable service times (#47). */
+  router.get('/catalog', staffOnly, async (req, res, next) => {
+    try {
+      res.json(await slotService.listCatalog(req.user));
+    } catch (err) { next(err); }
+  });
+
+  router.post('/tables', staffOnly, async (req, res, next) => {
+    try {
+      res.status(201).json(await slotService.createCatalogTable(req.user, req.body));
+    } catch (err) { next(err); }
+  });
+
   /** GET /api/slots/:slotId */
   router.get('/:slotId', staffOnly, async (req, res, next) => {
     try {

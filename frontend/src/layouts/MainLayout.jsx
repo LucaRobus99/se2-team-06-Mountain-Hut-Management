@@ -21,7 +21,12 @@ export default function MainLayout() {
             <div className="eh-footer-group">
               <h2>Find us</h2>
               <p>Streda Mastlè 64 · Santa Cristina<br />Seceda, Val Gardena</p>
-              <Link to="/find-us#getting-here" className="eh-footer-directions">Directions ↗</Link>
+              <Link to="/find-us#getting-here" className="eh-footer-directions" onClick={event => {
+                if (pathname === '/find-us' && event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+                  event.preventDefault();
+                  window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+                }
+              }}>Directions ↗</Link>
             </div>
             <div className="eh-footer-group">
               <h2>Opening hours</h2>

@@ -41,7 +41,7 @@ export const config = {
   /** MH-08 (#41): Mailgun template sent after a hiker cancels a booking. */
   mailgunCancelledTemplate: envText('MAILGUN_CANCELLED_TEMPLATE', 'booking-cancelled'),
   /** MH-07 (#44): Mailgun template for the password reset link. */
-  mailgunResetTemplate: envText('MAILGUN_RESET_TEMPLATE', 'password reset'),
+  mailgunResetTemplate: envText('MAILGUN_RESET_TEMPLATE', 'password-reset'),
   /** EU accounts must use https://api.eu.mailgun.net; US accounts may leave it empty. */
   mailgunUrl: (() => {
     const value = envText('MAILGUN_URL', '');

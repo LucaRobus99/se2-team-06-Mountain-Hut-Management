@@ -26,6 +26,9 @@
             .eh-col { display: block !important; width: 100% !important; padding: 0 0 10px 0 !important; }
             .eh-btn-col { display: block !important; width: 100% !important; padding: 0 0 10px 0 !important; }
             .eh-h1 { font-size: 26px !important; }
+            .eh-recap-date { display:block !important; width:auto !important; padding:14px !important; }
+            .eh-recap-fact { display:block !important; width:auto !important; padding:10px 0 !important; border-left:0 !important; }
+            .eh-recap-fact + .eh-recap-fact { border-top:1px solid #e3e5dc !important; }
         }
     </style>
 </head>
@@ -75,96 +78,74 @@
                             Booking Modification Confirmed!
                         </h1>
                         <p style="margin:0 auto 26px auto; max-width:425px; text-align:center; color:#667368; font-family:Georgia,serif; font-size:16px; line-height:1.5;">
-                            Hi {{name}}, your changes have been saved. Please check your updated reservation below.
+                            Hi {{name}}, your changes have been saved.<br />Please check your updated reservation below.
                         </p>
 
-                        <!-- Details -->
-                        <p style="margin:0 0 10px 0; color:#765034; font-family:Georgia,serif; font-size:14px; line-height:1.35; font-weight:700;">
-                            Your new confirmed details
-                        </p>
-
+                        <!-- Reservation recap mirrors the booking confirmation page. -->
                         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                            <tr>
-                                <td class="eh-col" width="50%" valign="top" style="padding:0 5px 10px 0;">
-                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                                        <tr><td style="padding:14px 16px; border:1px solid #e4e8dd; border-radius:11px; background:#f6f6f0;">
-                                            <div style="color:#6c7c6c; font-family:Georgia,serif; font-size:13px; line-height:1.35; font-weight:600; padding-bottom:4px;">Date</div>
-                                            <div style="color:#203a2d; font-family:Georgia,serif; font-size:16px; line-height:1.38; font-weight:700;">{{date}}</div>
-                                        </td></tr>
-                                    </table>
-                                </td>
-                                <td class="eh-col" width="50%" valign="top" style="padding:0 0 10px 5px;">
-                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                                        <tr><td style="padding:14px 16px; border:1px solid #e4e8dd; border-radius:11px; background:#f6f6f0;">
-                                            <div style="color:#6c7c6c; font-family:Georgia,serif; font-size:13px; line-height:1.35; font-weight:600; padding-bottom:4px;">Time</div>
-                                            <div style="color:#203a2d; font-family:Georgia,serif; font-size:16px; line-height:1.38; font-weight:700;">{{start_time}}{{#if end_time}} &ndash; {{end_time}}{{/if}}</div>
-                                        </td></tr>
-                                    </table>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td class="eh-col" width="50%" valign="top" style="padding:0 5px 10px 0;">
-                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                                        <tr><td style="padding:14px 16px; border:1px solid #e4e8dd; border-radius:11px; background:#f6f6f0;">
-                                            <div style="color:#6c7c6c; font-family:Georgia,serif; font-size:13px; line-height:1.35; font-weight:600; padding-bottom:4px;">Meal</div>
-                                            <div style="color:#203a2d; font-family:Georgia,serif; font-size:16px; line-height:1.38; font-weight:700;">{{meal}}</div>
-                                        </td></tr>
-                                    </table>
-                                </td>
-                                <td class="eh-col" width="50%" valign="top" style="padding:0 0 10px 5px;">
-                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                                        <tr><td style="padding:14px 16px; border:1px solid #e4e8dd; border-radius:11px; background:#f6f6f0;">
-                                            <div style="color:#6c7c6c; font-family:Georgia,serif; font-size:13px; line-height:1.35; font-weight:600; padding-bottom:4px;">Guests</div>
-                                            <div style="color:#203a2d; font-family:Georgia,serif; font-size:16px; line-height:1.38; font-weight:700;">{{guests}}</div>
-                                        </td></tr>
-                                    </table>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td colspan="2" valign="top" style="padding:0;">
-                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                                        <tr><td style="padding:14px 16px; border:1px solid #dae6d8; border-radius:11px; background:#eaf1e8;">
-                                            <div style="color:#6c7c6c; font-family:Georgia,serif; font-size:13px; line-height:1.35; font-weight:600; padding-bottom:4px;">Seating</div>
-                                            <div style="color:#203a2d; font-family:Georgia,serif; font-size:16px; line-height:1.38; font-weight:700;">{{#if split}}Across multiple tables{{else}}Together at one table{{/if}}</div>
-                                        </td></tr>
-                                    </table>
-                                </td>
-                            </tr>
-                            {{#if party_requirements}}
-                            <!-- MH-05 / MH-03: party requirements, one row per entry. An empty list hides the block. -->
-                            <tr>
-                                <td colspan="2" valign="top" style="padding:10px 0 0 0;">
-                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                                        <tr><td style="padding:14px 16px; border:1px solid #e4e8dd; border-radius:11px; background:#f6f6f0;">
-                                            <div style="color:#765034; font-family:Georgia,serif; font-size:14px; line-height:1.45; font-weight:700; padding-bottom:14px;">Dietary requirements &amp; allergies</div>
-                                            {{#each party_requirements}}
-                                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                                                <tr>
-                                                    {{#if this.allergies}}
-                                                    <td style="padding:13px 14px; border-left:4px solid #b4442f; border-radius:6px; background:#fbeae5; font-family:Georgia,serif;">
-                                                        <div style="color:#8f2f1e; font-size:11px; line-height:1.45; font-weight:700; letter-spacing:1px; text-transform:uppercase; padding-bottom:5px;">&#9888; Allergy &middot; special care needed</div>
-                                                        <div style="color:#203a2d; font-size:15px; line-height:1.4; font-weight:700;">{{this.description}}</div>
-                                                    </td>
-                                                    {{else}}
-                                                    <td style="padding:13px 14px; border-left:4px solid #567e5f; border-radius:6px; background:#eef3ed; font-family:Georgia,serif;">
-                                                        <div style="color:#3f724b; font-size:11px; line-height:1.45; font-weight:700; letter-spacing:1px; text-transform:uppercase; padding-bottom:5px;">Dietary preference</div>
-                                                        <div style="color:#203a2d; font-size:15px; line-height:1.4; font-weight:700;">{{this.description}}</div>
-                                                    </td>
-                                                    {{/if}}
-                                                </tr>
-                                                <tr><td height="12" style="height:12px; font-size:1px; line-height:12px;">&nbsp;</td></tr>
-                                            </table>
-                                            {{/each}}
-                                            <div style="color:#69756b; font-family:Georgia,serif; font-size:12px; line-height:1.45; padding-top:4px;">
-                                                Something missing or changed?<br />
-                                                Update your booking so our kitchen can prepare safely.
-                                            </div>
-                                        </td></tr>
-                                    </table>
-                                </td>
-                            </tr>
-                            {{/if}}
+                            <tr><td style="padding:18px; border:1px solid #e0e3d9; border-radius:14px; background:#fffefa;">
+                                <div style="font:700 19px/1.3 Georgia,serif; color:#242424; padding-bottom:14px;">Your reservation</div>
+                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#edf3eb; border-radius:10px;">
+                                    <tr>
+                                        <td class="eh-recap-date" width="55%" valign="top" style="padding:16px 8px 16px 14px;">
+                                            <div style="font:700 12px/1.35 Georgia,serif; color:#637965; padding-bottom:5px;">Date</div>
+                                            <div style="font:700 18px/1.35 Georgia,serif; color:#1d402d;">{{#if display_date}}{{display_date}}{{else}}{{date}}{{/if}}</div>
+                                        </td>
+                                        <td class="eh-recap-date" valign="top" style="padding:16px 14px 16px 8px;">
+                                            <div style="font:700 12px/1.35 Georgia,serif; color:#637965; padding-bottom:5px;">Time</div>
+                                            <div style="font:700 18px/1.35 Georgia,serif; color:#1d402d;">{{start_time}}{{#if end_time}} &ndash; {{end_time}}{{/if}}</div>
+                                        </td>
+                                    </tr>
+                                </table>
+                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                                    <tr><td height="17" colspan="3" style="height:17px; line-height:17px; font-size:1px;">&nbsp;</td></tr>
+                                    <tr>
+                                        <td class="eh-recap-fact" valign="top" style="width:25%; padding-right:8px;">
+                                                    <div style="font:700 12px/1.35 Georgia,serif; color:#637965; padding-bottom:5px;">Meal</div>
+                                                    <div style="font:700 16px/1.4 Georgia,serif; color:#242424; overflow-wrap:anywhere;">{{#if display_meal}}{{display_meal}}{{else}}{{meal}}{{/if}}</div>
+                                                </td>
+                                        <td class="eh-recap-fact" valign="top" style="width:25%; padding:0 8px 0 12px; border-left:1px solid #e3e5dc;">
+                                                    <div style="font:700 12px/1.35 Georgia,serif; color:#637965; padding-bottom:5px;">Guests</div>
+                                                    <div style="font:700 16px/1.4 Georgia,serif; color:#242424; overflow-wrap:anywhere;">{{#if guest_label}}{{guest_label}}{{else}}{{guests}}{{/if}}</div>
+                                                </td>
+                                        <td class="eh-recap-fact" valign="top" style="width:50%; padding-left:12px; border-left:1px solid #e3e5dc;">
+                                                    <div style="font:700 12px/1.35 Georgia,serif; color:#637965; padding-bottom:5px;">Seating</div>
+                                                    <div style="font:700 16px/1.4 Georgia,serif; color:#242424; overflow-wrap:anywhere;">{{#if split}}Across multiple tables{{else}}Together at one table{{/if}}</div>
+                                                </td>
+                                    </tr>
+                                </table>
+                            </td></tr>
                         </table>
+                        {{#if party_requirements}}
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                            <tr><td height="14" style="height:14px; line-height:14px; font-size:1px;">&nbsp;</td></tr>
+                            <tr><td style="padding:18px; border:1px solid #e4dbcd; border-radius:14px; background:#fffefa;">
+                                <div style="font:700 19px/1.3 Georgia,serif; color:#242424; padding-bottom:14px;">Dietary requirements</div>
+                                {{#each party_requirements}}
+                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                                    <tr>
+                                        {{#if this.allergies}}
+                                        <td style="padding:12px 14px; border:1px solid #e8baaa; border-left:3px solid #b4442f; border-radius:10px; background:#fcf0e9;">
+                                                        <div style="font:700 10px/1.4 Arial,Helvetica,sans-serif; letter-spacing:.55px; text-transform:uppercase; color:#963a2b; padding-bottom:5px;">Allergy &mdash; special care required</div>
+                                                        <div style="font:700 15px/1.5 Georgia,serif; color:#242424; overflow-wrap:anywhere; white-space:pre-wrap;">{{this.description}}</div>
+                                                    </td>
+                                        {{else}}
+                                        <td style="padding:12px 14px; border:1px solid #e0d4c3; border-radius:10px; background:#f4eee5;">
+                                                        <div style="font:700 10px/1.4 Arial,Helvetica,sans-serif; letter-spacing:.55px; text-transform:uppercase; color:#242424; padding-bottom:5px;">Dietary preference</div>
+                                                        <div style="font:700 15px/1.5 Georgia,serif; color:#242424; overflow-wrap:anywhere; white-space:pre-wrap;">{{this.description}}</div>
+                                                    </td>
+                                        {{/if}}
+                                    </tr>
+                                    <tr><td height="9" style="height:9px; line-height:9px; font-size:1px;">&nbsp;</td></tr>
+                                </table>
+                                {{/each}}
+                                {{#if party_requirements_truncated}}
+                                <div style="font:700 12px/1.45 Georgia,serif; color:#963a2b; padding-bottom:6px;">Some requirements are not shown here. Refer to your full reservation.</div>
+                                {{/if}}
+                                <div style="font:400 12px/1.45 Georgia,serif; color:#69756b;">Something missing or changed?<br />Update your booking so our kitchen can prepare safely.</div>
+                            </td></tr>
+                        </table>
+                        {{/if}}
 
                         {{#if booking_id}}
                         <p style="margin:16px 0 0 0; text-align:center; color:#69756b; font-family:Georgia,serif; font-size:14px; line-height:1.4;">
@@ -174,7 +155,7 @@
 
                         <!-- Note -->
                         <p style="margin:24px 0 0 0; padding-top:20px; border-top:1px solid #e9e4dc; text-align:center; color:#69756b; font-family:Georgia,serif; font-size:13px; line-height:1.5;">
-                            Mountain weather can change quickly &mdash; please plan your route with care.<br />
+                            Mountain weather can change quickly. Please plan your route with care.<br />
                             Changes are possible up to 48 hours before your meal.<br />
                             If you can no longer make it, please cancel so we can offer your table to other hikers.
                         </p>
