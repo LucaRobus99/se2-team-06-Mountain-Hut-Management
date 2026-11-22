@@ -3,7 +3,10 @@
 # to the backend container. The browser sees a single origin, so no CORS and
 # the session cookie works exactly like with the Vite dev proxy.
 
-FROM node:22-alpine AS build
+# --platform=$BUILDPLATFORM: dist/ is plain JS/CSS that works on any
+# architecture, so build it once natively. Running esbuild (a Go binary) under
+# QEMU for arm64 crashes Go's garbage collector ("found pointer to free object").
+FROM --platform=$BUILDPLATFORM node:22-alpine AS build
 WORKDIR /app
 # --ignore-scripts: no lifecycle scripts from dependencies run at install time
 # (Sonar S6505). The build does not need any: esbuild ships its binary as an
