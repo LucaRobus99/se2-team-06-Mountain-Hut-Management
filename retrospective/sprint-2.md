@@ -48,18 +48,47 @@
 
 *Note: For shared tasks (e.g. Sprint Planning, Daily Scrum, YouTrack update), estimated hours were divided equally among the team members involved. Actual hours are the time each member logged on the task. Standard deviation is the population standard deviation.*
 
-## 1.4 Total Task Estimation Error Ratio
-
+## 1.4 Task Estimation Error Measures
 
 | Metric | Value |
 |:---|---:|
 | Total Hours Estimated | 64h 00m |
 | Total Hours Spent | 63h 55m |
-| **Estimation Error Ratio** | **+0.0013 (+0.13%)** |
+| **Estimation Error Ratio (Estimated / Spent)** | **+0.0013 (+0.13%)** |
+| Total Task Estimation Error Ratio (Spent / Estimated) | −0.0013 (−0.13%) |
+| Absolute Relative Task Estimation Error | 0.0654 (6.54%) |
 
-The estimation error ratio is calculated using the following formula:
+### 1.4.1 Estimation Error Ratio — Estimated / Spent 
 
-$$\frac{Total\ Hours\ Estimated}{Total\ Hours\ Spent} - 1 = \frac{\sum_i estimation_{task_i}}{\sum_i spent_{task_i}} - 1 = \frac{3840}{3835} - 1 \approx +0.0013 = +0.13\%$$
+This measures the difference between estimated and actual total time **relative to the time actually spent**. A positive value means that the team spent less time than estimated; this is the convention also used to compare Sprint 1 and Sprint 2 in Section 3.3.
+
+$$
+\frac{Total\ Hours\ Estimated}{Total\ Hours\ Spent}-1
+=\frac{\sum_i estimation_{task_i}}{\sum_i spent_{task_i}}-1
+=\frac{3840}{3835}-1\approx +0.0013=+0.13\%
+$$
+
+### 1.4.2 Total Task Estimation Error Ratio — Spent / Estimated 
+
+This measures the difference between actual and estimated total time **relative to the originally estimated time**. A negative value indicates that the team spent slightly less time than planned; 
+
+$$
+\frac{\sum_i spent_{task_i}}{\sum_i estimation_{task_i}}-1
+=\frac{3835}{3840}-1\approx -0.0013=-0.13\%
+$$
+
+### 1.4.3 Absolute Relative Task Estimation Error
+
+This averages the **absolute relative error of each individual task**, using its own estimate as the reference. Unlike the two total-time ratios above, overestimations and underestimations cannot cancel each other out.
+
+$$
+\frac{1}{n}\sum_{i=1}^{n}
+\left|\frac{spent_{task_i}}{estimation_{task_i}}-1\right|
+=\frac{1}{45}\sum_{i=1}^{45}
+\left|\frac{spent_{task_i}}{estimation_{task_i}}-1\right|
+\approx 0.0654=6.54\%
+$$
+
 
 ---
 
