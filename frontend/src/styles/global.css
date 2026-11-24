@@ -412,3 +412,16 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible { 
 
 .eh-account-avatar { overflow:hidden; }
 .eh-account-avatar img { width:100%; height:100%; object-fit:cover; border-radius:50%; display:block; }
+
+/* Sprint 3 / H-06: compact desktop density at 100% browser zoom.
+   85% is applied to rem-based typography/spacing only on desktop.
+   No zoom or transform: mobile breakpoints and hit targets are preserved. */
+@media (min-width: 992px) {
+  html { font-size: 85%; }
+
+  /* Bring fixed-pixel layout dimensions into line with the compact type. */
+  .eh-navbar { min-height: 73px; }
+  .eh-nav-inner { width: min(1284px, calc(100% - 2 * clamp(16px, 3.8vw, 48px))); }
+  .eh-wide-wrap { width: min(1275px, calc(100% - 2 * clamp(16px, 3.8vw, 48px))); }
+  .eh-brand-mark { width: 49px; height: 39px; }
+}
