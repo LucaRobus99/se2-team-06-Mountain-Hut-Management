@@ -135,27 +135,97 @@ export function createSlotDao(db) {
       return rows[0] ?? null;
     },
 
-    async createTable(...args) {
+  async listByDateRange(...args) {
       const { db: exec, args: a } = executorOf(args);
-      const table = a[0];
+      const [start, end] = a;
+
       const { rows } = await exec.query(
-        `INSERT INTO dining_tables (label, seats) VALUES ($1, $2) RETURNING id`,
-        [table.label, table.seats]
+          `SELECT id, date, start_time, end_time, status, meal_id
+           FROM slots
+           WHERE date BETWEEN $1 AND $2
+           ORDER BY date, start_time`,
+          [start, end]
       );
-      return rows[0].id;
-    },
-
-    async listTables() {
-      const { rows } = await db.query('SELECT id, label, seats FROM dining_tables ORDER BY label, id');
       return rows;
-    },
+  },
 
-    async listTimePatterns() {
-      const { rows } = await db.query(`SELECT DISTINCT s.start_time AS "startTime",
-        s.end_time AS "endTime", m.meal_type AS meal
-        FROM slots s JOIN meals m ON m.id = s.meal_id
-        ORDER BY "startTime", "endTime", meal`);
-      return rows;
-    },
+  /** Returns true if any slot in [start..end] has at least one confirmed booking. */
+  async hasAnyConfirmedBookingInRange(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const [start, end] = a;
+      const { rowCount } = await exec.query(
+          `SELECT 1 FROM bookings b
+           JOIN slots s ON s.id = b.slot_id
+           WHERE s.date BETWEEN $1 AND $2
+             AND b.status = 'confirmed'
+           LIMIT 1`,
+          [start, end]
+      );
+      return rowCount > 0;
+  },
+
+  async findByIdsInDateRange(...args) {
+    const { db: exec, args: a } = executorOf(args);
+    const [dates] = a;
+
+    const { rows } = await exec.query(`
+        SELECT
+            s.*,
+            COALESCE(
+                json_agg(
+                    json_build_object(
+                        'tableId', st.table_id,
+                        'seats', st.seats
+                    )
+                ) FILTER (WHERE st.table_id IS NOT NULL),
+                '[]'::json
+            ) AS tables
+        FROM slots s
+        LEFT JOIN slot_tables st ON st.slot_id = s.id
+        WHERE s.date = ANY($1::text[])
+        GROUP BY s.id
+        ORDER BY s.date, s.start_time
+    `, [dates]);
+
+    return rows;
+},
+
+  /** Deletes all slots in [start..end]; slot_tables are removed via CASCADE. */
+  async deleteSlotsByDateRange(...args) {
+    const { db: exec, args: a } = executorOf(args);
+    const [start, end] = a;
+    await exec.query(
+      `DELETE FROM slots WHERE date BETWEEN $1 AND $2`,
+      [start, end]
+    );
+  },
+
+    async getTableSetForSlots(...args) {
+    const { db: exec, args: a } = executorOf(args);
+    const [slotIds] = a;
+
+    const { rows } = await exec.query(`
+        SELECT slot_id, table_id, seats
+        FROM slot_tables
+        WHERE slot_id = ANY($1::int[])
+        ORDER BY slot_id, table_id
+    `, [slotIds]);
+
+    const result = new Map();
+
+    for (const slotId of slotIds) {
+        result.set(slotId, []);
+    }
+
+    for (const row of rows) {
+        result.get(row.slot_id).push({
+            tableId: row.table_id,
+            seats: row.seats
+        });
+    }
+
+    return result;
+},
+
   };
 }
