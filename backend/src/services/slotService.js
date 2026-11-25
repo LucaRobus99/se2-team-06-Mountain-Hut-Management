@@ -573,16 +573,20 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
 
       if (details.length > 0) throw invalidFields(details);
 
-      // Converti UTC → stringa YYYY-MM-DD usabile nel DB (le date sono stored come text).
+      // Dates are stored as 'YYYY-MM-DD' text. Every query covers the whole week,
+      // Monday to Sunday, matching the range copyWeeklySchedule deletes and fills.
       const fmt = (d) => d.toISOString().slice(0, 10);
+      const sundayOf = (monday) => fmt(new Date(monday.getTime() + 6 * 24 * 60 * 60 * 1000));
       const srcStr = fmt(sourceDate);
+      const srcEnd = sundayOf(sourceDate);
       const tgtStr = fmt(targetDate);
+      const tgtEnd = sundayOf(targetDate);
 
-      const sourceSlots = await slotDao.listByDateRange(srcStr, srcStr);
-      const targetSlots = await slotDao.listByDateRange(tgtStr, tgtStr);
+      const sourceSlots = await slotDao.listByDateRange(srcStr, srcEnd);
+      const targetSlots = await slotDao.listByDateRange(tgtStr, tgtEnd);
 
       const hasExistingSchedule = targetSlots.length > 0;
-      if (await slotDao.hasAnyConfirmedBookingInRange(tgtStr, tgtStr)) {
+      if (await slotDao.hasAnyConfirmedBookingInRange(tgtStr, tgtEnd)) {
         throw new ConflictError(
           'The destination week contains confirmed bookings and cannot be overwritten.',
           'WEEKLY_COPY_CONFLICT',
