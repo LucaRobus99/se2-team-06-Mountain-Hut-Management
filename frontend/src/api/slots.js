@@ -44,6 +44,10 @@ export function createCatalogTable(tableIdentifier, seats) {
   });
 }
 
+export function deleteCatalogTable(tableId) {
+  return request(`/api/slots/tables/${encodeURIComponent(tableId)}`, { method: 'DELETE' });
+}
+
 export async function createStaffSlot({ date, meal, startTime, endTime, tables, copyTablesFromSlotId }) {
   return request('/api/slots', {
     method: 'POST',
