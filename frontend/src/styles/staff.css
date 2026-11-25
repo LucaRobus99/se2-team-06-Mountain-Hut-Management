@@ -247,3 +247,10 @@
   .staff-schedule-row { grid-template-columns:1fr auto; } .staff-schedule-row > span:first-child { grid-column:1/-1; }
 }
 @media (prefers-reduced-motion: reduce) { .staff-sidebar { transition:none; } }
+
+/* Sprint 3 / H-06: align staff desktop widths and vertical chrome with
+   the shared 85% rem-based density defined in global.css. */
+@media (min-width: 992px) {
+  .staff-content { max-width: 1300px; }
+  .staff-topbar { height: 58px; }
+}
