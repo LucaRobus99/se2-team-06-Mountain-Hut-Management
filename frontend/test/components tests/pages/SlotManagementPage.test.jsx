@@ -11,6 +11,7 @@ vi.mock('../../../src/api/slots.js', () => ({
   createStaffSlot: vi.fn(),
   listSlotCatalog: vi.fn(),
   createCatalogTable: vi.fn(),
+  deleteCatalogTable: vi.fn(),
   mealLabel: vi.fn((meal) => (meal ? meal[0].toUpperCase() + meal.slice(1) : '')),
   todayInHut: vi.fn(() => '2026-11-15'),
 }));
@@ -38,6 +39,63 @@ describe('SlotManagementPage Component Integration Tests', () => {
     listSlotCatalog.mockResolvedValue({ tables: [{ tableId: 1, tableIdentifier: 'T1', seats: 2 }, { tableId: 2, tableIdentifier: 'T2', seats: 4 }], timePatterns: [{ meal: 'dinner', startTime: '19:00', endTime: '21:00' }] });
   });
 
+  it('opens only the selected operation and normalizes a selected date to its week', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><SlotManagementPage /></MemoryRouter>);
+    const daily = screen.getByRole('button', { name: /create a new slot/i });
+    const weekly = screen.getByRole('button', { name: /repeat weekly schedule/i });
+    expect(daily).toHaveAttribute('aria-expanded', 'false');
+    expect(weekly).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('heading', { name: /daily schedule/i })).not.toBeInTheDocument();
+    await user.click(weekly);
+    await user.click(screen.getByRole('button', { name: /choose source week/i }));
+    await user.click(screen.getByRole('button', { name: 'This week' }));
+    expect(screen.getByRole('button', { name: /choose source week: 9 Nov 2026.*15 Nov 2026/i })).toBeInTheDocument();
+    await waitFor(() => expect(listStaffSlots).toHaveBeenCalledTimes(7));
+    expect(listStaffSlots).toHaveBeenCalledWith('2026-11-09');
+    expect(listStaffSlots).toHaveBeenCalledWith('2026-11-15');
+    await user.click(screen.getByRole('button', { name: /choose destination week/i }));
+    await user.click(screen.getByRole('button', { name: 'This week' }));
+    expect(screen.getByText(/choose a different destination week/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /review weekly copy/i })).toBeDisabled();
+    await user.click(daily);
+    expect(weekly).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('heading', { name: /daily schedule/i })).toBeInTheDocument();
+    await user.click(daily);
+    expect(daily).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('heading', { name: /daily schedule/i })).not.toBeInTheDocument();
+  });
+
+  it('shows only the selected weekday and table configuration independent of reservations', async () => {
+    const user = userEvent.setup();
+    listSlotCatalog.mockResolvedValue({ tables: [
+      { tableId: 1, tableIdentifier: 'T1', seats: 4 },
+      { tableId: 2, tableIdentifier: 'T2', seats: 4 },
+      { tableId: 3, tableIdentifier: 'T3', seats: 4 },
+      { tableId: 4, tableIdentifier: 'Terrace 1', seats: 4 },
+    ], timePatterns: [] });
+    listStaffSlots.mockImplementation(async date => ({ slots: date === '2026-11-09' ? [{
+      id: 91, meal: 'breakfast', status: 'available', startTime: '09:00', endTime: '10:00',
+      tables: [
+        { tableId: 1, tableIdentifier: 'T1', seats: 4, freeSeats: 4 },
+        { tableId: 2, tableIdentifier: 'T2', seats: 4, freeSeats: 2 },
+        { tableId: 3, tableIdentifier: 'T3', seats: 4, freeSeats: 0 },
+      ],
+    }] : [] }));
+    render(<MemoryRouter><SlotManagementPage /></MemoryRouter>);
+    await user.click(screen.getByRole('button', { name: /repeat weekly schedule/i }));
+    await user.click(screen.getByRole('button', { name: /choose source week/i }));
+    await user.click(screen.getByRole('button', { name: 'This week' }));
+    expect(await screen.findByText('3 tables included')).toBeInTheDocument();
+    expect(screen.getByTitle('T1: Included')).toHaveClass('is-included');
+    expect(screen.getByTitle('T2: Included')).toHaveClass('is-included');
+    expect(screen.getByTitle('T3: Included')).toHaveClass('is-included');
+    expect(screen.queryByText('Terrace 1')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Tuesday, 10 Nov, 0 slots/i }));
+    expect(screen.getByText('No slots scheduled')).toBeInTheDocument();
+    expect(screen.queryByText('3 tables included')).not.toBeInTheDocument();
+  });
+
   it('should render page headings and load daily schedule slots', async () => {
     listStaffSlots.mockResolvedValueOnce({
       slots: [
@@ -57,6 +115,7 @@ describe('SlotManagementPage Component Integration Tests', () => {
         <SlotManagementPage />
       </MemoryRouter>
     );
+    await userEvent.setup().click(screen.getByRole('button', { name: /create a new slot/i }));
 
     expect(screen.getByRole('heading', { level: 1, name: /slot management/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: /daily schedule/i })).toBeInTheDocument();
@@ -74,6 +133,7 @@ describe('SlotManagementPage Component Integration Tests', () => {
         <SlotManagementPage />
       </MemoryRouter>
     );
+    await userEvent.setup().click(screen.getByRole('button', { name: /create a new slot/i }));
 
     await user.click(await screen.findByRole('button', { name: /define a new table/i }));
     await user.click(screen.getByRole('button', { name: /^create table$/i }));
@@ -99,6 +159,7 @@ describe('SlotManagementPage Component Integration Tests', () => {
         <SlotManagementPage />
       </MemoryRouter>
     );
+    await userEvent.setup().click(screen.getByRole('button', { name: /create a new slot/i }));
 
     await user.click(await screen.findByRole('checkbox', { name: /T1 2 seats/i }));
 
@@ -145,6 +206,7 @@ describe('SlotManagementPage Component Integration Tests', () => {
         <SlotManagementPage />
       </MemoryRouter>
     );
+    await userEvent.setup().click(screen.getByRole('button', { name: /create a new slot/i }));
 
     const copyRadio = screen.getByRole('radio', { name: /copy tables from another slot/i });
     await user.click(copyRadio);
@@ -179,6 +241,7 @@ describe('SlotManagementPage Component Integration Tests', () => {
     const user = userEvent.setup();
     createCatalogTable.mockResolvedValueOnce({ tableId: 9, tableIdentifier: 'Terrace', seats: 6 });
     render(<MemoryRouter><SlotManagementPage /></MemoryRouter>);
+    await userEvent.setup().click(screen.getByRole('button', { name: /create a new slot/i }));
     await user.click(await screen.findByRole('button', { name: /service time/i }));
     await user.click(screen.getByRole('option', { name: /Dinner · 19:00–21:00/i }));
     await user.click(screen.getByRole('button', { name: /define a new table/i }));
@@ -203,6 +266,7 @@ describe('SlotManagementPage Component Integration Tests', () => {
         <SlotManagementPage />
       </MemoryRouter>
     );
+    await userEvent.setup().click(screen.getByRole('button', { name: /create a new slot/i }));
 
     await user.click(await screen.findByRole('checkbox', { name: /T1 2 seats/i }));
 
@@ -228,6 +292,7 @@ describe('SlotManagementPage Component Integration Tests', () => {
         <SlotManagementPage />
       </MemoryRouter>
     );
+    await userEvent.setup().click(screen.getByRole('button', { name: /create a new slot/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Failed to load slots');
 
@@ -266,6 +331,7 @@ describe('SlotManagementPage Component Integration Tests', () => {
         <SlotManagementPage />
       </MemoryRouter>
     );
+    await userEvent.setup().click(screen.getByRole('button', { name: /create a new slot/i }));
 
     await user.click(await screen.findByRole('checkbox', { name: /T1 2 seats/i }));
 
@@ -302,6 +368,7 @@ describe('SlotManagementPage Component Integration Tests', () => {
         <SlotManagementPage />
       </MemoryRouter>
     );
+    await userEvent.setup().click(screen.getByRole('button', { name: /create a new slot/i }));
 
     await user.click(await screen.findByRole('checkbox', { name: /T1 2 seats/i }));
     await user.click(screen.getByRole('button', { name: /create slot/i }));

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Spinner } from 'react-bootstrap';
-import { createStaffSlot, listStaffSlots, listSlotCatalog, createCatalogTable, mealLabel, todayInHut } from '../api/slots.js';
+import { Alert, Modal, Spinner } from 'react-bootstrap';
+import { createStaffSlot, listStaffSlots, listSlotCatalog, createCatalogTable, deleteCatalogTable, mealLabel, todayInHut } from '../api/slots.js';
 import SlotConfirmModal from '../components/SlotConfirmModal.jsx';
 import StaffDatePicker from '../components/StaffDatePicker.jsx';
 import StaffSelect from '../components/StaffSelect.jsx';
 import StaffTimePicker from '../components/StaffTimePicker.jsx';
+import WeeklySchedulePanel from '../components/WeeklySchedulePanel.jsx';
 
 const MEALS = [
   { value: 'breakfast', label: 'Breakfast' },
@@ -32,7 +33,7 @@ function Field({ id, label, hint, error, children }) {
   );
 }
 
-export default function SlotManagementPage() {
+function DailySlotManagement() {
   const [viewDate, setViewDate] = useState(todayInHut);
   const [slots, setSlots] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -54,6 +55,11 @@ export default function SlotManagementPage() {
   const [newTableSeats, setNewTableSeats] = useState('');
   const [addingTable, setAddingTable] = useState(false);
   const [newTableError, setNewTableError] = useState('');
+  const [removeMode, setRemoveMode] = useState(false);
+  const [tableToRemove, setTableToRemove] = useState(null);
+  const [removingTable, setRemovingTable] = useState(false);
+  const [removeError, setRemoveError] = useState('');
+  const [removeNotice, setRemoveNotice] = useState('');
   const [sourceDate, setSourceDate] = useState(() => dayBefore(todayInHut()));
   const [sourceSlots, setSourceSlots] = useState([]);
   const [sourceId, setSourceId] = useState('');
@@ -137,6 +143,24 @@ export default function SlotManagementPage() {
     finally { setAddingTable(false); }
   }
 
+  async function confirmRemoveTable() {
+    if (!tableToRemove || removingTable) return;
+    const table = tableToRemove;
+    setRemovingTable(true);
+    setRemoveError('');
+    try {
+      await deleteCatalogTable(table.tableId);
+      setCatalog(previous => previous.filter(t => t.tableId !== table.tableId));
+      setTables(previous => previous.filter(t => t.tableId !== table.tableId));
+      setRemoveNotice(`${table.tableIdentifier} removed from the table catalog.`);
+      setTableToRemove(null);
+    } catch (error) {
+      setRemoveError(error.message || 'Could not remove the table.');
+    } finally {
+      setRemovingTable(false);
+    }
+  }
+
   function validate() {
     const errors = {};
     if (!date) errors.date = 'Choose a date.';
@@ -152,7 +176,7 @@ export default function SlotManagementPage() {
   function handleSubmit(event) {
     event.preventDefault();
     setFormError('');
-    if (!validate() || saving || (mode === 'manual' && newTableOpen)) return;
+    if (saving || removingTable || (mode === 'manual' && (newTableOpen || removeMode)) || !validate()) return;
     const payload = { date, startTime, endTime, meal };
     if (mode === 'copy') payload.copyTablesFromSlotId = Number(sourceId);
     else payload.tables = tables.map((table) => ({
@@ -202,12 +226,7 @@ export default function SlotManagementPage() {
   }
 
   return (
-    <div className="staff-page staff-slots-page">
-      <div className="staff-page-heading">
-        <div><p className="staff-eyebrow">SERVICE PLANNING</p><h1>Slot management</h1>
-          <p>Set service times, choose the meal type and configure tables for each slot.</p></div>
-      </div>
-
+    <div className="staff-page staff-daily-slot-content">
       <section className="staff-panel" ref={scheduleRef}>
         <div className="staff-panel-heading"><div><h2>Daily schedule</h2><p>Check the existing slots before creating a new one.</p></div>
           <div className="staff-inline-date"><label htmlFor="staff-view-date">Date</label><StaffDatePicker id="staff-view-date" value={viewDate} onChange={setViewDate} ariaLabel="Choose schedule date" /></div>
@@ -268,7 +287,7 @@ export default function SlotManagementPage() {
           </div>
           <div className="staff-section-divider" />
           <div className="staff-panel-heading staff-table-heading"><h3>Table configuration</h3></div>
-          <fieldset className="staff-mode-picker" disabled={saving}>
+          <fieldset className="staff-mode-picker" disabled={saving || removeMode || removingTable}>
             <legend className="visually-hidden">Choose a table configuration method</legend>
             <label className={mode === 'manual' ? 'selected' : ''}><input type="radio" name="table-mode" value="manual" checked={mode === 'manual'} onChange={() => setMode('manual')} /> Choose existing tables</label>
             <label className={mode === 'copy' ? 'selected' : ''}><input type="radio" name="table-mode" value="copy" checked={mode === 'copy'} onChange={() => setMode('copy')} /> Copy tables from another slot</label>
@@ -278,12 +297,20 @@ export default function SlotManagementPage() {
               <p className="staff-hint">Select which physical tables are available for this service. Each table has a fixed number of seats.</p>
               {catalogError && <Alert variant="danger">{catalogError}</Alert>}
               {loadingCatalog ? <p role="status">Loading tables…</p> : <div className="staff-catalog-grid">{catalog.map(table => (
-                <label className={`staff-catalog-table ${tables.some(t => t.tableId === table.tableId) ? 'selected' : ''}`} key={table.tableId}>
-                  <input type="checkbox" aria-label={`${table.tableIdentifier} ${table.seats} ${table.seats === 1 ? 'seat' : 'seats'}`} checked={tables.some(t => t.tableId === table.tableId)} onChange={() => toggleTable(table)} disabled={saving}/>
-                  <span><strong>{table.tableIdentifier}</strong><small>{table.seats} {table.seats === 1 ? 'seat' : 'seats'}</small></span>
-                </label>
+                <div className="staff-catalog-entry" key={table.tableId}>
+                  <label className={`staff-catalog-table ${tables.some(t => t.tableId === table.tableId) ? 'selected' : ''}`}>
+                    <input type="checkbox" aria-label={`${table.tableIdentifier} ${table.seats} ${table.seats === 1 ? 'seat' : 'seats'}`} checked={tables.some(t => t.tableId === table.tableId)} onChange={() => toggleTable(table)} disabled={saving || removeMode}/>
+                    <span><strong>{table.tableIdentifier}</strong><small>{table.seats} {table.seats === 1 ? 'seat' : 'seats'}</small></span>
+                  </label>
+                  {removeMode && <button type="button" className="staff-catalog-remove" aria-label={`Remove ${table.tableIdentifier}`} disabled={removingTable} onClick={() => { setRemoveNotice(''); setRemoveError(''); setTableToRemove(table); }}>Remove</button>}
+                </div>
               ))}</div>}
-              <button className="staff-outline-button" type="button" disabled={saving || addingTable || loadingCatalog || Boolean(catalogError)} onClick={() => setNewTableOpen(v => !v)}>{newTableOpen ? 'Close new table form' : '+ Define a new table'}</button>
+              <div className="staff-catalog-actions">
+                <button className="staff-outline-button" type="button" disabled={saving || addingTable || loadingCatalog || removeMode || Boolean(catalogError)} onClick={() => setNewTableOpen(v => !v)}>{newTableOpen ? 'Close new table form' : '+ Define a new table'}</button>
+                <button className="staff-outline-button" type="button" aria-pressed={removeMode} disabled={saving || addingTable || loadingCatalog || newTableOpen || removingTable || Boolean(catalogError)} onClick={() => { setRemoveMode(v => !v); setRemoveNotice(''); }}>{removeMode ? 'Finish removing tables' : '− Remove a table'}</button>
+              </div>
+              {removeMode && <p className="staff-hint">Only tables not assigned to any existing slot or reservation can be removed from the catalog.</p>}
+              {removeNotice && <Alert variant="success" role="status">{removeNotice}</Alert>}
               {newTableOpen && <div className="staff-new-table">
                 <Field id="new-table-name" label="Table identifier"><input id="new-table-name" value={newTableName} maxLength={50} onChange={e => setNewTableName(e.target.value)} disabled={addingTable} placeholder="e.g. Terrace 1"/></Field>
                 <Field id="new-table-seats" label="Fixed seats"><input id="new-table-seats" type="number" min="1" step="1" value={newTableSeats} onChange={e => setNewTableSeats(e.target.value)} disabled={addingTable}/></Field>
@@ -319,13 +346,76 @@ export default function SlotManagementPage() {
                 <span><strong>{tableCount}</strong> {tableCount === 1 ? 'table' : 'tables'}</span>
               </div>
             </div>
-            <button className="staff-primary-button" type="submit" disabled={saving || addingTable || (mode === 'copy' && !selectedSource) || (mode === 'manual' && (newTableOpen || loadingCatalog || Boolean(catalogError)))}>{saving ? 'Creating slot…' : 'Create slot'} <span aria-hidden="true">↗</span></button>
+            <button className="staff-primary-button" type="submit" disabled={saving || addingTable || removingTable || (mode === 'copy' && !selectedSource) || (mode === 'manual' && (newTableOpen || removeMode || loadingCatalog || Boolean(catalogError)))}>{saving ? 'Creating slot…' : 'Create slot'} <span aria-hidden="true">↗</span></button>
           </div>
 
         </form>
       </section>
 
+      <Modal show={Boolean(tableToRemove)} onHide={() => { if (!removingTable) setTableToRemove(null); }} centered backdrop="static" keyboard={!removingTable} aria-labelledby="remove-table-title" dialogClassName="staff-confirm-modal eh-dialog" backdropClassName="eh-cancel-backdrop">
+        <Modal.Header closeButton={!removingTable}>
+          <div><p className="eh-dialog-eyebrow">Table configuration</p><Modal.Title as="h2" id="remove-table-title">Remove table?</Modal.Title></div>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="staff-confirm-intro">Remove <strong>{tableToRemove?.tableIdentifier}</strong> from the table catalog? This action cannot be undone.</p>
+          <p className="staff-hint">Tables used by existing slots or reservations cannot be removed.</p>
+          {removeError && <Alert variant="danger" role="alert">{removeError}</Alert>}
+        </Modal.Body>
+        <Modal.Footer>
+          <button type="button" className="staff-outline-button" disabled={removingTable} onClick={() => setTableToRemove(null)}>Cancel</button>
+          <button type="button" className="staff-catalog-confirm-remove" disabled={removingTable} onClick={confirmRemoveTable}>{removingTable ? 'Removing…' : 'Remove table'}</button>
+        </Modal.Footer>
+      </Modal>
+
       <SlotConfirmModal show={confirmOpen} summary={pendingSlot?.summary} onCancel={() => setConfirmOpen(false)} onConfirm={handleConfirm} busy={saving} />
+    </div>
+  );
+}
+
+const OPERATIONS = [
+  { id: 'daily', title: 'Create a new slot', description: 'View the daily schedule and configure a new service slot.' },
+  { id: 'weekly', title: 'Repeat weekly schedule', description: 'Reuse an entire week of service slots in another week.' },
+];
+
+export default function SlotManagementPage() {
+  const [operation, setOperation] = useState(null);
+  const [dailyOpened, setDailyOpened] = useState(false);
+  const [weeklyOpened, setWeeklyOpened] = useState(false);
+
+  function toggleOperation(id) {
+    if (id === 'daily') setDailyOpened(true);
+    else setWeeklyOpened(true);
+    setOperation(current => current === id ? null : id);
+  }
+
+  return (
+    <div className="staff-page staff-slots-page">
+      <div className="staff-page-heading">
+        <div><p className="staff-eyebrow">SERVICE PLANNING</p><h1>Slot management</h1>
+          <p>Choose an operation to manage your hut’s service schedule.</p></div>
+      </div>
+      <div className={`staff-slot-workspace ${operation ? 'has-operation' : ''}`}>
+        <div className="staff-slot-operations" aria-label="Slot management operations">
+          {OPERATIONS.map(item => (
+            <button key={item.id} type="button" className={`staff-operation-card ${operation === item.id ? 'is-selected' : ''}`}
+              aria-expanded={operation === item.id} aria-controls={`staff-operation-${item.id}`} onClick={() => toggleOperation(item.id)}>
+              <span className="staff-operation-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  {item.id === 'daily' ? <><rect x="3" y="4" width="17" height="17" rx="3"/><path d="M7 2v4M16 2v4M3 9h17M12 12v6m-3-3h6"/></> : <><path d="M20 7H7a4 4 0 0 0-4 4M16 3l4 4-4 4M4 17h13a4 4 0 0 0 4-4M8 13l-4 4 4 4"/></>}
+                </svg>
+              </span>
+              <span className="staff-operation-copy"><strong>{item.title}</strong><small>{item.description}</small>
+                {operation === item.id && <span className="staff-operation-open">Details open</span>}
+              </span>
+              <span className="staff-operation-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m9 5 7 7-7 7" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+            </button>
+          ))}
+        </div>
+        <div className="staff-slot-operation-detail" hidden={!operation}>
+          <div id="staff-operation-daily" hidden={operation !== 'daily'}>{dailyOpened && <DailySlotManagement />}</div>
+          <div id="staff-operation-weekly" hidden={operation !== 'weekly'}>{weeklyOpened && <WeeklySchedulePanel active={operation === 'weekly'} />}</div>
+        </div>
+      </div>
     </div>
   );
 }

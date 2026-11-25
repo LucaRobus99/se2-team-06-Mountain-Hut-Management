@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { todayInHut } from '../api/slots.js';
+import { mondayOf, weekRange } from '../utils/staffWeek.js';
 
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 const MONTH_FORMAT = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -13,7 +14,7 @@ function utcDate(iso) {
 function isoDate(date) { return date.toISOString().slice(0, 10); }
 
 /** Small, dependency-free calendar shared by staff screens. Values stay as YYYY-MM-DD. */
-export default function StaffDatePicker({ id, value, onChange, min, disabled = false, ariaLabel, preferredPlacement = 'auto' }) {
+export default function StaffDatePicker({ id, value, onChange, min, disabled = false, ariaLabel, preferredPlacement = 'auto', selectionMode = 'day' }) {
   const root = useRef(null);
   const trigger = useRef(null);
   const [open, setOpen] = useState(false);
@@ -68,7 +69,10 @@ export default function StaffDatePicker({ id, value, onChange, min, disabled = f
     return current;
   });
   const today = todayInHut();
-  const title = value ? DISPLAY_FORMAT.format(utcDate(value)) : 'Choose a date';
+  const isWeek = selectionMode === 'week';
+  const title = value ? (isWeek ? weekRange(value) : DISPLAY_FORMAT.format(utcDate(value))) : (isWeek ? 'Choose a week' : 'Choose a date');
+  const isSelected = iso => isWeek ? Boolean(value && mondayOf(iso) === value) : iso === value;
+  function choose(iso) { onChange(isWeek ? mondayOf(iso) : iso); setOpen(false); if (isWeek) trigger.current?.focus(); }
 
   return (
     <div className={`staff-date-picker ${open ? 'is-open' : ''}`} ref={root}>
@@ -80,7 +84,7 @@ export default function StaffDatePicker({ id, value, onChange, min, disabled = f
         </svg>
       </button>
       {open && (
-        <div className={`staff-calendar ${placement === 'above' ? 'staff-calendar--above' : ''}`} role="dialog" aria-label="Select a date">
+        <div className={`staff-calendar ${placement === 'above' ? 'staff-calendar--above' : ''}`} role="dialog" aria-label={isWeek ? 'Select a week' : 'Select a date'}>
           <div className="staff-calendar-header">
             <strong>{MONTH_FORMAT.format(visibleMonth)}</strong>
             <div className="staff-calendar-arrows">
@@ -95,16 +99,16 @@ export default function StaffDatePicker({ id, value, onChange, min, disabled = f
               const outside = day.getUTCMonth() !== visibleMonth.getUTCMonth();
               return (
                 <button key={iso} type="button" disabled={Boolean(min && iso < min)}
-                  className={`staff-calendar-day ${outside ? 'outside' : ''} ${iso === value ? 'selected' : ''} ${iso === today ? 'today' : ''}`}
-                  aria-label={DAY_FORMAT.format(day)} aria-pressed={iso === value}
-                  onClick={() => { onChange(iso); setOpen(false); }}>
+                  className={`staff-calendar-day ${outside ? 'outside' : ''} ${isSelected(iso) ? 'selected' : ''} ${iso === today ? 'today' : ''}`}
+                  aria-label={DAY_FORMAT.format(day)} aria-pressed={isSelected(iso)}
+                  onClick={() => choose(iso)}>
                   {day.getUTCDate()}
                 </button>
               );
             })}
           </div>
           <div className="staff-calendar-footer">
-            <button type="button" disabled={Boolean(min && today < min)} onClick={() => { onChange(today); setOpen(false); }}>Today</button>
+            <button type="button" disabled={Boolean(min && today < min)} onClick={() => choose(today)}>{isWeek ? 'This week' : 'Today'}</button>
           </div>
         </div>
       )}

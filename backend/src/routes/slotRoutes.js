@@ -39,6 +39,13 @@ export function createSlotRouter(slotService, requireAuth) {
     } catch (err) { next(err); }
   });
 
+  router.delete('/tables/:tableId', staffOnly, async (req, res, next) => {
+    try {
+      await slotService.deleteCatalogTable(req.user, req.params.tableId);
+      res.status(204).end();
+    } catch (err) { next(err); }
+  });
+
   /** GET /api/slots/:slotId */
   router.get('/:slotId', staffOnly, async (req, res, next) => {
     try {
