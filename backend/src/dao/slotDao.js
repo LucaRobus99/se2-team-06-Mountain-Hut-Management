@@ -159,10 +159,28 @@ export function createSlotDao(db) {
       return rows.length > 0;
     },
 
+    async createTable(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const table = a[0];
+      const { rows } = await exec.query(
+        `INSERT INTO dining_tables (label, seats) VALUES ($1, $2) RETURNING id`,
+        [table.label, table.seats]
+      );
+      return rows[0].id;
+    },
+
     async listTables() {
       const { rows } = await db.query('SELECT id, label, seats FROM dining_tables ORDER BY label, id');
       return rows;
-  },
+    },
+
+    async listTimePatterns() {
+      const { rows } = await db.query(`SELECT DISTINCT s.start_time AS "startTime",
+        s.end_time AS "endTime", m.meal_type AS meal
+        FROM slots s JOIN meals m ON m.id = s.meal_id
+        ORDER BY "startTime", "endTime", meal`);
+      return rows;
+    },
 
   /** Returns true if any slot in [start..end] has at least one confirmed booking. */
   async hasAnyConfirmedBookingInRange(...args) {
