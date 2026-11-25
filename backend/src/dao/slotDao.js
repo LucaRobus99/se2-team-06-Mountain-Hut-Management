@@ -145,6 +145,15 @@ export function createSlotDao(db) {
       return rows[0].id;
     },
 
+    /** Foreign keys prevent removing tables referenced by slots or bookings. */
+    async deleteTable(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const { rows } = await exec.query(
+        'DELETE FROM dining_tables WHERE id = $1 RETURNING id', [a[0]]
+      );
+      return rows.length > 0;
+    },
+
     async listTables() {
       const { rows } = await db.query('SELECT id, label, seats FROM dining_tables ORDER BY label, id');
       return rows;

@@ -2,13 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import SlotManagementPage from '../../src/pages/SlotManagementPage.jsx';
-import { createStaffSlot, listStaffSlots, listSlotCatalog } from '../../src/api/slots.js';
+import { createStaffSlot, listStaffSlots, listSlotCatalog, deleteCatalogTable } from '../../src/api/slots.js';
 
 vi.mock('../../src/api/slots.js', async (importOriginal) => ({
   ...(await importOriginal()),
   createStaffSlot: vi.fn(),
   listStaffSlots: vi.fn(),
   listSlotCatalog: vi.fn(),
+  deleteCatalogTable: vi.fn(),
 }));
 
 const createdSlot = {
@@ -18,6 +19,7 @@ const createdSlot = {
 
 async function openConfirmation(user) {
   render(<SlotManagementPage />);
+  await user.click(screen.getByRole('button', { name: /create a new slot/i }));
   await screen.findByText('No slots for this date');
   for (const checkbox of await screen.findAllByRole('checkbox')) await user.click(checkbox);
   await user.click(screen.getByRole('button', { name: /create slot/i }));
@@ -43,9 +45,43 @@ describe('SlotManagementPage confirmation popup', () => {
     expect(createStaffSlot).not.toHaveBeenCalled();
   });
 
+  it('removes a catalog table only after confirmation and updates the selection', async () => {
+    const user = userEvent.setup();
+    deleteCatalogTable.mockResolvedValueOnce(null);
+    render(<SlotManagementPage />);
+    await user.click(screen.getByRole('button', { name: /create a new slot/i }));
+    const checkbox = await screen.findByRole('checkbox', { name: 'T1 4 seats' });
+    await user.click(checkbox);
+    await user.click(screen.getByRole('button', { name: /remove a table/i }));
+    await user.click(screen.getByRole('button', { name: 'Remove T1' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(deleteCatalogTable).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Remove table' }));
+    expect(await screen.findByText('T1 removed from the table catalog.')).toBeInTheDocument();
+    expect(deleteCatalogTable).toHaveBeenCalledWith(1);
+    expect(screen.queryByRole('checkbox', { name: 'T1 4 seats' })).not.toBeInTheDocument();
+  });
+
+  it('preserves the table when the server rejects removal', async () => {
+    const user = userEvent.setup();
+    deleteCatalogTable.mockRejectedValueOnce(new Error('This table is used by an existing slot or reservation and cannot be removed.'));
+    render(<SlotManagementPage />);
+    await user.click(screen.getByRole('button', { name: /create a new slot/i }));
+    await screen.findByRole('checkbox', { name: 'T1 4 seats' });
+    await user.click(screen.getByRole('button', { name: /remove a table/i }));
+    await user.click(screen.getByRole('button', { name: 'Remove T1' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Remove table' }));
+    expect(await within(dialog).findByText(/this table is used/i)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByRole('checkbox', { name: 'T1 4 seats' })).toBeInTheDocument();
+  });
+
   it('does not silently select any tables', async () => {
     const user = userEvent.setup();
     render(<SlotManagementPage />);
+    await user.click(screen.getByRole('button', { name: /create a new slot/i }));
     await screen.findByText('No slots for this date');
 
     for (const checkbox of await screen.findAllByRole('checkbox')) expect(checkbox).not.toBeChecked();

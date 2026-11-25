@@ -429,6 +429,26 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
       });
     },
 
+    async deleteCatalogTable(user, tableIdRaw) {
+      assertStaff(user);
+      const tableId = parsePositiveInt(tableIdRaw);
+      if (!Number.isSafeInteger(tableId) || tableId > 2147483647) {
+        throw invalidFields([invalid('tableId', EXPECTED.positiveInt)]);
+      }
+      try {
+        await db.transaction(async exec => {
+          if (!await slotDao.deleteTable(exec, tableId)) {
+            throw new NotFoundError('Table not found.', 'TABLE_NOT_FOUND');
+          }
+        });
+      } catch (error) {
+        if (error?.code === '23503') {
+          throw new ConflictError('This table is used by an existing slot or reservation and cannot be removed.', 'TABLE_IN_USE');
+        }
+        throw error;
+      }
+    },
+
     async getSlot(user, slotIdRaw) {
       assertStaff(user);
       const slot = await loadSlot(slotIdRaw);
