@@ -57,3 +57,15 @@ export async function createStaffSlot({ date, meal, startTime, endTime, tables, 
       : { date, meal, startTime, endTime, tables }),
   });
 }
+
+export function previewWeeklyCopy(input) {
+  return request('/api/staff/slots/copy-week/preview', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
+  });
+}
+
+export function copyWeeklySchedule(input) {
+  return request('/api/staff/slots/copy-week', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
+  });
+}

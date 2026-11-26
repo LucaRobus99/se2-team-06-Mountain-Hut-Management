@@ -15,7 +15,7 @@ import {
 } from '../utils/validation.js';
 import { canSeat } from './seating.js';
 import { assertSlotOpen, seatOrFail } from './bookingRules.js';
-import { isInPast, isSlotTooLate, todayInZone,parsingDate,isMonday } from '../utils/hutTime.js';
+import { isInPast, isSlotTooLate, todayInZone, parsingDate } from '../utils/hutTime.js';
 
 const ALLOWED_MEALS = ['breakfast', 'lunch', 'aperitivo', 'dinner'];
 const MAX_TABLE_LABEL_LENGTH = 50;
@@ -541,7 +541,7 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
       return response;
     },
 
-    async validateWeeklyCopy(user, { sourceWeekStart, targetWeekStart }) {
+    async validateWeeklyCopy(user, { sourceWeekStart, targetWeekStart }, exec = db) {
       assertStaff(user);
       const details = [];
       const sourceDate = parsingDate(sourceWeekStart);
@@ -578,83 +578,75 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
       const srcStr = fmt(sourceDate);
       const tgtStr = fmt(targetDate);
 
-      const sourceSlots = await slotDao.listByDateRange(srcStr, srcStr);
-      const targetSlots = await slotDao.listByDateRange(tgtStr, tgtStr);
-
+      const weekEnd = date => fmt(new Date(date.getTime() + 6 * 86400000));
+      const sourceSlots = await slotDao.listByDateRange(exec, srcStr, weekEnd(sourceDate));
+      const targetSlots = await slotDao.listByDateRange(exec, tgtStr, weekEnd(targetDate));
+      if (!sourceSlots.length) {
+        throw new ConflictError('The source week has no slots to copy.', 'WEEKLY_COPY_EMPTY_SOURCE');
+      }
       const hasExistingSchedule = targetSlots.length > 0;
-      if (await slotDao.hasAnyConfirmedBookingInRange(tgtStr, tgtStr)) {
+      // Preserve all reservation records, including cancelled ones (slot FK).
+      if (await slotDao.hasAnyBookingInRange(exec, tgtStr, weekEnd(targetDate))) {
         throw new ConflictError(
-          'The destination week contains confirmed bookings and cannot be overwritten.',
-          'WEEKLY_COPY_CONFLICT',
-          [{ field: 'targetWeekStart', rule: 'conflict', message: `Destination week starting ${tgtStr} has existing confirmed bookings.` }]
+          'The destination week contains reservations and cannot be overwritten.',
+          'WEEKLY_COPY_CONFLICT'
         );
       }
 
       return { sourceDate, targetDate, sourceSlots, targetSlots, hasExistingSchedule };
     },
-    async copyWeeklySchedule(user, { sourceWeekStart, targetWeekStart }) {
+    async previewWeeklyCopy(user, input) {
+      return db.transaction(async exec => {
+        const { sourceSlots, targetSlots } = await this.validateWeeklyCopy(user, input, exec);
+        return {
+          sourceCount: sourceSlots.length,
+          targetCount: targetSlots.length,
+          sourceDays: new Set(sourceSlots.map(slot => slot.date)).size,
+          sourceSlotIds: sourceSlots.map(slot => slot.id),
+          targetSlotIds: targetSlots.map(slot => slot.id),
+        };
+      });
+    },
+
+    async copyWeeklySchedule(user, input) {
       assertStaff(user);
-      const { sourceDate, targetDate, sourceSlots, hasExistingSchedule } = await this.validateWeeklyCopy(user, { sourceWeekStart, targetWeekStart });
-
-      function dayOffset(slotDateStr) {
-        const d = parsingDate(slotDateStr);
-        return Math.round((d.getTime() - sourceDate.getTime()) / (24 * 60 * 60 * 1000));
-      }
-
-      const fmt = (d) => d.toISOString().slice(0, 10);
-      const tgtDates = Array.from({ length: 7 }, (_, i) => fmt(new Date(targetDate.getTime() + i * 24 * 60 * 60 * 1000)));
-
-      try {
-        if (db && typeof db.transaction === 'function') {
-          return await db.transaction(async (exec) => {
-            if (hasExistingSchedule) {
-              await slotDao.deleteSlotsByDateRange(exec, tgtDates[0], tgtDates[6]);
-            }
-            const createdIds = [];
-            const tableSets = await slotDao.getTableSetForSlots(exec, sourceSlots.map((s) => s.id));
-            for (const src of sourceSlots) {
-              const offset = dayOffset(src.date);
-              const id = await slotDao.createSlot(exec, {
-                date: tgtDates[offset],
-                startTime: src.start_time,
-                endTime: src.end_time,
-                mealId: src.meal_id,
-                status: src.status,
-              });
-              for (const t of (tableSets.get(src.id) ?? [])) {
-                await slotDao.addTableToSlot(exec, id, t.tableId, t.seats);
-              }
-              createdIds.push(id);
-            }
-            return { targetWeekStart: fmt(targetDate), copiedCount: createdIds.length };
+      // All application writes share the database transaction lock.
+      // Revalidate inside it, not just before starting the transaction.
+      return db.transaction(async exec => {
+        const { sourceDate, targetDate, sourceSlots, targetSlots, hasExistingSchedule } =
+          await this.validateWeeklyCopy(user, input, exec);
+        if (input.expectedSourceSlotIds !== undefined) {
+          const expected = input.expectedSourceSlotIds;
+          const actual = sourceSlots.map(slot => slot.id);
+          if (!Array.isArray(expected) || expected.length !== actual.length ||
+              actual.some(id => !expected.includes(id))) {
+            throw new ConflictError('The source schedule changed. Review the weekly copy again.', 'WEEKLY_COPY_CHANGED');
+          }
+        }
+        if (input.expectedTargetSlotIds !== undefined) {
+          const expected = input.expectedTargetSlotIds;
+          const actual = targetSlots.map(slot => slot.id);
+          if (!Array.isArray(expected) || expected.length !== actual.length ||
+              actual.some(id => !expected.includes(id))) {
+            throw new ConflictError('The destination schedule changed. Review the weekly copy again.', 'WEEKLY_COPY_CHANGED');
+          }
+        }
+        const fmt = d => d.toISOString().slice(0, 10);
+        const targetDates = Array.from({ length: 7 }, (_, i) => fmt(new Date(targetDate.getTime() + i * 86400000)));
+        const tableSets = await slotDao.getTableSetForSlots(exec, sourceSlots.map(slot => slot.id));
+        if (hasExistingSchedule) await slotDao.deleteSlotsByDateRange(exec, targetDates[0], targetDates[6]);
+        for (const src of sourceSlots) {
+          const offset = Math.round((parsingDate(src.date).getTime() - sourceDate.getTime()) / 86400000);
+          const id = await slotDao.createSlot(exec, {
+            date: targetDates[offset], startTime: src.start_time, endTime: src.end_time,
+            mealId: src.meal_id, status: src.status,
           });
+          for (const table of tableSets.get(src.id) ?? []) {
+            await slotDao.addTableToSlot(exec, id, table.tableId, table.seats);
+          }
         }
-      } catch (err) {
-        if (err instanceof AppError) throw err;
-        throw err;
-      }
-
-      // Non-transactional fallback.
-      if (hasExistingSchedule) {
-        await slotDao.deleteSlotsByDateRange(tgtDates[0], tgtDates[6]);
-      }
-      const tableSets = await slotDao.getTableSetForSlots(sourceSlots.map((s) => s.id));
-      const createdIds = [];
-      for (const src of sourceSlots) {
-        const offset = dayOffset(src.date);
-        const id = await slotDao.createSlot({
-          date: tgtDates[offset],
-          startTime: src.start_time,
-          endTime: src.end_time,
-          mealId: src.meal_id,
-          status: src.status,
-        });
-        for (const t of (tableSets.get(src.id) ?? [])) {
-          await slotDao.addTableToSlot(id, t.tableId, t.seats);
-        }
-        createdIds.push(id);
-      }
-      return { targetWeekStart: fmt(targetDate), copiedCount: createdIds.length };
+        return { targetWeekStart: fmt(targetDate), copiedCount: sourceSlots.length };
+      });
     },
 
   };

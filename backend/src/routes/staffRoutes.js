@@ -64,12 +64,15 @@ export function createStaffRouter({ bookingService, slotService, requireAuth }) 
     }
   });
 
-  router.post('/slots/copy-week', staffOnly, async (req, res, next) => {
-    const { sourceWeekStart, targetWeekStart } = req.body;
+  router.post('/slots/copy-week/preview', staffOnly, async (req, res, next) => {
     try {
-      await slotService.validateWeeklyCopy(req.user, { sourceWeekStart, targetWeekStart });
-      const result = await slotService.copyWeeklySchedule(req.user, { sourceWeekStart, targetWeekStart });
-      res.status(201).json(result);
+      res.json(await slotService.previewWeeklyCopy(req.user, req.body ?? {}));
+    } catch (err) { next(err); }
+  });
+
+  router.post('/slots/copy-week', staffOnly, async (req, res, next) => {
+    try {
+      res.status(201).json(await slotService.copyWeeklySchedule(req.user, req.body ?? {}));
     } catch (err) { next(err); }
   });
   return router;

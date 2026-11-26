@@ -135,6 +135,24 @@ export function createSlotDao(db) {
       return rows[0] ?? null;
     },
 
+    async createTable(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const table = a[0];
+      const { rows } = await exec.query(
+        `INSERT INTO dining_tables (label, seats) VALUES ($1, $2) RETURNING id`,
+        [table.label, table.seats]
+      );
+      return rows[0].id;
+    },
+
+    async listTimePatterns() {
+      const { rows } = await db.query(`SELECT DISTINCT s.start_time AS "startTime",
+        s.end_time AS "endTime", m.meal_type AS meal
+        FROM slots s JOIN meals m ON m.id = s.meal_id
+        ORDER BY "startTime", "endTime", meal`);
+      return rows;
+    },
+
   async listByDateRange(...args) {
       const { db: exec, args: a } = executorOf(args);
       const [start, end] = a;
@@ -177,6 +195,16 @@ export function createSlotDao(db) {
           [start, end]
       );
       return rowCount > 0;
+  },
+
+  /** Any reservation record prevents deleting its referenced slot. */
+  async hasAnyBookingInRange(...args) {
+    const { db: exec, args: [start, end] } = executorOf(args);
+    const { rows } = await exec.query(
+      `SELECT 1 FROM bookings b JOIN slots s ON s.id = b.slot_id
+       WHERE s.date BETWEEN $1 AND $2 LIMIT 1`, [start, end]
+    );
+    return rows.length > 0;
   },
 
   async findByIdsInDateRange(...args) {
