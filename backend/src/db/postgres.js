@@ -191,6 +191,29 @@ async function initialiseIfEmpty(exec) {
         COMMIT;`); }
       catch (error) { await exec('ROLLBACK;').catch(() => {}); throw error; }
     }
+
+    // MH-10-02: menus now store rich-text `content` (NOT NULL) and an
+    // `updated_at` stamp; slots can reference an assigned menu.
+    const menuMigrate = `BEGIN;
+      DO $$
+      BEGIN
+        IF to_regclass('public.menus') IS NOT NULL THEN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'menus' AND column_name = 'content') THEN
+            ALTER TABLE menus ADD COLUMN content TEXT;
+            UPDATE menus SET content = coalesce(description, '') WHERE content IS NULL;
+          END IF;
+          ALTER TABLE menus ALTER COLUMN content SET NOT NULL;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'menus' AND column_name = 'updated_at') THEN
+            ALTER TABLE menus ADD COLUMN updated_at TEXT NOT NULL DEFAULT to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z');
+          END IF;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'slots' AND column_name = 'menu_id') THEN
+          ALTER TABLE slots ADD COLUMN menu_id INTEGER REFERENCES menus(id) ON DELETE SET NULL;
+        END IF;
+      END $$;
+      COMMIT;`;
+    try { await exec(menuMigrate); }
+    catch (error) { await exec('ROLLBACK;').catch(() => {}); throw error; }
     return;
   }
 
