@@ -587,6 +587,10 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
       const tgtEnd = sundayOf(targetDate);
 
       const sourceSlots = await slotDao.listByDateRange(srcStr, srcEnd);
+      if (sourceSlots.length === 0) {
+        // Copying nothing would only wipe the destination week.
+        throw invalidFields([{ field: 'sourceWeekStart', rule: 'empty', message: 'The source week has no slots to copy.' }]);
+      }
       const targetSlots = await slotDao.listByDateRange(tgtStr, tgtEnd);
 
       const hasExistingSchedule = targetSlots.length > 0;
