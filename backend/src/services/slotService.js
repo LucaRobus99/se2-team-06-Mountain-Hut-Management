@@ -15,7 +15,7 @@ import {
 } from '../utils/validation.js';
 import { canSeat } from './seating.js';
 import { assertSlotOpen, seatOrFail } from './bookingRules.js';
-import { isInPast, isSlotTooLate, todayInZone,parsingDate,isMonday } from '../utils/hutTime.js';
+import { isInPast, isSlotTooLate, todayInZone } from '../utils/hutTime.js';
 
 const ALLOWED_MEALS = ['breakfast', 'lunch', 'aperitivo', 'dinner'];
 const MAX_TABLE_LABEL_LENGTH = 50;
@@ -293,8 +293,10 @@ function validateListSlotsQuery(query) {
 function validateWeeklyCopyInput(body, today) {
   const { sourceWeekStart, targetWeekStart } = body ?? {};
   const details = [];
-  const sourceDate = parsingDate(sourceWeekStart);
-  const targetDate = parsingDate(targetWeekStart);
+  // A valid 'YYYY-MM-DD' as a UTC midnight Date, else null.
+  const utcDate = value => (isValidDate(value) ? new Date(`${value}T00:00:00Z`) : null);
+  const sourceDate = utcDate(sourceWeekStart);
+  const targetDate = utcDate(targetWeekStart);
 
   // Missing, badly formatted and not-a-Monday are distinct errors for the client.
   if (isMissing(sourceWeekStart)) {
@@ -614,7 +616,7 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
           );
         }
 
-        await slotDao.deleteSlotsByDateRange(exec, target[0], target[6]);
+        await slotDao.clearSlotsByDateRange(exec, target[0], target[6]);
         const tableSets = await slotDao.getTableSetForSlots(exec, sourceSlots.map((s) => s.id));
         for (const src of sourceSlots) {
           const id = await slotDao.createSlot(exec, {
