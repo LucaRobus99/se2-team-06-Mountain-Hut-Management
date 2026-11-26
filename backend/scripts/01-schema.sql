@@ -69,6 +69,10 @@ CREATE TABLE IF NOT EXISTS slots (
     end_time    TEXT NOT NULL,
     status      TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available', 'off')),
     created_at  TEXT NOT NULL DEFAULT to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+    -- MH-09: set when a weekly copy replaces a slot that only has cancelled
+    -- bookings. The row stays so those bookings keep their history, but the slot
+    -- leaves the schedule, availability and overlap checks. NULL = active.
+    archived_at TEXT,
     CHECK (start_time < end_time)
 );
 
@@ -158,9 +162,9 @@ CREATE OR REPLACE FUNCTION slots_no_overlap() RETURNS trigger AS $$
 BEGIN
     IF EXISTS (
         SELECT 1 FROM slots
-        WHERE id <> NEW.id AND date = NEW.date
+        WHERE id <> NEW.id AND date = NEW.date AND archived_at IS NULL
           AND start_time < NEW.end_time AND NEW.start_time < end_time
-    ) THEN
+    ) AND NEW.archived_at IS NULL THEN
         RAISE EXCEPTION 'Slot overlaps another slot' USING ERRCODE = 'check_violation';
     END IF;
     RETURN NEW;
