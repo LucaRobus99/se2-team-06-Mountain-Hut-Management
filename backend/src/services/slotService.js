@@ -558,6 +558,10 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
         details.push(invalid('targetWeekStart', EXPECTED.date));
       } else if (targetDate.getUTCDay() !== 1) {
         details.push({ field: 'targetWeekStart', rule: 'invalid', message: 'targetWeekStart must be a Monday.' });
+      } else if (targetWeekStart <= todayInZone(timeZone, now())) {
+        // Like slot creation: no slots in the past. A week that has already
+        // started would also lose its past slots, which belong to history.
+        details.push({ field: 'targetWeekStart', rule: 'past', message: 'The destination week must not have started yet.' });
       }
 
       // Controlli tra i due campi solo quando entrambi sono validi.
