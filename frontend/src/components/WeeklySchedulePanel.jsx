@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Spinner } from 'react-bootstrap';
-import { listStaffSlots, listSlotCatalog, mealLabel } from '../api/slots.js';
+import { listStaffSlots, mealLabel, previewWeeklyCopy, copyWeeklySchedule } from '../api/slots.js';
+import WeeklyCopyModal from './WeeklyCopyModal.jsx';
 import StaffDatePicker from './StaffDatePicker.jsx';
 import { addDays, mondayOf, weekRange } from '../utils/staffWeek.js';
 
@@ -27,23 +28,31 @@ export default function WeeklySchedulePanel({ active }) {
   const [sourceWeek, setSourceWeek] = useState('');
   const [targetWeek, setTargetWeek] = useState('');
   const [selectedDay, setSelectedDay] = useState(0);
-  const [schedule, setSchedule] = useState({ week: '', days: [], catalog: [], loading: false, error: '' });
+  const [schedule, setSchedule] = useState({ week: '', days: [], loading: false, error: '' });
   const [reload, setReload] = useState(0);
+  const [review, setReview] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [copyError, setCopyError] = useState('');
+  const [notice, setNotice] = useState('');
+  const requestId = useRef(0);
+  const copyLock = useRef(false);
   const sameWeek = Boolean(sourceWeek && sourceWeek === targetWeek);
+
+  const earlierWeek = Boolean(sourceWeek && targetWeek && targetWeek < sourceWeek);
 
   useEffect(() => {
     if (!active || !sourceWeek) return;
     let current = true;
     const dates = Array.from({ length: 7 }, (_, index) => addDays(sourceWeek, index));
-    setSchedule({ week: sourceWeek, days: [], catalog: [], loading: true, error: '' });
-    Promise.all([Promise.all(dates.map(async date => {
+    setSchedule({ week: sourceWeek, days: [], loading: true, error: '' });
+    Promise.all(dates.map(async date => {
       const data = await listStaffSlots(date);
       return { date, slots: data.slots || [] };
-    })), listSlotCatalog()]).then(([days, data]) => {
-      if (!Array.isArray(data.tables)) throw new Error('Could not load the table catalog.');
-      if (current) setSchedule({ week: sourceWeek, days, catalog: data.tables, loading: false, error: '' });
+    })).then(days => {
+      if (current) setSchedule({ week: sourceWeek, days, loading: false, error: '' });
     }).catch(error => {
-      if (current) setSchedule({ week: sourceWeek, days: [], catalog: [], loading: false, error: error.message || 'Could not load the weekly schedule.' });
+      if (current) setSchedule({ week: sourceWeek, days: [], loading: false, error: error.message || 'Could not load the weekly schedule.' });
     });
     return () => { current = false; };
   }, [active, sourceWeek, reload]);
@@ -51,10 +60,63 @@ export default function WeeklySchedulePanel({ active }) {
   const ready = schedule.week === sourceWeek && !schedule.loading && !schedule.error && schedule.days.length === 7;
   const count = ready ? schedule.days.reduce((sum, day) => sum + day.slots.length, 0) : 0;
   const selectSource = value => {
+    setNotice('');
     setSourceWeek(mondayOf(value));
     setSelectedDay(0);
   };
-  const selectTarget = value => setTargetWeek(mondayOf(value));
+  const selectTarget = value => { setNotice(''); setTargetWeek(mondayOf(value)); };
+  const canReview = ready && count > 0 && sourceWeek && targetWeek && !sameWeek && !earlierWeek && !review;
+
+  function closeReview() {
+    if (copyLock.current) return;
+    requestId.current += 1;
+    setReview(null);
+    setPreviewLoading(false);
+    setCopyError('');
+  }
+
+  async function openReview() {
+    if (!canReview) return;
+    const id = ++requestId.current;
+    const input = { sourceWeekStart: sourceWeek, targetWeekStart: targetWeek };
+    setReview(input);
+    setNotice('');
+    setCopyError('');
+    setPreviewLoading(true);
+    try {
+      const preview = await previewWeeklyCopy(input);
+      if (requestId.current === id) setReview({ ...input, preview });
+    } catch (error) {
+      if (requestId.current === id) setCopyError(error.message || 'Could not check the destination week.');
+    } finally {
+      if (requestId.current === id) setPreviewLoading(false);
+    }
+  }
+
+  async function confirmCopy() {
+    if (!review?.preview || copyError || previewLoading || copyLock.current) return;
+    copyLock.current = true;
+    setCopying(true);
+    try {
+      const result = await copyWeeklySchedule({
+        sourceWeekStart: review.sourceWeekStart,
+        targetWeekStart: review.targetWeekStart,
+        expectedSourceSlotIds: review.preview.sourceSlotIds,
+        expectedTargetSlotIds: review.preview.targetSlotIds,
+      });
+      setReview(null);
+      setSourceWeek(result.targetWeekStart);
+      setTargetWeek('');
+      setSelectedDay(0);
+      setReload(n => n + 1);
+      setNotice(`${result.copiedCount} ${result.copiedCount === 1 ? 'slot' : 'slots'} copied successfully to ${weekRange(result.targetWeekStart)}.`);
+    } catch (error) {
+      setCopyError(error.message || 'Could not copy the weekly schedule. Review the destination again.');
+    } finally {
+      copyLock.current = false;
+      setCopying(false);
+    }
+  }
 
   return (
     <section className="staff-panel staff-weekly-panel" aria-label="Repeat weekly schedule">
@@ -63,18 +125,20 @@ export default function WeeklySchedulePanel({ active }) {
         <div className="staff-week-field staff-week-source">
           <span className="staff-week-step">01 · SOURCE</span>
           <label htmlFor="staff-source-week">Source week</label>
-          <StaffDatePicker id="staff-source-week" value={sourceWeek} onChange={selectSource} ariaLabel="Choose source week" selectionMode="week" />
+          <StaffDatePicker id="staff-source-week" value={sourceWeek} onChange={selectSource} ariaLabel="Choose source week" selectionMode="week" disabled={Boolean(review)} />
           <small>Select any day of the week to copy.</small>
         </div>
         <span className="staff-week-direction" aria-hidden="true">→</span>
         <div className="staff-week-field staff-week-target">
           <span className="staff-week-step">02 · DESTINATION</span>
           <label htmlFor="staff-target-week">Destination week</label>
-          <StaffDatePicker id="staff-target-week" value={targetWeek} onChange={selectTarget} ariaLabel="Choose destination week" selectionMode="week" />
+          <StaffDatePicker id="staff-target-week" value={targetWeek} onChange={selectTarget} ariaLabel="Choose destination week" selectionMode="week" disabled={Boolean(review)} />
           <small>Select the week to receive the schedule.</small>
         </div>
       </div>
-      {sameWeek && <Alert variant="warning" role="alert">Choose a different destination week. A week cannot be copied onto itself.</Alert>}
+      {notice && <Alert variant="success" role="status">{notice}</Alert>}
+      {earlierWeek && <Alert variant="danger" role="alert">Choose a destination week after the source week.</Alert>}
+      {sameWeek && <Alert variant="danger" role="alert">Choose a different destination week. A week cannot be copied onto itself.</Alert>}
       <div className="staff-week-overview-heading">
         <div><h3>Weekly schedule</h3><p>{sourceWeek ? weekRange(sourceWeek) : 'Select a source week to view its slots.'}</p></div>
         {ready && <span className="staff-week-count">{count} {count === 1 ? 'slot' : 'slots'}</span>}
@@ -99,10 +163,10 @@ export default function WeeklySchedulePanel({ active }) {
         </div>
       </div>}
       <div className="staff-week-footer">
-        <div><strong>{ready && count === 0 ? 'No slots to copy' : sourceWeek && targetWeek && !sameWeek && ready ? 'Weeks selected' : 'Select two different weeks'}</strong><p>Reservations are not copied. Destination checks and confirmation are required before copying.</p></div>
-        <button type="button" className="staff-primary-button" disabled>Review weekly copy <span aria-hidden="true">→</span></button>
+        <div><strong>{ready && count === 0 ? 'No slots to copy' : sourceWeek && targetWeek && !sameWeek && !earlierWeek && ready ? 'Weeks selected' : 'Select two different weeks'}</strong><p>Reservations and menus are not copied. Destination checks and confirmation are required before copying.</p></div>
+        <button type="button" className="staff-primary-button" disabled={!canReview} onClick={openReview}>Review weekly copy <span aria-hidden="true">→</span></button>
       </div>
-      <p className="staff-week-pending">Weekly copy confirmation is not available yet.</p>
+      <WeeklyCopyModal review={review} loading={previewLoading} busy={copying} error={copyError} onCancel={closeReview} onConfirm={confirmCopy} />
     </section>
   );
 }

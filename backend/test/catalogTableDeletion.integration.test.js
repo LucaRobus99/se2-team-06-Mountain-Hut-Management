@@ -17,6 +17,10 @@ describe('Staff catalog table removal', () => {
     try {
       const app = createApp({ db, now: fixedNow });
       const agent = await login(app, 'employee');
+      const catalog = await agent.get('/api/slots/catalog');
+      expect(catalog.status).toBe(200);
+      expect(Array.isArray(catalog.body.tables)).toBe(true);
+      expect(Array.isArray(catalog.body.timePatterns)).toBe(true);
       const unused = await agent.post('/api/slots/tables').send({ tableIdentifier: 'Removal test', seats: 4 });
       expect(unused.status).toBe(201);
       const path = `/api/slots/tables/${unused.body.tableId}`;

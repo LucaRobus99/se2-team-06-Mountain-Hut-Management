@@ -257,8 +257,8 @@
 
 /* MHM-140 — operation cards and weekly selection, scoped to slot management. */
 .staff-slot-workspace { display:grid; grid-template-columns:minmax(0,1fr); gap:22px; align-items:start; }
-.staff-slot-workspace.has-operation { grid-template-columns:minmax(220px, .75fr) minmax(0, 2fr); }
-.staff-slot-operations { display:grid; gap:14px; min-width:0; max-width:900px; }
+.staff-slot-workspace.has-operation { grid-template-columns:minmax(0,1fr); }
+.staff-slot-operations { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; min-width:0; }
 .staff-slot-operation-detail { min-width:0; }
 .staff-slot-operation-detail[hidden],.staff-slot-operation-detail > [hidden] { display:none; }
 .staff-shell .staff-operation-card { display:flex; align-items:center; gap:16px; width:100%; min-width:0; text-align:left; background:#fff; border:1px solid #dfe7dd; border-left:5px solid transparent; border-radius:16px; padding:20px; color:var(--staff-ink); box-shadow:0 8px 26px rgba(35,62,46,.045); cursor:pointer; transition:background .18s,border-color .18s,box-shadow .18s; }
@@ -327,8 +327,7 @@
 .staff-week-footer strong { color:#304d3c; }
 .staff-week-footer p,.staff-week-pending { color:var(--staff-muted); font-size:.8rem; margin:5px 0 0; }
 .staff-week-pending { text-align:right; }
-@media(max-width:1180px) { .staff-slot-workspace.has-operation { grid-template-columns:minmax(0,1fr); } .staff-slot-workspace.has-operation .staff-slot-operations { max-width:none; grid-template-columns:repeat(2,minmax(0,1fr)); } }
-@media(max-width:700px) { .staff-slot-workspace.has-operation .staff-slot-operations,.staff-week-selection { grid-template-columns:minmax(0,1fr); } .staff-week-direction { display:none; } .staff-week-target .staff-calendar { left:0; right:auto; } .staff-week-pending { text-align:left; } }
+@media(max-width:700px) { .staff-week-selection { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; } .staff-week-selection > .staff-week-direction { display:none; } .staff-week-pending { text-align:left; } }
 
 @media (max-width:400px) { .staff-week-field .staff-calendar { width:270px; max-width:calc(100vw - 76px); padding:10px; } .staff-shell .staff-operation-card { gap:10px; padding:15px 12px; } .staff-operation-icon { width:42px; height:42px; } }
 
@@ -342,3 +341,55 @@
 .staff-catalog-confirm-remove { border:1px solid #9a493b; border-radius:9px; background:#9a493b; color:#fff; padding:11px 16px; font-weight:700; cursor:pointer; }
 .staff-catalog-confirm-remove:hover:not(:disabled) { background:#813b30; }
 .staff-catalog-remove:disabled,.staff-catalog-confirm-remove:disabled { opacity:.6; cursor:not-allowed; }
+
+/* MHM-141: reuse the staff confirmation dialog and weekly selection palette. */
+.staff-copy-weeks { margin-bottom:16px; }
+.staff-copy-weeks .staff-week-field strong { display:block; color:#203128; font-size:.87rem; line-height:1.4; }
+.staff-copy-weeks .staff-week-field { padding:13px; }
+@media(max-width:480px) { .staff-copy-weeks { grid-template-columns:minmax(0,1fr); } .staff-copy-weeks .staff-week-direction { display:none; } }
+
+/* Slot management: full-width details beneath two persistent operation cards.
+   Match the previous 110% desktop appearance using local dimensions, not zoom. */
+.staff-content:has(> .staff-slots-page) { max-width:1430px; }
+.staff-slots-page { gap:27px; }
+.staff-slots-page .staff-page-heading h1 { font-size:clamp(2rem,3.3vw,3.19rem); }
+.staff-slots-page .staff-page-heading p:not(.staff-eyebrow) { font-size:1.034rem; }
+.staff-slots-page .staff-eyebrow { font-size:.77rem; }
+.staff-slots-page .staff-panel { padding:clamp(18px,2.75vw,35px); }
+.staff-slots-page .staff-panel-heading h2 { font-size:1.683rem; }
+.staff-slots-page .staff-panel-heading p { font-size:.968rem; }
+.staff-slots-page .staff-slot-workspace.has-operation .staff-operation-card,
+.staff-slots-page .staff-operation-card { padding:clamp(12px,2vw,22px); gap:clamp(8px,1.2vw,18px); }
+.staff-slots-page .staff-slot-workspace.has-operation .staff-operation-icon,
+.staff-slots-page .staff-operation-icon { width:44px; height:44px; }
+.staff-slots-page .staff-operation-copy strong { font-size:1.32rem; overflow-wrap:anywhere; }
+.staff-slots-page .staff-operation-copy small { font-size:.935rem; overflow-wrap:anywhere; }
+.staff-slots-page .staff-operation-open { font-size:.836rem; }
+.staff-slots-page .staff-week-selection { align-items:stretch; }
+.staff-slots-page .staff-week-selection > .staff-week-direction { align-self:center; }
+.staff-slots-page .staff-week-selection .staff-week-field { padding:17px; }
+.staff-slots-page .staff-week-selection .staff-week-step { font-size:.748rem; }
+.staff-slots-page .staff-week-selection label { font-size:1.155rem; }
+.staff-slots-page .staff-week-selection small { font-size:.858rem; }
+.staff-slots-page .staff-week-selection .staff-date-trigger { font-size:.946rem; min-height:55px; }
+.staff-slots-page .staff-week-selection .staff-date-trigger > span { min-width:0; overflow-wrap:anywhere; }
+.staff-slots-page .staff-week-overview-heading h3 { font-size:1.485rem; }
+.staff-slots-page .staff-week-overview-heading p { font-size:.913rem; }
+.staff-slots-page .staff-week-footer p { font-size:.88rem; }
+@media(max-width:700px) {
+  .staff-slots-page .staff-slot-operations { gap:8px; }
+  .staff-slots-page .staff-slot-workspace.has-operation .staff-operation-card,
+  .staff-slots-page .staff-operation-card { flex-wrap:wrap; align-content:flex-start; padding:12px; gap:7px; }
+  .staff-slots-page .staff-operation-copy { flex:1 0 100%; }
+  .staff-slots-page .staff-operation-copy strong { font-size:1.05rem; }
+  .staff-slots-page .staff-operation-copy small { font-size:.78rem; }
+  .staff-slots-page .staff-operation-icon { order:0; }
+  .staff-slots-page .staff-operation-copy { order:2; }
+  .staff-slots-page .staff-slot-workspace .staff-operation-arrow { display:grid; order:1; margin-left:auto; width:29px; height:29px; }
+  .staff-slots-page .staff-week-selection .staff-week-field { padding:9px; }
+  .staff-slots-page .staff-week-selection .staff-date-trigger { padding:8px; gap:4px; font-size:.8rem; }
+  .staff-slots-page .staff-week-selection .staff-date-trigger svg { width:16px; height:16px; }
+  .staff-slots-page .staff-week-selection label { font-size:.95rem; overflow-wrap:anywhere; }
+  .staff-slots-page .staff-week-selection .staff-week-step { font-size:.65rem; overflow-wrap:anywhere; }
+  .staff-slots-page .staff-week-selection small { font-size:.75rem; overflow-wrap:anywhere; }
+}
