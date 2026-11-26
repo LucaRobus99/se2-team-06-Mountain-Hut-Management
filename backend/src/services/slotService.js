@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { AppError, NotFoundError, ConflictError, ForbiddenError } from '../errors/AppError.js';
 import { isStaff, STAFF_ONLY_MESSAGE } from '../auth/roles.js';
 import {
@@ -332,6 +333,32 @@ function validateWeeklyCopyInput(body, today) {
   return { sourceDate, targetDate };
 }
 
+/**
+ * MH-09: fingerprint of both weeks (every slot's time, meal, status and tables).
+ * A preview returns it; a copy sent with `expectedRevision` is refused when any
+ * slot was added, removed or edited in between, not only when ids differ.
+ */
+function weekRevision(sourceSlots, targetSlots, tableSets) {
+  const describe = slots => slots.map(s => [s.id, s.date, s.start_time, s.end_time, s.meal_id, s.status, tableSets.get(s.id) ?? []]);
+  return createHash('sha256').update(JSON.stringify([describe(sourceSlots), describe(targetSlots)])).digest('hex').slice(0, 16);
+}
+
+/** MH-09: rejects a copy whose preview no longer matches the weeks (optimistic check). */
+function assertPreviewCurrent(body, week) {
+  const changed = label => new ConflictError(`The ${label} schedule changed. Review the weekly copy again.`, 'WEEKLY_COPY_CHANGED');
+  for (const [key, slots, label] of [
+    ['expectedSourceSlotIds', week.sourceSlots, 'source'],
+    ['expectedTargetSlotIds', week.targetSlots, 'destination'],
+  ]) {
+    const expected = body[key];
+    const actual = slots.map(slot => slot.id);
+    if (expected !== undefined && (!Array.isArray(expected) || expected.length !== actual.length || actual.some(id => !expected.includes(id)))) {
+      throw changed(label);
+    }
+  }
+  if (body.expectedRevision !== undefined && body.expectedRevision !== week.revision) throw changed('weekly');
+}
+
 /** The seven 'YYYY-MM-DD' dates of the week starting on `monday` (a UTC Date). */
 function weekDates(monday) {
   return Array.from({ length: 7 }, (_, i) =>
@@ -362,6 +389,35 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
     if (!isStaff(user)) {
       throw new ForbiddenError(STAFF_ONLY_MESSAGE, 'FORBIDDEN');
     }
+  }
+
+  /** MH-09: the source and destination week dates of a valid copy-week body. */
+  function parseWeeklyCopy(body) {
+    const { sourceDate, targetDate } = validateWeeklyCopyInput(body, todayInZone(timeZone, now()));
+    return { source: weekDates(sourceDate), target: weekDates(targetDate) };
+  }
+
+  /**
+   * MH-09: loads both weeks through `exec` (the transaction when copying) and
+   * applies the rules that need the database: the source has slots, and no
+   * destination slot has a confirmed booking.
+   */
+  async function loadWeeklyCopy(exec, source, target) {
+    const sourceSlots = await slotDao.listByDateRange(exec, source[0], source[6]);
+    if (sourceSlots.length === 0) {
+      // Copying nothing would only wipe the destination week.
+      throw invalidFields([{ field: 'sourceWeekStart', rule: 'empty', message: 'The source week has no slots to copy.' }]);
+    }
+    if (await slotDao.hasAnyConfirmedBookingInRange(exec, target[0], target[6])) {
+      throw new ConflictError(
+        'The destination week contains confirmed bookings and cannot be overwritten.',
+        'WEEKLY_COPY_CONFLICT',
+        [{ field: 'targetWeekStart', rule: 'conflict', message: `Destination week starting ${target[0]} has existing confirmed bookings.` }]
+      );
+    }
+    const targetSlots = await slotDao.listByDateRange(exec, target[0], target[6]);
+    const tableSets = await slotDao.getTableSetForSlots(exec, [...sourceSlots, ...targetSlots].map(slot => slot.id));
+    return { sourceSlots, targetSlots, tableSets, revision: weekRevision(sourceSlots, targetSlots, tableSets) };
   }
 
   return {
@@ -590,55 +646,37 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
       return response;
     },
 
-    async validateWeeklyCopy(user, body, exec) {
-      assertStaff(user);
-      const { sourceDate, targetDate } = validateWeeklyCopyInput(body, todayInZone(timeZone, now()));
-      const source = weekDates(sourceDate);
-      const target = weekDates(targetDate);
-      const sourceSlots = await slotDao.listByDateRange(exec, source[0], source[6]);
-      if (sourceSlots.length === 0) {
-        throw invalidFields([{ field: 'sourceWeekStart', rule: 'empty', message: 'The source week has no slots to copy.' }]);
-      }
-      const targetSlots = await slotDao.listByDateRange(exec, target[0], target[6]);
-      if (await slotDao.hasAnyConfirmedBookingInRange(exec, target[0], target[6])) {
-        throw new ConflictError(
-          'The destination week contains confirmed bookings and cannot be overwritten.',
-          'WEEKLY_COPY_CONFLICT',
-          [{ field: 'targetWeekStart', rule: 'conflict', message: `Destination week starting ${target[0]} has existing confirmed bookings.` }]
-        );
-      }
-      return { source, target, sourceSlots, targetSlots };
-    },
-
+    /** MH-09: what the copy would do, without changing anything. */
     async previewWeeklyCopy(user, body) {
-      return db.transaction(async exec => {
-        const { sourceSlots, targetSlots } = await this.validateWeeklyCopy(user, body, exec);
-        return {
-          sourceCount: sourceSlots.length,
-          targetCount: targetSlots.length,
-          sourceDays: new Set(sourceSlots.map(slot => slot.date)).size,
-          sourceSlotIds: sourceSlots.map(slot => slot.id),
-          targetSlotIds: targetSlots.map(slot => slot.id),
-        };
-      });
+      assertStaff(user);
+      const { source, target } = parseWeeklyCopy(body);
+      // Plain reads, no transaction: the preview must not hold the global write
+      // lock. copyWeeklySchedule re-checks everything and rejects a stale preview.
+      const week = await loadWeeklyCopy(db, source, target);
+      return {
+        sourceCount: week.sourceSlots.length,
+        targetCount: week.targetSlots.length,
+        sourceDays: new Set(week.sourceSlots.map(slot => slot.date)).size,
+        sourceSlotIds: week.sourceSlots.map(slot => slot.id),
+        targetSlotIds: week.targetSlots.map(slot => slot.id),
+        revision: week.revision,
+      };
     },
 
+    /**
+     * MH-09: copies every slot of the source week (Monday to Sunday), with its
+     * tables, into the destination week, replacing the destination schedule.
+     * The request is validated before the transaction opens; the database checks
+     * run inside it, where the advisory lock keeps bookings out until it commits.
+     */
     async copyWeeklySchedule(user, body) {
+      assertStaff(user);
+      const { source, target } = parseWeeklyCopy(body);
       return db.transaction(async exec => {
-        const { source, target, sourceSlots, targetSlots } = await this.validateWeeklyCopy(user, body, exec);
-        for (const [key, slots, label] of [
-          ['expectedSourceSlotIds', sourceSlots, 'source'],
-          ['expectedTargetSlotIds', targetSlots, 'destination'],
-        ]) {
-          const expected = body[key];
-          const actual = slots.map(slot => slot.id);
-          if (expected !== undefined && (!Array.isArray(expected) || expected.length !== actual.length || actual.some(id => !expected.includes(id)))) {
-            throw new ConflictError(`The ${label} schedule changed. Review the weekly copy again.`, 'WEEKLY_COPY_CHANGED');
-          }
-        }
-        const tableSets = await slotDao.getTableSetForSlots(exec, sourceSlots.map(slot => slot.id));
+        const week = await loadWeeklyCopy(exec, source, target);
+        assertPreviewCurrent(body, week);
         await slotDao.clearSlotsByDateRange(exec, target[0], target[6]);
-        for (const src of sourceSlots) {
+        for (const src of week.sourceSlots) {
           const id = await slotDao.createSlot(exec, {
             date: target[source.indexOf(src.date)],
             startTime: src.start_time,
@@ -646,11 +684,11 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
             mealId: src.meal_id,
             status: src.status,
           });
-          for (const table of tableSets.get(src.id) ?? []) {
+          for (const table of week.tableSets.get(src.id) ?? []) {
             await slotDao.addTableToSlot(exec, id, table.tableId, table.seats);
           }
         }
-        return { targetWeekStart: target[0], copiedCount: sourceSlots.length };
+        return { targetWeekStart: target[0], copiedCount: week.sourceSlots.length };
       });
     },
   };
