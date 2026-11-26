@@ -547,17 +547,25 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
       const sourceDate = parsingDate(sourceWeekStart);
       const targetDate = parsingDate(targetWeekStart);
 
-      // Formato vs. giorno della settimana: due errori distinti per il client.
-      if (!sourceDate) {
+      // Missing, badly formatted and not-a-Monday are distinct errors for the client.
+      if (isMissing(sourceWeekStart)) {
+        details.push(required('sourceWeekStart'));
+      } else if (!sourceDate) {
         details.push(invalid('sourceWeekStart', EXPECTED.date));
       } else if (sourceDate.getUTCDay() !== 1) {
         details.push({ field: 'sourceWeekStart', rule: 'invalid', message: 'sourceWeekStart must be a Monday.' });
       }
 
-      if (!targetDate) {
+      if (isMissing(targetWeekStart)) {
+        details.push(required('targetWeekStart'));
+      } else if (!targetDate) {
         details.push(invalid('targetWeekStart', EXPECTED.date));
       } else if (targetDate.getUTCDay() !== 1) {
         details.push({ field: 'targetWeekStart', rule: 'invalid', message: 'targetWeekStart must be a Monday.' });
+      } else if (targetWeekStart <= todayInZone(timeZone, now())) {
+        // Like slot creation: no slots in the past. A week that has already
+        // started would also lose its past slots, which belong to history.
+        details.push({ field: 'targetWeekStart', rule: 'past', message: 'The destination week must not have started yet.' });
       }
 
       // Controlli tra i due campi solo quando entrambi sono validi.
@@ -573,16 +581,24 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
 
       if (details.length > 0) throw invalidFields(details);
 
-      // Converti UTC → stringa YYYY-MM-DD usabile nel DB (le date sono stored come text).
+      // Dates are stored as 'YYYY-MM-DD' text. Every query covers the whole week,
+      // Monday to Sunday, matching the range copyWeeklySchedule deletes and fills.
       const fmt = (d) => d.toISOString().slice(0, 10);
+      const sundayOf = (monday) => fmt(new Date(monday.getTime() + 6 * 24 * 60 * 60 * 1000));
       const srcStr = fmt(sourceDate);
+      const srcEnd = sundayOf(sourceDate);
       const tgtStr = fmt(targetDate);
+      const tgtEnd = sundayOf(targetDate);
 
-      const sourceSlots = await slotDao.listByDateRange(srcStr, srcStr);
-      const targetSlots = await slotDao.listByDateRange(tgtStr, tgtStr);
+      const sourceSlots = await slotDao.listByDateRange(srcStr, srcEnd);
+      if (sourceSlots.length === 0) {
+        // Copying nothing would only wipe the destination week.
+        throw invalidFields([{ field: 'sourceWeekStart', rule: 'empty', message: 'The source week has no slots to copy.' }]);
+      }
+      const targetSlots = await slotDao.listByDateRange(tgtStr, tgtEnd);
 
       const hasExistingSchedule = targetSlots.length > 0;
-      if (await slotDao.hasAnyConfirmedBookingInRange(tgtStr, tgtStr)) {
+      if (await slotDao.hasAnyConfirmedBookingInRange(tgtStr, tgtEnd)) {
         throw new ConflictError(
           'The destination week contains confirmed bookings and cannot be overwritten.',
           'WEEKLY_COPY_CONFLICT',
