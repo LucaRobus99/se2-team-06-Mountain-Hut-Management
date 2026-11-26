@@ -65,7 +65,8 @@ export function createStaffRouter({ bookingService, slotService, requireAuth }) 
   });
 
   router.post('/slots/copy-week', staffOnly, async (req, res, next) => {
-    const { sourceWeekStart, targetWeekStart } = req.body;
+    // No JSON body leaves req.body undefined: report the missing fields as a 400.
+    const { sourceWeekStart, targetWeekStart } = req.body ?? {};
     try {
       await slotService.validateWeeklyCopy(req.user, { sourceWeekStart, targetWeekStart });
       const result = await slotService.copyWeeklySchedule(req.user, { sourceWeekStart, targetWeekStart });

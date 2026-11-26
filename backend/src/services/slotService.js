@@ -547,14 +547,18 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
       const sourceDate = parsingDate(sourceWeekStart);
       const targetDate = parsingDate(targetWeekStart);
 
-      // Formato vs. giorno della settimana: due errori distinti per il client.
-      if (!sourceDate) {
+      // Missing, badly formatted and not-a-Monday are distinct errors for the client.
+      if (isMissing(sourceWeekStart)) {
+        details.push(required('sourceWeekStart'));
+      } else if (!sourceDate) {
         details.push(invalid('sourceWeekStart', EXPECTED.date));
       } else if (sourceDate.getUTCDay() !== 1) {
         details.push({ field: 'sourceWeekStart', rule: 'invalid', message: 'sourceWeekStart must be a Monday.' });
       }
 
-      if (!targetDate) {
+      if (isMissing(targetWeekStart)) {
+        details.push(required('targetWeekStart'));
+      } else if (!targetDate) {
         details.push(invalid('targetWeekStart', EXPECTED.date));
       } else if (targetDate.getUTCDay() !== 1) {
         details.push({ field: 'targetWeekStart', rule: 'invalid', message: 'targetWeekStart must be a Monday.' });
