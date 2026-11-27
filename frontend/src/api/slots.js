@@ -44,6 +44,10 @@ export function createCatalogTable(tableIdentifier, seats) {
   });
 }
 
+export function deleteCatalogTable(tableId) {
+  return request(`/api/slots/tables/${encodeURIComponent(tableId)}`, { method: 'DELETE' });
+}
+
 export async function createStaffSlot({ date, meal, startTime, endTime, tables, copyTablesFromSlotId }) {
   return request('/api/slots', {
     method: 'POST',
@@ -51,5 +55,17 @@ export async function createStaffSlot({ date, meal, startTime, endTime, tables, 
     body: JSON.stringify(copyTablesFromSlotId
       ? { date, meal, startTime, endTime, copyTablesFromSlotId }
       : { date, meal, startTime, endTime, tables }),
+  });
+}
+
+export function previewWeeklyCopy(input) {
+  return request('/api/staff/slots/copy-week/preview', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
+  });
+}
+
+export function copyWeeklySchedule(input) {
+  return request('/api/staff/slots/copy-week', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
   });
 }

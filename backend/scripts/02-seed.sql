@@ -24,7 +24,7 @@ INSERT INTO meals (id, meal_type) VALUES
     (3, 'aperitivo'),
     (4, 'dinner');
 
-INSERT INTO menus (meal_id, name, description) VALUES
+INSERT INTO menus (meal_id, name, content) VALUES
     (1, 'Continental', 'Bread, butter, jam, yogurt, coffee or tea'),
     (2, 'Mountain lunch', 'Polenta with cheese and a dessert'),
     (2, 'Vegetarian lunch', 'Vegetable soup and a dessert'),
@@ -64,4 +64,5 @@ INSERT INTO slot_tables (slot_id, table_id, seats) VALUES
 SELECT setval(pg_get_serial_sequence('users', 'id'), (SELECT max(id) FROM users));
 SELECT setval(pg_get_serial_sequence('dining_tables', 'id'), (SELECT max(id) FROM dining_tables));
 SELECT setval(pg_get_serial_sequence('meals', 'id'), (SELECT max(id) FROM meals));
+SELECT setval(pg_get_serial_sequence('menus', 'id'), (SELECT max(id) FROM menus));
 SELECT setval(pg_get_serial_sequence('slots', 'id'), (SELECT max(id) FROM slots));

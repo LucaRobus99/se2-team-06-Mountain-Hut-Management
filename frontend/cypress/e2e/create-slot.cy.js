@@ -39,6 +39,7 @@ describe('Mountain Hut - Employee Slot Creation Flow (MH-02)', () => {
 
     findFreeDate().then(date => {
       cy.visit('/staff/slots');
+      cy.contains('button', 'Create a new slot').click();
       pickStaffDate('#slot-date', date);
       pickTime('#slot-start', 'Start time', '13', '00');
       pickTime('#slot-end', 'End time', '14', '00');

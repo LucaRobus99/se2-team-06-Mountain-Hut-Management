@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { AppError, NotFoundError, ConflictError, ForbiddenError } from '../errors/AppError.js';
 import { isStaff, STAFF_ONLY_MESSAGE } from '../auth/roles.js';
 import {
@@ -289,6 +290,81 @@ function validateListSlotsQuery(query) {
   return { date, meal };
 }
 
+/** MH-09: checks the copy-week body; `today` is the hut's date. No database access. */
+function validateWeeklyCopyInput(body, today) {
+  const { sourceWeekStart, targetWeekStart } = body ?? {};
+  const details = [];
+  // A valid 'YYYY-MM-DD' as a UTC midnight Date, else null.
+  const utcDate = value => (isValidDate(value) ? new Date(`${value}T00:00:00Z`) : null);
+  const sourceDate = utcDate(sourceWeekStart);
+  const targetDate = utcDate(targetWeekStart);
+
+  // Missing, badly formatted and not-a-Monday are distinct errors for the client.
+  if (isMissing(sourceWeekStart)) {
+    details.push(required('sourceWeekStart'));
+  } else if (!sourceDate) {
+    details.push(invalid('sourceWeekStart', EXPECTED.date));
+  } else if (sourceDate.getUTCDay() !== 1) {
+    details.push({ field: 'sourceWeekStart', rule: 'invalid', message: 'sourceWeekStart must be a Monday.' });
+  }
+
+  if (isMissing(targetWeekStart)) {
+    details.push(required('targetWeekStart'));
+  } else if (!targetDate) {
+    details.push(invalid('targetWeekStart', EXPECTED.date));
+  } else if (targetDate.getUTCDay() !== 1) {
+    details.push({ field: 'targetWeekStart', rule: 'invalid', message: 'targetWeekStart must be a Monday.' });
+  } else if (targetWeekStart <= today) {
+    // Like slot creation: no slots in the past. A week that has already
+    // started would also lose its past slots, which belong to history.
+    details.push({ field: 'targetWeekStart', rule: 'past', message: 'The destination week must not have started yet.' });
+  }
+
+  // Compare the two weeks only when both are valid.
+  if (details.length === 0 && targetDate.getTime() <= sourceDate.getTime()) {
+    details.push({
+      field: 'targetWeekStart',
+      rule: targetDate.getTime() === sourceDate.getTime() ? 'conflict' : 'order',
+      message: 'targetWeekStart must be strictly after sourceWeekStart.',
+    });
+  }
+
+  if (details.length > 0) throw invalidFields(details);
+  return { sourceDate, targetDate };
+}
+
+/**
+ * MH-09: fingerprint of both weeks (every slot's time, meal, status and tables).
+ * A preview returns it; a copy sent with `expectedRevision` is refused when any
+ * slot was added, removed or edited in between, not only when ids differ.
+ */
+function weekRevision(sourceSlots, targetSlots, tableSets) {
+  const describe = slots => slots.map(s => [s.id, s.date, s.start_time, s.end_time, s.meal_id, s.status, tableSets.get(s.id) ?? []]);
+  return createHash('sha256').update(JSON.stringify([describe(sourceSlots), describe(targetSlots)])).digest('hex').slice(0, 16);
+}
+
+/** MH-09: rejects a copy whose preview no longer matches the weeks (optimistic check). */
+function assertPreviewCurrent(body, week) {
+  const changed = label => new ConflictError(`The ${label} schedule changed. Review the weekly copy again.`, 'WEEKLY_COPY_CHANGED');
+  for (const [key, slots, label] of [
+    ['expectedSourceSlotIds', week.sourceSlots, 'source'],
+    ['expectedTargetSlotIds', week.targetSlots, 'destination'],
+  ]) {
+    const expected = body[key];
+    const actual = slots.map(slot => slot.id);
+    if (expected !== undefined && (!Array.isArray(expected) || expected.length !== actual.length || actual.some(id => !expected.includes(id)))) {
+      throw changed(label);
+    }
+  }
+  if (body.expectedRevision !== undefined && body.expectedRevision !== week.revision) throw changed('weekly');
+}
+
+/** The seven 'YYYY-MM-DD' dates of the week starting on `monday` (a UTC Date). */
+function weekDates(monday) {
+  return Array.from({ length: 7 }, (_, i) =>
+    new Date(monday.getTime() + i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+}
+
 export function createSlotService({ slotDao, db, timeZone, now = () => new Date() }) {
   async function loadSlot(slotIdRaw) {
     const slotId = parsePositiveInt(slotIdRaw);
@@ -313,6 +389,35 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
     if (!isStaff(user)) {
       throw new ForbiddenError(STAFF_ONLY_MESSAGE, 'FORBIDDEN');
     }
+  }
+
+  /** MH-09: the source and destination week dates of a valid copy-week body. */
+  function parseWeeklyCopy(body) {
+    const { sourceDate, targetDate } = validateWeeklyCopyInput(body, todayInZone(timeZone, now()));
+    return { source: weekDates(sourceDate), target: weekDates(targetDate) };
+  }
+
+  /**
+   * MH-09: loads both weeks through `exec` (the transaction when copying) and
+   * applies the rules that need the database: the source has slots, and no
+   * destination slot has a confirmed booking.
+   */
+  async function loadWeeklyCopy(exec, source, target) {
+    const sourceSlots = await slotDao.listByDateRange(exec, source[0], source[6]);
+    if (sourceSlots.length === 0) {
+      // Copying nothing would only wipe the destination week.
+      throw invalidFields([{ field: 'sourceWeekStart', rule: 'empty', message: 'The source week has no slots to copy.' }]);
+    }
+    if (await slotDao.hasAnyConfirmedBookingInRange(exec, target[0], target[6])) {
+      throw new ConflictError(
+        'The destination week contains confirmed bookings and cannot be overwritten.',
+        'WEEKLY_COPY_CONFLICT',
+        [{ field: 'targetWeekStart', rule: 'conflict', message: `Destination week starting ${target[0]} has existing confirmed bookings.` }]
+      );
+    }
+    const targetSlots = await slotDao.listByDateRange(exec, target[0], target[6]);
+    const tableSets = await slotDao.getTableSetForSlots(exec, [...sourceSlots, ...targetSlots].map(slot => slot.id));
+    return { sourceSlots, targetSlots, tableSets, revision: weekRevision(sourceSlots, targetSlots, tableSets) };
   }
 
   return {
@@ -429,6 +534,26 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
       });
     },
 
+    async deleteCatalogTable(user, tableIdRaw) {
+      assertStaff(user);
+      const tableId = parsePositiveInt(tableIdRaw);
+      if (!Number.isSafeInteger(tableId) || tableId > 2147483647) {
+        throw invalidFields([invalid('tableId', EXPECTED.positiveInt)]);
+      }
+      try {
+        await db.transaction(async exec => {
+          if (!await slotDao.deleteTable(exec, tableId)) {
+            throw new NotFoundError('Table not found.', 'TABLE_NOT_FOUND');
+          }
+        });
+      } catch (error) {
+        if (error?.code === '23503') {
+          throw new ConflictError('This table is used by an existing slot or reservation and cannot be removed.', 'TABLE_IN_USE');
+        }
+        throw error;
+      }
+    },
+
     async getSlot(user, slotIdRaw) {
       assertStaff(user);
       const slot = await loadSlot(slotIdRaw);
@@ -519,6 +644,52 @@ export function createSlotService({ slotDao, db, timeZone, now = () => new Date(
         };
       }
       return response;
+    },
+
+    /** MH-09: what the copy would do, without changing anything. */
+    async previewWeeklyCopy(user, body) {
+      assertStaff(user);
+      const { source, target } = parseWeeklyCopy(body);
+      // Plain reads, no transaction: the preview must not hold the global write
+      // lock. copyWeeklySchedule re-checks everything and rejects a stale preview.
+      const week = await loadWeeklyCopy(db, source, target);
+      return {
+        sourceCount: week.sourceSlots.length,
+        targetCount: week.targetSlots.length,
+        sourceDays: new Set(week.sourceSlots.map(slot => slot.date)).size,
+        sourceSlotIds: week.sourceSlots.map(slot => slot.id),
+        targetSlotIds: week.targetSlots.map(slot => slot.id),
+        revision: week.revision,
+      };
+    },
+
+    /**
+     * MH-09: copies every slot of the source week (Monday to Sunday), with its
+     * tables, into the destination week, replacing the destination schedule.
+     * The request is validated before the transaction opens; the database checks
+     * run inside it, where the advisory lock keeps bookings out until it commits.
+     */
+    async copyWeeklySchedule(user, body) {
+      assertStaff(user);
+      const { source, target } = parseWeeklyCopy(body);
+      return db.transaction(async exec => {
+        const week = await loadWeeklyCopy(exec, source, target);
+        assertPreviewCurrent(body, week);
+        await slotDao.clearSlotsByDateRange(exec, target[0], target[6]);
+        for (const src of week.sourceSlots) {
+          const id = await slotDao.createSlot(exec, {
+            date: target[source.indexOf(src.date)],
+            startTime: src.start_time,
+            endTime: src.end_time,
+            mealId: src.meal_id,
+            status: src.status,
+          });
+          for (const table of week.tableSets.get(src.id) ?? []) {
+            await slotDao.addTableToSlot(exec, id, table.tableId, table.seats);
+          }
+        }
+        return { targetWeekStart: target[0], copiedCount: week.sourceSlots.length };
+      });
     },
   };
 }

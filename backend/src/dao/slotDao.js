@@ -56,7 +56,7 @@ export function createSlotDao(db) {
         `SELECT s.id, s.date, s.start_time, s.end_time, s.status, m.meal_type AS meal
          FROM slots s
          LEFT JOIN meals m ON m.id = s.meal_id
-         WHERE s.date = $1
+         WHERE s.date = $1 AND s.archived_at IS NULL
          ORDER BY s.start_time, s.id`,
         [date]
       );
@@ -135,6 +135,29 @@ export function createSlotDao(db) {
       return rows[0] ?? null;
     },
 
+    /** Active slots dated in [start..end], with the columns a weekly copy needs. */
+    async listByDateRange(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const [start, end] = a;
+      const { rows } = await exec.query(
+        `SELECT id, date, start_time, end_time, status, meal_id
+         FROM slots
+         WHERE date BETWEEN $1 AND $2 AND archived_at IS NULL
+         ORDER BY date, start_time`,
+        [start, end]
+      );
+      return rows;
+    },
+
+    /** Foreign keys prevent removing tables referenced by slots or bookings. */
+    async deleteTable(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const { rows } = await exec.query(
+        'DELETE FROM dining_tables WHERE id = $1 RETURNING id', [a[0]]
+      );
+      return rows.length > 0;
+    },
+
     async createTable(...args) {
       const { db: exec, args: a } = executorOf(args);
       const table = a[0];
@@ -154,8 +177,64 @@ export function createSlotDao(db) {
       const { rows } = await db.query(`SELECT DISTINCT s.start_time AS "startTime",
         s.end_time AS "endTime", m.meal_type AS meal
         FROM slots s JOIN meals m ON m.id = s.meal_id
+        WHERE s.archived_at IS NULL
         ORDER BY "startTime", "endTime", meal`);
       return rows;
+    },
+
+    /** Whether any slot dated in [start..end] has at least one confirmed booking. */
+    async hasAnyConfirmedBookingInRange(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const [start, end] = a;
+      const { rowCount } = await exec.query(
+        `SELECT 1 FROM bookings b
+         JOIN slots s ON s.id = b.slot_id
+         WHERE s.date BETWEEN $1 AND $2
+           AND b.status = 'confirmed'
+         LIMIT 1`,
+        [start, end]
+      );
+      return rowCount > 0;
+    },
+
+    /**
+     * Clears the active slots in [start..end] for a weekly copy. Slots that still
+     * have bookings (only cancelled ones: the caller rejects confirmed bookings)
+     * are archived and switched off so those bookings keep their history; the
+     * others are deleted, and their slot_tables go with them via CASCADE.
+     */
+    async clearSlotsByDateRange(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const [start, end] = a;
+      await exec.query(
+        `UPDATE slots s
+         SET archived_at = to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), status = 'off'
+         WHERE s.date BETWEEN $1 AND $2 AND s.archived_at IS NULL
+           AND EXISTS (SELECT 1 FROM bookings b WHERE b.slot_id = s.id)`,
+        [start, end]
+      );
+      await exec.query(
+        `DELETE FROM slots WHERE date BETWEEN $1 AND $2 AND archived_at IS NULL`,
+        [start, end]
+      );
+    },
+
+    /** The table set of each slot: Map of slotId → [{ tableId, seats }], [] when none. */
+    async getTableSetForSlots(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const [slotIds] = a;
+      const { rows } = await exec.query(
+        `SELECT slot_id, table_id, seats
+         FROM slot_tables
+         WHERE slot_id = ANY($1::int[])
+         ORDER BY slot_id, table_id`,
+        [slotIds]
+      );
+      const result = new Map(slotIds.map(slotId => [slotId, []]));
+      for (const row of rows) {
+        result.get(row.slot_id).push({ tableId: row.table_id, seats: row.seats });
+      }
+      return result;
     },
   };
 }
