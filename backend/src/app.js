@@ -16,6 +16,9 @@ import { createAvailabilityRouter } from './routes/availabilityRoutes.js';
 import { createBookingRouter } from './routes/bookingRoutes.js';
 import { createSlotRouter } from './routes/slotRoutes.js';
 import { createStaffRouter } from './routes/staffRoutes.js';
+import { createMenuDao } from './dao/menuDao.js';
+import { createMenuService } from './services/menuService.js';
+import { createMenuRouter, createSlotMenuRouter } from './routes/menuRoutes.js';
 import { configurePassport } from './auth/passport.js';
 import { sessionMiddleware } from './auth/session.js';
 import { createRequireAuth } from './middleware/requireAuth.js';
@@ -38,6 +41,7 @@ export function createApp({ db, timeZone = config.hutTimeZone, now = () => new D
   const slotDao = createSlotDao(db);
   const bookingDao = createBookingDao(db);
   const passwordResetDao = createPasswordResetDao(db);
+  const menuDao = createMenuDao(db);
 
   // Passport local strategy + Express session (cookie `sid`).
   const auth = configurePassport({ userDao });
@@ -73,6 +77,7 @@ export function createApp({ db, timeZone = config.hutTimeZone, now = () => new D
     appBaseUrl: config.appBaseUrl,
     now,
   });
+  const menuService = createMenuService({ menuDao, slotDao, db, timeZone, now });
 
   // Health check
   app.use('/api/health', createHealthRouter(db));
@@ -88,8 +93,10 @@ export function createApp({ db, timeZone = config.hutTimeZone, now = () => new D
   }));
 
   // Public availability, then authenticated bookings
-  app.use('/api/availability', createAvailabilityRouter(slotService));
+  app.use('/api/availability', createAvailabilityRouter(slotService, menuService));
   app.use('/api/slots', createSlotRouter(slotService, requireAuth));
+  app.use('/api/slots', createSlotMenuRouter(menuService, requireAuth));
+  app.use('/api/menus', createMenuRouter(menuService, requireAuth));
   app.use('/api/bookings', createBookingRouter(bookingService, requireAuth));
   // MH-07: staff-only search, availability and bookings on someone's behalf.
   app.use('/api/staff', createStaffRouter({ bookingService, slotService, requireAuth }));
