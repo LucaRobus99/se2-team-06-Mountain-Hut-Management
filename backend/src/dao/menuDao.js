@@ -91,7 +91,9 @@ export function createMenuDao(db) {
       const params = mealType ? [date, mealType] : [date];
       const { rows } = await exec.query(
         `SELECT s.id AS "slotId", s.date, s.start_time AS "startTime", s.end_time AS "endTime",
-                m.meal_type AS "meal", mu.id AS "menuId", mu.name AS "menuName", mu.content AS "menuContent"
+                m.meal_type AS "meal",
+                s.menu_id AS "menuId", mu.name AS "menuName", mu.content AS "menuContent",
+                s.menu_name_override AS "menuNameOverride", s.menu_content_override AS "menuContentOverride"
          FROM slots s
          JOIN meals m ON m.id = s.meal_id
          LEFT JOIN menus mu ON mu.id = s.menu_id
@@ -111,7 +113,9 @@ export function createMenuDao(db) {
       const slotId = a[0];
       const { rows } = await exec.query(
         `SELECT s.id AS "slotId", s.date, s.start_time AS "startTime", s.end_time AS "endTime",
-                m.meal_type AS "meal", mu.id AS "menuId", mu.name AS "menuName", mu.content AS "menuContent"
+                m.meal_type AS "meal",
+                s.menu_id AS "menuId", mu.name AS "menuName", mu.content AS "menuContent",
+                s.menu_name_override AS "menuNameOverride", s.menu_content_override AS "menuContentOverride"
          FROM slots s
          JOIN meals m ON m.id = s.meal_id
          LEFT JOIN menus mu ON mu.id = s.menu_id
@@ -119,6 +123,47 @@ export function createMenuDao(db) {
         [slotId]
       );
       return rows[0] ?? null;
+    },
+
+    /**
+     * MH-10-02/03: set the slot's full menu state in one UPDATE. All three
+     * values are written explicitly (NULL included) so re-assigning never
+     * leaves stale overrides: library menu → overrides NULL, unsaved variant
+     * → name/content override set, base menu_id may be NULL (ad-hoc).
+     */
+    async assignSlotMenu(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const [slotId, { menuId, nameOverride, contentOverride }] = a;
+      await exec.query(
+        `UPDATE slots
+         SET menu_id = $1,
+             menu_name_override = $2,
+             menu_content_override = $3
+         WHERE id = $4`,
+        [menuId ?? null, nameOverride ?? null, contentOverride ?? null, slotId]
+      );
+    },
+
+    async deleteMenu(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const id = a[0];
+      // slots.menu_id is ON DELETE SET NULL: referencing slots are released.
+      await exec.query('DELETE FROM menus WHERE id = $1', [id]);
+    },
+
+    /**
+     * Every slot still referencing a menu, active or archived: archived rows
+     * keep their cancelled-booking history, so their past slots must keep
+     * their menu too. Used by the deletion guard (professor rule 3).
+     */
+    async listSlotsReferencingMenu(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const menuId = a[0];
+      const { rows } = await exec.query(
+        'SELECT id, date, start_time FROM slots WHERE menu_id = $1 ORDER BY date, start_time',
+        [menuId]
+      );
+      return rows;
     },
   };
 }

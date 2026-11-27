@@ -77,7 +77,7 @@ export function createApp({ db, timeZone = config.hutTimeZone, now = () => new D
     appBaseUrl: config.appBaseUrl,
     now,
   });
-  const menuService = createMenuService({ menuDao, slotDao, db });
+  const menuService = createMenuService({ menuDao, slotDao, db, timeZone, now });
 
   // Health check
   app.use('/api/health', createHealthRouter(db));

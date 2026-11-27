@@ -45,6 +45,20 @@ export function createMenuRouter(menuService, requireAuth) {
     }
   });
 
+  /**
+   * DELETE /api/menus/:id - Remove a menu from the library.
+   * Blocked (409) while any past slot still references it; referencing
+   * future slots are released (their menu_id is set to NULL).
+   */
+  router.delete('/:id', staffOnly, async (req, res, next) => {
+    try {
+      await menuService.deleteMenu(req.params.id);
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  });
+
   /** PUT /api/slots/:slotId/menu - Assign menu (or reused/revised copy) to a slot */
   // Note: this route can be mounted at /api/slots/:slotId/menu or handled here.
   // We can also attach a subrouter or export a helper.

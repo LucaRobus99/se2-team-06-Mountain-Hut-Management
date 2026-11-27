@@ -210,6 +210,13 @@ async function initialiseIfEmpty(exec) {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'slots' AND column_name = 'menu_id') THEN
           ALTER TABLE slots ADD COLUMN menu_id INTEGER REFERENCES menus(id) ON DELETE SET NULL;
         END IF;
+        -- MH-10-02/03: unsaved menu variants live on the slot, not in menus.
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'slots' AND column_name = 'menu_name_override') THEN
+          ALTER TABLE slots ADD COLUMN menu_name_override TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'slots' AND column_name = 'menu_content_override') THEN
+          ALTER TABLE slots ADD COLUMN menu_content_override TEXT;
+        END IF;
       END $$;
       COMMIT;`;
     try { await exec(menuMigrate); }

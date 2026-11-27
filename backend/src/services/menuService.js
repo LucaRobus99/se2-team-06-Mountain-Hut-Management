@@ -1,5 +1,11 @@
-import { NotFoundError, ConflictError, ValidationError } from '../errors/AppError.js';
+import {
+  NotFoundError,
+  ConflictError,
+  UnprocessableEntityError,
+  ValidationError,
+} from '../errors/AppError.js';
 import { validateMenuInput } from './menuValidation.js';
+import { isInPast } from '../utils/hutTime.js';
 import {
   EXPECTED,
   invalid,
@@ -11,8 +17,9 @@ import {
 } from '../utils/validation.js';
 
 const ALLOWED_MEALS = ['breakfast', 'lunch', 'aperitivo', 'dinner'];
+const MAX_MENU_NAME_LENGTH = 100;
 
-export function createMenuService({ menuDao, slotDao, db }) {
+export function createMenuService({ menuDao, slotDao, db, timeZone, now = () => new Date() }) {
   async function resolveMealId(mealInput) {
     if (typeof mealInput === 'number' || (typeof mealInput === 'string' && /^\d+$/.test(mealInput))) {
       const id = Number(mealInput);
@@ -33,6 +40,21 @@ export function createMenuService({ menuDao, slotDao, db }) {
     } else {
       throw new ValidationError('Invalid meal identifier or type.', 'VALIDATION_ERROR');
     }
+  }
+
+  /**
+   * Professor rule 2: a variant of a reused menu must not shadow an existing
+   * menu of the same meal. "Base" → "Base (2)" → "Base (3)" …
+   */
+  async function resolveUniqueMenuName(exec, mealId, baseName) {
+    let candidate = baseName;
+    let n = 2;
+    while (await menuDao.findByMealAndName(exec, mealId, candidate)) {
+      const suffix = ` (${n})`;
+      candidate = baseName.slice(0, Math.max(1, MAX_MENU_NAME_LENGTH - suffix.length)) + suffix;
+      n += 1;
+    }
+    return candidate;
   }
 
   return {
@@ -110,10 +132,18 @@ export function createMenuService({ menuDao, slotDao, db }) {
       return await menuDao.listAll();
     },
 
-    async assignMenuToSlot(slotId, { menuId, content, name, mealId }) {
+    async assignMenuToSlot(slotId, { menuId, content, name, saveVariant: saveVariantRaw }) {
       const parsedSlotId = Number(slotId);
       if (!Number.isInteger(parsedSlotId) || parsedSlotId <= 0) {
         throw new ValidationError('Invalid slot ID.', 'VALIDATION_ERROR');
+      }
+
+      let saveVariant = false;
+      if (saveVariantRaw !== undefined) {
+        if (typeof saveVariantRaw !== 'boolean') {
+          throw new ValidationError('saveVariant must be a boolean.', 'VALIDATION_ERROR');
+        }
+        saveVariant = saveVariantRaw;
       }
 
       const slot = await slotDao.findById(parsedSlotId);
@@ -121,65 +151,132 @@ export function createMenuService({ menuDao, slotDao, db }) {
         throw new NotFoundError('Slot not found.', 'SLOT_NOT_FOUND');
       }
 
-      let resolvedMenuId;
+      // Professor rule 1: a menu can only be modified/assigned before the slot starts.
+      if (isInPast(slot.date, slot.start_time, { timeZone, now: now() })) {
+        throw new UnprocessableEntityError(
+          'This slot has already started; its menu can no longer be modified.',
+          'SLOT_STARTED'
+        );
+      }
+
+      let resolvedMenuId = null;
+      let nameOverride = null;
+      let contentOverride = null;
+      let effectiveSaved = true;
 
       if (menuId !== undefined && menuId !== null) {
-        // Reusing an existing menu (optionally modified or direct)
         const parsedMenuId = Number(menuId);
         const menu = await menuDao.findById(parsedMenuId);
         if (!menu) {
           throw new NotFoundError('Menu not found.', 'MENU_NOT_FOUND');
         }
 
-        // If content/name are also provided, support modified copy before assignment (MH-10-03)
+        // Verify menu meal matches slot meal
+        const mealCheck = await db.query('SELECT meal_type AS "mealType" FROM meals WHERE id = $1', [menu.mealId]);
+        if (mealCheck.rows[0]?.mealType !== slot.meal) {
+          throw new ValidationError('Menu meal type does not match slot meal type.', 'MEAL_MISMATCH');
+        }
+
         if (content !== undefined || name !== undefined) {
           const validated = validateMenuInput({
             name: name ?? menu.name,
             content: content ?? menu.content,
           });
-          // Create a new version/copy of the menu or update
-          resolvedMenuId = await db.transaction(async (tx) => {
-            const newMenu = await menuDao.createMenu(tx, {
-              mealId: menu.mealId,
-              name: validated.name,
-              content: validated.content,
+
+          if (saveVariant) {
+            // Save as a permanent variant in library (menus)
+            resolvedMenuId = await db.transaction(async (tx) => {
+              const uniqueName = await resolveUniqueMenuName(tx, menu.mealId, validated.name);
+              const newMenu = await menuDao.createMenu(tx, {
+                mealId: menu.mealId,
+                name: uniqueName,
+                content: validated.content,
+              });
+              return newMenu.id;
             });
-            return newMenu.id;
-          });
-        } else {
-          // Verify menu meal matches slot meal
-          const mealCheck = await db.query('SELECT meal_type AS "mealType" FROM meals WHERE id = $1', [menu.mealId]);
-          if (mealCheck.rows[0]?.mealType !== slot.meal) {
-            throw new ValidationError('Menu meal type does not match slot meal type.', 'MEAL_MISMATCH');
+            effectiveSaved = true;
+          } else {
+            // Unsaved variant: lives only on the slot overrides
+            resolvedMenuId = menu.id;
+            nameOverride = validated.name;
+            contentOverride = validated.content;
+            effectiveSaved = false;
           }
+        } else {
           resolvedMenuId = menu.id;
+          effectiveSaved = true;
         }
       } else if (content !== undefined && name !== undefined) {
-        // Creating a new ad-hoc menu for this slot
         const resolvedMeal = await db.query('SELECT id FROM meals WHERE meal_type = $1', [slot.meal]);
         const slotMealId = resolvedMeal.rows[0].id;
         const validated = validateMenuInput({ name, content });
 
-        resolvedMenuId = await db.transaction(async (tx) => {
-          const newMenu = await menuDao.createMenu(tx, {
-            mealId: slotMealId,
-            name: validated.name,
-            content: validated.content,
+        if (saveVariant) {
+          resolvedMenuId = await db.transaction(async (tx) => {
+            const uniqueName = await resolveUniqueMenuName(tx, slotMealId, validated.name);
+            const newMenu = await menuDao.createMenu(tx, {
+              mealId: slotMealId,
+              name: uniqueName,
+              content: validated.content,
+            });
+            return newMenu.id;
           });
-          return newMenu.id;
-        });
+          effectiveSaved = true;
+        } else {
+          resolvedMenuId = null;
+          nameOverride = validated.name;
+          contentOverride = validated.content;
+          effectiveSaved = false;
+        }
       } else {
         throw new ValidationError('Either menuId or valid name and content must be provided for slot assignment.', 'VALIDATION_ERROR');
       }
 
-      // Associate menu with slot
-      await db.query('UPDATE slots SET menu_id = $1 WHERE id = $2', [resolvedMenuId, parsedSlotId]);
+      await menuDao.assignSlotMenu(parsedSlotId, {
+        menuId: resolvedMenuId,
+        nameOverride,
+        contentOverride,
+      });
 
       return {
         slotId: parsedSlotId,
         menuId: resolvedMenuId,
+        saved: effectiveSaved,
+        ...(nameOverride ? { name: nameOverride, content: contentOverride } : {}),
         success: true,
       };
+    },
+
+    /**
+     * Professor rule 3: a menu can be deleted only while none of its
+     * referencing slots has already started. Past slots keep their menu.
+     * Future slots are released (slots.menu_id → NULL via ON DELETE SET NULL).
+     */
+    async deleteMenu(menuIdRaw) {
+      const menuId = parsePositiveInt(menuIdRaw);
+      if (menuId === null) {
+        throw invalidFields([invalid('menuId', EXPECTED.positiveInt)]);
+      }
+
+      const menu = await menuDao.findById(menuId);
+      if (!menu) {
+        throw new NotFoundError('Menu not found.', 'MENU_NOT_FOUND');
+      }
+
+      const slots = await menuDao.listSlotsReferencingMenu(menuId);
+      const hasPastSlot = slots.some((s) =>
+        isInPast(s.date, s.start_time, { timeZone, now: now() })
+      );
+      if (hasPastSlot) {
+        throw new ConflictError(
+          'This menu is still used by a past slot; past slots keep their assigned menu.',
+          'MENU_USED_BY_PAST_SLOT'
+        );
+      }
+
+      await db.transaction(async (tx) => {
+        await menuDao.deleteMenu(tx, menuId);
+      });
     },
 
     /**
@@ -210,9 +307,11 @@ export function createMenuService({ menuDao, slotDao, db }) {
         startTime: row.startTime,
         endTime: row.endTime,
         meal: row.meal,
-        menu: row.menuId
-          ? { id: row.menuId, name: row.menuName, content: row.menuContent }
-          : null,
+        menu: row.menuNameOverride
+          ? { id: row.menuId ?? null, name: row.menuNameOverride, content: row.menuContentOverride, saved: false }
+          : row.menuId
+            ? { id: row.menuId, name: row.menuName, content: row.menuContent, saved: true }
+            : null,
       }));
 
       return { date, meal: meal ?? null, slots };
@@ -239,9 +338,11 @@ export function createMenuService({ menuDao, slotDao, db }) {
         startTime: row.startTime,
         endTime: row.endTime,
         meal: row.meal,
-        menu: row.menuId
-          ? { id: row.menuId, name: row.menuName, content: row.menuContent }
-          : null,
+        menu: row.menuNameOverride
+          ? { id: row.menuId ?? null, name: row.menuNameOverride, content: row.menuContentOverride, saved: false }
+          : row.menuId
+            ? { id: row.menuId, name: row.menuName, content: row.menuContent, saved: true }
+            : null,
       };
     },
   };
