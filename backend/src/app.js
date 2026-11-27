@@ -93,7 +93,7 @@ export function createApp({ db, timeZone = config.hutTimeZone, now = () => new D
   }));
 
   // Public availability, then authenticated bookings
-  app.use('/api/availability', createAvailabilityRouter(slotService));
+  app.use('/api/availability', createAvailabilityRouter(slotService, menuService));
   app.use('/api/slots', createSlotRouter(slotService, requireAuth));
   app.use('/api/slots', createSlotMenuRouter(menuService, requireAuth));
   app.use('/api/menus', createMenuRouter(menuService, requireAuth));

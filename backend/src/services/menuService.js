@@ -1,5 +1,14 @@
 import { NotFoundError, ConflictError, ValidationError } from '../errors/AppError.js';
 import { validateMenuInput } from './menuValidation.js';
+import {
+  EXPECTED,
+  invalid,
+  invalidFields,
+  isMissing,
+  isValidDate,
+  parsePositiveInt,
+  required,
+} from '../utils/validation.js';
 
 const ALLOWED_MEALS = ['breakfast', 'lunch', 'aperitivo', 'dinner'];
 
@@ -170,6 +179,69 @@ export function createMenuService({ menuDao, slotDao, db }) {
         slotId: parsedSlotId,
         menuId: resolvedMenuId,
         success: true,
+      };
+    },
+
+    /**
+     * MH-10-04 (public, read-only): active slots of a day with their assigned
+     * menu. `menu` is null when the slot has none — the client can tell "no
+     * menu" (200 + null) apart from an error (400/404).
+     */
+    async publicSlotMenus(query = {}) {
+      const details = [];
+      const date = query.date;
+      if (isMissing(date)) {
+        details.push(required('date'));
+      } else if (!isValidDate(date)) {
+        details.push(invalid('date', EXPECTED.date));
+      }
+      const meal = query.meal;
+      if (!isMissing(meal) && !ALLOWED_MEALS.includes(meal)) {
+        details.push(invalid('meal', `one of ${ALLOWED_MEALS.join(', ')}`));
+      }
+      if (details.length > 0) {
+        throw invalidFields(details);
+      }
+
+      const rows = await menuDao.listSlotMenus(date, meal ?? null);
+      const slots = rows.map((row) => ({
+        slotId: row.slotId,
+        date: row.date,
+        startTime: row.startTime,
+        endTime: row.endTime,
+        meal: row.meal,
+        menu: row.menuId
+          ? { id: row.menuId, name: row.menuName, content: row.menuContent }
+          : null,
+      }));
+
+      return { date, meal: meal ?? null, slots };
+    },
+
+    /**
+     * MH-10-04 (public, read-only): the menu assigned to one slot.
+     * Unknown or archived slot → 404; slot without menu → 200 with menu: null.
+     */
+    async publicSlotMenu(slotIdRaw) {
+      const slotId = parsePositiveInt(slotIdRaw);
+      if (slotId === null) {
+        throw invalidFields([invalid('slotId', EXPECTED.positiveInt)]);
+      }
+
+      const row = await menuDao.findBySlotId(slotId);
+      if (!row) {
+        throw new NotFoundError('Slot not found.', 'SLOT_NOT_FOUND');
+      }
+
+      return {
+        slotId: row.slotId,
+        date: row.date,
+        startTime: row.startTime,
+        endTime: row.endTime,
+        meal: row.meal,
+        menu: row.menuId
+          ? { id: row.menuId, name: row.menuName, content: row.menuContent }
+          : null,
       };
     },
   };

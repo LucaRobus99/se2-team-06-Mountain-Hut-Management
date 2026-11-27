@@ -79,5 +79,46 @@ export function createMenuDao(db) {
       );
       return rows;
     },
+
+    /**
+     * MH-10-04: active slots of a day with their assigned menu (LEFT JOIN so
+     * slots without a menu still show up with null menu columns).
+     */
+    async listSlotMenus(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const [date, mealType] = a;
+      const mealFilter = mealType ? 'AND m.meal_type = $2' : '';
+      const params = mealType ? [date, mealType] : [date];
+      const { rows } = await exec.query(
+        `SELECT s.id AS "slotId", s.date, s.start_time AS "startTime", s.end_time AS "endTime",
+                m.meal_type AS "meal", mu.id AS "menuId", mu.name AS "menuName", mu.content AS "menuContent"
+         FROM slots s
+         JOIN meals m ON m.id = s.meal_id
+         LEFT JOIN menus mu ON mu.id = s.menu_id
+         WHERE s.date = $1 AND s.archived_at IS NULL ${mealFilter}
+         ORDER BY s.start_time, s.id`,
+        params
+      );
+      return rows;
+    },
+
+    /**
+     * MH-10-04: one active slot with its meal and (optionally) assigned menu.
+     * Returns null when the slot does not exist or is archived.
+     */
+    async findBySlotId(...args) {
+      const { db: exec, args: a } = executorOf(args);
+      const slotId = a[0];
+      const { rows } = await exec.query(
+        `SELECT s.id AS "slotId", s.date, s.start_time AS "startTime", s.end_time AS "endTime",
+                m.meal_type AS "meal", mu.id AS "menuId", mu.name AS "menuName", mu.content AS "menuContent"
+         FROM slots s
+         JOIN meals m ON m.id = s.meal_id
+         LEFT JOIN menus mu ON mu.id = s.menu_id
+         WHERE s.id = $1 AND s.archived_at IS NULL`,
+        [slotId]
+      );
+      return rows[0] ?? null;
+    },
   };
 }
