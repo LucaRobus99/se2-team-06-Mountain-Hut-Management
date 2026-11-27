@@ -24,7 +24,6 @@ describe('SlotRoutes - Integration Tests', () => {
   });
 
   describe('Authentication & Authorization checks', () => {
-
     it('should return 401 Unauthorized when trying to access slots endpoints without logging in', async () => {
       const response = await request(app).get('/api/slots');
       expect(response.status).toBe(401);
@@ -40,12 +39,21 @@ describe('SlotRoutes - Integration Tests', () => {
       const response = await agent.get('/api/slots');
       expect(response.status).toBe(403);
       expect(response.body.error.code).toBe('FORBIDDEN');
-    });
 
+      const catalogRes = await agent.get('/api/slots/catalog');
+      expect(catalogRes.status).toBe(403);
+      expect(catalogRes.body.error.code).toBe('FORBIDDEN');
+
+      const createTableRes = await agent.post('/api/slots/tables').send({
+        tableIdentifier: 'ForbiddenTable',
+        seats: 4,
+      });
+      expect(createTableRes.status).toBe(403);
+      expect(createTableRes.body.error.code).toBe('FORBIDDEN');
+    });
   });
 
- describe('Staff slot operations (POST /api/slots, GET /api/slots, GET /api/slots/:slotId)', () => {
-
+  describe('Staff slot operations (POST /api/slots, GET /api/slots, GET /api/slots/:slotId, catalog & tables)', () => {
     beforeEach(async () => {
       // Log in as an employee/staff member from seed data
       await agent
@@ -60,14 +68,14 @@ describe('SlotRoutes - Integration Tests', () => {
           date: '2026-11-20',
           meal: 'lunch',
           startTime: '12:00',
-          endTime: '14:00'
+          endTime: '14:00',
         });
 
       expect(response.status).toBe(201);
       expect(response.header).toHaveProperty('location');
       expect(response.body).toHaveProperty('id');
     });
-    
+
     it('should allow staff to list slots', async () => {
       const response = await agent
         .get('/api/slots')
@@ -84,19 +92,42 @@ describe('SlotRoutes - Integration Tests', () => {
       expect(catalog.status).toBe(200);
       expect(catalog.body.tables).toContainEqual({ tableId: 1, tableIdentifier: 'T1', seats: 2 });
       expect(catalog.body.timePatterns).toContainEqual({ meal: 'lunch', startTime: '12:00', endTime: '13:00' });
+
+      const invalidTable = await agent.post('/api/slots/tables').send({ tableIdentifier: '', seats: 0 });
+      expect([400, 422]).toContain(invalidTable.status);
+
       const created = await agent.post('/api/slots/tables').send({ tableIdentifier: 'Terrace 1', seats: 6 });
       expect(created.status).toBe(201);
       expect((await agent.post('/api/slots/tables').send({ tableIdentifier: 'Terrace 1', seats: 8 })).status).toBe(409);
+
       const first = { date: '2026-11-20', meal: 'lunch', startTime: '12:00', endTime: '13:00' };
       const valid = await agent.post('/api/slots').send({ ...first, tables: [{ tableIdentifier: 'Terrace 1', seats: 6 }] });
       expect(valid.status).toBe(201);
+
       const second = { ...first, startTime: '13:00', endTime: '14:00' };
       const invalid = await agent.post('/api/slots').send({ ...second, tables: [{ tableIdentifier: 'Terrace 1', seats: 8 }] });
       expect(invalid.status).toBe(409);
       expect(invalid.body.error.code).toBe('TABLE_CAPACITY_MISMATCH');
+
       expect((await agent.get('/api/slots').query({ date: first.date })).body.slots).toHaveLength(1);
       await expect(db.query('INSERT INTO slot_tables (slot_id, table_id, seats) VALUES ($1,1,8)', [valid.body.id])).rejects.toThrow();
       expect((await agent.post('/api/slots').send({ ...second, tables: [{ tableIdentifier: 'Terrace 1', seats: 6 }] })).status).toBe(201);
+    });
+
+    it('should delete an unused catalog table with 204 and handle 404 / 409 conflict', async () => {
+      const created = await agent.post('/api/slots/tables').send({ tableIdentifier: 'Temp Table', seats: 4 });
+      expect(created.status).toBe(201);
+
+      const deleted = await agent.delete(`/api/slots/tables/${created.body.tableId}`);
+      expect(deleted.status).toBe(204);
+
+      const missing = await agent.delete('/api/slots/tables/999999');
+      expect(missing.status).toBe(404);
+
+      // Table 1 (T1) is referenced by seed slots/bookings
+      const inUse = await agent.delete('/api/slots/tables/1');
+      expect(inUse.status).toBe(409);
+      expect(inUse.body.error.code).toBe('TABLE_IN_USE');
     });
 
     it('should allow staff to retrieve a specific slot by ID', async () => {
@@ -117,7 +148,5 @@ describe('SlotRoutes - Integration Tests', () => {
       expect(response.status).toBe(404);
       expect(response.body).toHaveProperty('error');
     });
-
   });
-
 });

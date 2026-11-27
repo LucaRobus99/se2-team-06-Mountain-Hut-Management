@@ -2,15 +2,13 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-// Mock the API dependency used inside StaffDatePicker
 vi.mock('../../../src/api/slots.js', () => ({
-  todayInHut: vi.fn(() => '2026-11-15'),
+  todayInHut: vi.fn(() => '2026-11-18'), // Wednesday in week of 2026-11-16..2026-11-22
 }));
 
 import StaffDatePicker from '../../../src/components/StaffDatePicker.jsx';
 
 describe('StaffDatePicker Component Tests', () => {
-
   it('should render trigger button with formatted date value correctly', () => {
     render(
       <StaffDatePicker
@@ -38,7 +36,6 @@ describe('StaffDatePicker Component Tests', () => {
     const triggerButton = screen.getByRole('button', { name: /choose a date/i });
     await user.click(triggerButton);
 
-    // Verify dialog popover is visible showing November 2026
     const dialog = screen.getByRole('dialog', { name: /select a date/i });
     expect(dialog).toBeInTheDocument();
     expect(screen.getByText('November 2026')).toBeInTheDocument();
@@ -57,11 +54,9 @@ describe('StaffDatePicker Component Tests', () => {
     await user.click(screen.getByRole('button', { name: /choose a date/i }));
     expect(screen.getByText('November 2026')).toBeInTheDocument();
 
-    // Go to previous month (October 2026)
     await user.click(screen.getByRole('button', { name: /previous month/i }));
     expect(screen.getByText('October 2026')).toBeInTheDocument();
 
-    // Go to next month (back to November 2026)
     await user.click(screen.getByRole('button', { name: /next month/i }));
     expect(screen.getByText('November 2026')).toBeInTheDocument();
   });
@@ -80,7 +75,6 @@ describe('StaffDatePicker Component Tests', () => {
 
     await user.click(screen.getByRole('button', { name: /choose a date/i }));
 
-    // Click on a day button, e.g. 20 Nov 2026
     const dayButton = screen.getByRole('button', { name: /20 Nov 2026/i });
     await user.click(dayButton);
 
@@ -105,8 +99,7 @@ describe('StaffDatePicker Component Tests', () => {
     const todayButton = screen.getByRole('button', { name: /^today$/i });
     await user.click(todayButton);
 
-    // Mocked todayInHut returns '2026-11-15'
-    expect(handleChange).toHaveBeenCalledWith('2026-11-15');
+    expect(handleChange).toHaveBeenCalledWith('2026-11-18');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
@@ -123,11 +116,9 @@ describe('StaffDatePicker Component Tests', () => {
 
     await user.click(screen.getByRole('button', { name: /choose a date/i }));
 
-    // Day 14 should be disabled because min is Nov 15 (format: 14 Nov 2026)
     const pastDayButton = screen.getByRole('button', { name: /14 Nov 2026/i });
     expect(pastDayButton).toBeDisabled();
 
-    // Day 15 should be enabled
     const validDayButton = screen.getByRole('button', { name: /15 Nov 2026/i });
     expect(validDayButton).not.toBeDisabled();
   });
@@ -149,7 +140,7 @@ describe('StaffDatePicker Component Tests', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('should show placeholder when value is empty and close on Escape or outside pointerdown', async () => {
+  it('should show placeholder when value is empty, keep open on inside click, and close on Escape or outside pointerdown', async () => {
     const user = userEvent.setup();
 
     render(
@@ -161,6 +152,11 @@ describe('StaffDatePicker Component Tests', () => {
 
     const triggerButton = screen.getByRole('button', { name: /choose a date: choose a date/i });
     await user.click(triggerButton);
+    const dialog = screen.getByRole('dialog', { name: /select a date/i });
+    expect(dialog).toBeInTheDocument();
+
+    // Pointerdown inside dialog keeps it open
+    await user.pointer({ target: dialog, keys: '[MouseLeft]' });
     expect(screen.getByRole('dialog', { name: /select a date/i })).toBeInTheDocument();
 
     // Close with Escape
@@ -190,10 +186,8 @@ describe('StaffDatePicker Component Tests', () => {
     await user.click(screen.getByRole('button', { name: /choose a date/i }));
     expect(screen.getByRole('dialog')).toHaveClass('staff-calendar--above');
 
-    // Close first
     await user.keyboard('{Escape}');
 
-    // Simulate tight space below trigger and plenty of space above
     Object.defineProperty(window, 'innerHeight', { value: 200, configurable: true });
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       top: 180,
@@ -230,18 +224,58 @@ describe('StaffDatePicker Component Tests', () => {
         id="date-picker"
         value="2026-11-15"
         onChange={() => {}}
-        min="2026-11-20"
+        min="2026-11-25"
       />
     );
 
     await user.click(screen.getByRole('button', { name: /choose a date/i }));
 
-    // todayInHut is mocked as '2026-11-15', which is < '2026-11-20'
     expect(screen.getByRole('button', { name: /^today$/i })).toBeDisabled();
 
-    // November 1, 2026 is a Sunday, so Oct 26–31 2026 are outside November
     const outsideDay = screen.getByRole('button', { name: /31 Oct 2026/i });
     expect(outsideDay).toHaveClass('outside');
   });
-  
+
+  it('should support week selectionMode with empty value, day click, and "This week" button', async () => {
+    const handleChange = vi.fn();
+    const user = userEvent.setup();
+
+    const { rerender } = render(
+      <StaffDatePicker
+        id="week-picker"
+        value=""
+        onChange={handleChange}
+        selectionMode="week"
+        ariaLabel="Target week"
+      />
+    );
+
+    const trigger = screen.getByRole('button', { name: /target week: choose a week/i });
+    expect(trigger).toBeInTheDocument();
+
+    await user.click(trigger);
+    expect(screen.getByRole('dialog', { name: /select a week/i })).toBeInTheDocument();
+
+    // Clicking Wednesday 18 Nov 2026 selects Monday 2026-11-16
+    await user.click(screen.getByRole('button', { name: /18 Nov 2026/i }));
+    expect(handleChange).toHaveBeenCalledWith('2026-11-16');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    // Rerender with selected Monday value and test "This week" button
+    rerender(
+      <StaffDatePicker
+        id="week-picker"
+        value="2026-11-16"
+        onChange={handleChange}
+        selectionMode="week"
+        ariaLabel="Target week"
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: /target week/i }));
+    expect(screen.getByRole('button', { name: /18 Nov 2026/i })).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(screen.getByRole('button', { name: /this week/i }));
+    expect(handleChange).toHaveBeenLastCalledWith('2026-11-16');
+  });
 });
