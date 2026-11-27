@@ -350,6 +350,20 @@ describe('slotService staff flows - White-Box Tests', () => {
 
       await expect(service.getSeating(5, { partySize: '4' })).rejects.toMatchObject({ code: 'INSUFFICIENT_CAPACITY' });
     });
+
+    it('should allow staff seating right up to slot start time', async () => {
+      slotDao.findById.mockResolvedValueOnce({
+        id: 6,
+        date: '2026-08-14',
+        start_time: '09:30',
+        end_time: '10:30',
+        status: 'available',
+      });
+      slotDao.getTablesWithFreeForSlot.mockResolvedValue([{ id: 1, label: 'T1', seats: 4, free: 4 }]);
+
+      const result = await service.getSeating(6, { partySize: '2' }, { staff: true });
+      expect(result.slotId).toBe(6);
+    });
   });
 
   describe('listAvailableSlots', () => {
@@ -371,6 +385,21 @@ describe('slotService staff flows - White-Box Tests', () => {
       expect(slotDao.getTablesWithFreeForSlots).toHaveBeenCalledWith([3, 1, 2]);
       expect(result.slots.map((s) => s.id)).toEqual([1, 3]);
       expect(result.slots[0]).toMatchObject({ availableSeats: 4, tables: [{ tableId: 1, tableLabel: 'T1', seats: 4, freeSeats: 4 }] });
+    });
+
+    it('should include near-term slots when staff option is true', async () => {
+      slotDao.listByDate.mockResolvedValue([
+        { id: 11, date: '2026-08-14', start_time: '09:30', end_time: '10:30', status: 'available', meal: 'breakfast' },
+      ]);
+      slotDao.getTablesWithFreeForSlots.mockResolvedValue([
+        { slot_id: 11, id: 1, label: 'T1', seats: 4, free: 4 },
+      ]);
+
+      const result = await service.listAvailableSlots(
+        { date: '2026-08-14', meal: 'breakfast', partySize: '2' },
+        { staff: true }
+      );
+      expect(result.slots.map((s) => s.id)).toEqual([11]);
     });
   });
 });
