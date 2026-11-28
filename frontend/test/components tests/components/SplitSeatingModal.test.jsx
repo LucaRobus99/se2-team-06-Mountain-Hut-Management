@@ -99,4 +99,26 @@ describe('SplitSeatingModal Component Tests', () => {
     expect(screen.getByRole('button', { name: /continue with split seating/i })).toBeDisabled();
   });
 
+  it('should trigger onCancel when pressing Escape if not busy', async () => {
+    const handleCancel = vi.fn();
+    const user = userEvent.setup();
+
+    render(<SplitSeatingModal {...defaultProps} busy={false} onCancel={handleCancel} />);
+
+    await user.keyboard('{Escape}');
+
+    expect(handleCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('should not trigger onCancel when pressing Escape if busy', async () => {
+    const handleCancel = vi.fn();
+    const user = userEvent.setup();
+
+    render(<SplitSeatingModal {...defaultProps} busy={true} onCancel={handleCancel} />);
+
+    await user.keyboard('{Escape}');
+
+    expect(handleCancel).not.toHaveBeenCalled();
+  });
+  
 });
