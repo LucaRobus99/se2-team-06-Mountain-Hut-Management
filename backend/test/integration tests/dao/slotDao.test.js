@@ -7,20 +7,16 @@ describe('SlotDao - Integration Tests', () => {
   let slotDao;
 
   beforeEach(() => {
-    // Initialize a clean test database (PostgreSQL) with schema and seed data
     db = createTestDb();
     slotDao = createSlotDao(db);
   });
 
   afterEach(async () => {
-    // Close the database connection after each test
     await db.close();
   });
 
   describe('findById', () => {
-    
     it('should return the correct slot and resolved meal type when ID exists', async () => {
-      // In the seed data, slot ID 3 corresponds to '2026-11-15' at 12:00 (lunch)
       const slot = await slotDao.findById(3);
 
       expect(slot).toBeDefined();
@@ -36,17 +32,15 @@ describe('SlotDao - Integration Tests', () => {
       const slot = await slotDao.findById(9999);
       expect(slot).toBeNull();
     });
-
   });
 
   describe('listByDate', () => {
-    
     it('should return all slots for a given date ordered by start time', async () => {
       const slots = await slotDao.listByDate('2026-11-15');
 
       expect(slots).toBeInstanceOf(Array);
       expect(slots.length).toBeGreaterThan(0);
-      
+
       expect(slots[0].date).toBe('2026-11-15');
       expect(slots[0].start_time).toBe('09:00');
       expect(slots[0].meal).toBe('breakfast');
@@ -56,7 +50,6 @@ describe('SlotDao - Integration Tests', () => {
       const slots = await slotDao.listByDate('2099-01-01');
       expect(slots).toEqual([]);
     });
-
   });
 
   describe('findMealByType', () => {
@@ -75,7 +68,6 @@ describe('SlotDao - Integration Tests', () => {
   });
 
   describe('getTablesWithFreeForSlot & getTablesWithFreeForSlots', () => {
-    
     it('should return tables associated with the slot and calculate free seats correctly', async () => {
       const tables = await slotDao.getTablesWithFreeForSlot(3);
 
@@ -97,6 +89,13 @@ describe('SlotDao - Integration Tests', () => {
       expect(tables.length).toBeGreaterThan(0);
     });
 
+    it('should support excluding a specific booking ID via exceptBookingId', async () => {
+      const withoutExclusion = await slotDao.getTablesWithFreeForSlots([3]);
+      const withExclusion = await slotDao.getTablesWithFreeForSlots([3], 999999);
+
+      expect(withExclusion).toEqual(withoutExclusion);
+    });
+
     it('should return an empty array for a slot that has no tables assigned (zero capacity)', async () => {
       const tables = await slotDao.getTablesWithFreeForSlot(8);
       expect(tables).toEqual([]);
@@ -106,10 +105,9 @@ describe('SlotDao - Integration Tests', () => {
       const tables = await slotDao.getTablesWithFreeForSlots([]);
       expect(tables).toEqual([]);
     });
-
   });
 
-  describe('getTableSetForSlot', () => {
+  describe('getTableSetForSlot & getTableSetForSlots', () => {
     it('should return the table set for a specific slot', async () => {
       const tableSet = await slotDao.getTableSetForSlot(3);
       expect(tableSet).toBeInstanceOf(Array);
@@ -117,6 +115,15 @@ describe('SlotDao - Integration Tests', () => {
         expect(tableSet[0]).toHaveProperty('tableId');
         expect(tableSet[0]).toHaveProperty('seats');
       }
+    });
+
+    it('should return a Map of table sets keyed by slot ID for multiple slots', async () => {
+      const map = await slotDao.getTableSetForSlots([3, 8]);
+      expect(map).toBeInstanceOf(Map);
+      expect(map.has(3)).toBe(true);
+      expect(map.has(8)).toBe(true);
+      expect(Array.isArray(map.get(3))).toBe(true);
+      expect(map.get(8)).toEqual([]);
     });
   });
 
@@ -129,13 +136,13 @@ describe('SlotDao - Integration Tests', () => {
         startTime: '13:00',
         endTime: '15:00',
         mealId: meal.id,
-        status: 'available'
+        status: 'available',
       });
       expect(newSlotId).toBeDefined();
       expect(typeof newSlotId).toBe('number');
     });
 
-    it('should find a table by label and create a new table', async () => {
+    it('should find a table by label, create a new table, list it, and delete it', async () => {
       const label = 'TestTable-99';
       let table = await slotDao.findTableByLabel(label);
       expect(table).toBeNull();
@@ -146,6 +153,15 @@ describe('SlotDao - Integration Tests', () => {
       table = await slotDao.findTableByLabel(label);
       expect(table).not.toBeNull();
       expect(table.id).toBe(newTableId);
+
+      const allTables = await slotDao.listTables();
+      expect(allTables.some((t) => t.id === newTableId && t.label === label)).toBe(true);
+
+      const deleted = await slotDao.deleteTable(newTableId);
+      expect(deleted).toBe(true);
+
+      const deletedAgain = await slotDao.deleteTable(newTableId);
+      expect(deletedAgain).toBe(false);
     });
 
     it('should add a table to a slot', async () => {
@@ -159,7 +175,6 @@ describe('SlotDao - Integration Tests', () => {
       });
       const tableId = await slotDao.createTable({ label: 'SlotTestTable', seats: 4 });
 
-      // Should not throw
       await expect(slotDao.addTableToSlot(slotId, tableId, 4)).resolves.not.toThrow();
 
       const tables = await slotDao.getTablesWithFreeForSlot(slotId);
@@ -168,4 +183,42 @@ describe('SlotDao - Integration Tests', () => {
     });
   });
 
+  describe('listByDateRange, listTimePatterns, hasAnyConfirmedBookingInRange & clearSlotsByDateRange', () => {
+    it('should list active slots within a date range and return distinct time patterns', async () => {
+      const rangeSlots = await slotDao.listByDateRange('2026-11-15', '2026-11-15');
+      expect(Array.isArray(rangeSlots)).toBe(true);
+      expect(rangeSlots.length).toBeGreaterThan(0);
+
+      const patterns = await slotDao.listTimePatterns();
+      expect(Array.isArray(patterns)).toBe(true);
+      expect(patterns.length).toBeGreaterThan(0);
+      expect(patterns[0]).toHaveProperty('startTime');
+      expect(patterns[0]).toHaveProperty('endTime');
+      expect(patterns[0]).toHaveProperty('meal');
+    });
+
+    it('should check whether any confirmed booking exists in a date range', async () => {
+      const farFutureHasConfirmed = await slotDao.hasAnyConfirmedBookingInRange('2099-01-01', '2099-01-07');
+      expect(farFutureHasConfirmed).toBe(false);
+    });
+
+    it('should clear active slots without bookings in a date range', async () => {
+      const meal = await slotDao.findMealByType('dinner');
+      await slotDao.createSlot({
+        date: '2026-12-10',
+        startTime: '18:00',
+        endTime: '19:00',
+        mealId: meal.id,
+        status: 'available',
+      });
+
+      const before = await slotDao.listByDateRange('2026-12-10', '2026-12-10');
+      expect(before.length).toBe(1);
+
+      await slotDao.clearSlotsByDateRange('2026-12-10', '2026-12-10');
+
+      const after = await slotDao.listByDateRange('2026-12-10', '2026-12-10');
+      expect(after).toEqual([]);
+    });
+  });
 });

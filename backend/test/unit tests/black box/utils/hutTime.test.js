@@ -1,19 +1,23 @@
 import { describe, it, expect } from 'vitest';
-import { zonedTimeToUtc, isSlotTooLate, isTooLateToModify, todayInZone, isInPast } from '../../../../src/utils/hutTime.js';
+import {
+  zonedTimeToUtc,
+  isSlotTooLate,
+  isTooLateToModify,
+  todayInZone,
+  isInPast,
+  BOOKING_LEAD_MS,
+  MODIFICATION_LEAD_MS,
+} from '../../../../src/utils/hutTime.js';
 
 describe('hutTime - Black-Box Tests', () => {
-
   describe('zonedTimeToUtc', () => {
-    
     it('should correctly convert time during Daylight Saving Time (CEST, UTC+2) to UTC', () => {
-      // August 14, 2026, at 13:00 in Rome -> During summer Rome is UTC+2, so 13:00 local = 11:00 UTC
       const result = zonedTimeToUtc('2026-08-14', '13:00', 'Europe/Rome');
       expect(result).toBeInstanceOf(Date);
       expect(result.toISOString()).toBe('2026-08-14T11:00:00.000Z');
     });
 
     it('should correctly convert time during Standard Time (CET, UTC+1) to UTC', () => {
-      // January 15, 2026, at 13:00 in Rome -> During winter Rome is UTC+1, so 13:00 local = 12:00 UTC
       const result = zonedTimeToUtc('2026-01-15', '13:00', 'Europe/Rome');
       expect(result).toBeInstanceOf(Date);
       expect(result.toISOString()).toBe('2026-01-15T12:00:00.000Z');
@@ -26,76 +30,107 @@ describe('hutTime - Black-Box Tests', () => {
       expect(res2.toISOString()).toBe('2026-08-14T12:00:00.000Z');
     });
 
+    it('should handle DST transition days accurately', () => {
+      // Spring forward in Europe/Rome: 2026-03-29 (02:00 jumps to 03:00, CEST = UTC+2)
+      const springResult = zonedTimeToUtc('2026-03-29', '10:00', 'Europe/Rome');
+      expect(springResult.toISOString()).toBe('2026-03-29T08:00:00.000Z');
+
+      // Fall back in Europe/Rome: 2026-10-25 (03:00 drops back to 02:00, CET = UTC+1)
+      const autumnResult = zonedTimeToUtc('2026-10-25', '10:00', 'Europe/Rome');
+      expect(autumnResult.toISOString()).toBe('2026-10-25T09:00:00.000Z');
+    });
   });
 
   describe('isSlotTooLate', () => {
-    
     const slot = {
       date: '2026-08-14',
-      start_time: '13:00'
+      start_time: '13:00',
     };
     const timeZone = 'Europe/Rome';
-    // Slot set for 13:00 local time (11:00 UTC).
-    // The cutoff threshold for booking (2 hours prior) corresponds to 11:00 local time (09:00 UTC).
 
     it('should return false when checking well before the 2-hour threshold (e.g., 2 hours and 1 minute before)', () => {
-      // 2 hours and 1 minute before 13:00 local = 10:59 local time (08:59:00 UTC)
       const now = new Date('2026-08-14T08:59:00.000Z');
-      
+      const result = isSlotTooLate(slot, { timeZone, now });
+      expect(result).toBe(false);
+    });
+
+    it('should return false at the exact 2-hour boundary (11:00 local = 09:00 UTC)', () => {
+      const now = new Date('2026-08-14T09:00:00.000Z');
       const result = isSlotTooLate(slot, { timeZone, now });
       expect(result).toBe(false);
     });
 
     it('should return true when checking past the threshold (e.g., 1 hour and 59 minutes before)', () => {
-      // 1 hour and 59 minutes before 13:00 local = 11:01 local time (09:01:00 UTC)
       const now = new Date('2026-08-14T09:01:00.000Z');
-      
       const result = isSlotTooLate(slot, { timeZone, now });
       expect(result).toBe(true);
     });
 
     it('should respect a custom lead time (leadMs) when passed as an optional parameter', () => {
-      // Set a custom lead time of 4 hours instead of 2 (4 hours before 13:00 = 09:00 local / 07:00 UTC)
-      const customLeadMs = 4 * 60 * 60 * 1000; 
-      
+      const customLeadMs = 4 * 60 * 60 * 1000;
       const now = new Date('2026-08-14T07:01:00.000Z');
-      
       const result = isSlotTooLate(slot, { timeZone, now, leadMs: customLeadMs });
       expect(result).toBe(true);
     });
 
+    it('should work when optional leadMs is omitted', () => {
+      const now = new Date(Date.now() - (BOOKING_LEAD_MS + 60_000));
+      const dynamicSlot = {
+        date: todayInZone(timeZone, now),
+        start_time: '23:59',
+      };
+      expect(typeof isSlotTooLate(dynamicSlot, { timeZone, now })).toBe('boolean');
+    });
   });
 
   describe('isTooLateToModify (MH-06 48-hour rule)', () => {
-    
     it('should return true if less than 48 hours remain before the slot starts', () => {
-      // Slot on August 14, 2026, at 13:00 local
       const slot = { date: '2026-08-14', start_time: '13:00' };
-      // Current time: August 12, 2026, at 14:00 UTC (less than 48h remaining)
       const now = new Date('2026-08-12T14:00:00.000Z');
 
       const result = isTooLateToModify(slot, { timeZone: 'Europe/Rome', now });
       expect(result).toBe(true);
     });
 
+    it('should return false at the exact 48-hour boundary', () => {
+      const slot = { date: '2026-08-14', start_time: '13:00' }; // 11:00 UTC on Aug 14
+      const now = new Date('2026-08-12T11:00:00.000Z');
+
+      const result = isTooLateToModify(slot, { timeZone: 'Europe/Rome', now });
+      expect(result).toBe(false);
+    });
+
     it('should return false if more than 48 hours remain before the slot starts', () => {
       const slot = { date: '2026-08-14', start_time: '13:00' };
-      // Current time: August 10, 2026, at 10:00 UTC (plenty of time)
       const now = new Date('2026-08-10T10:00:00.000Z');
 
       const result = isTooLateToModify(slot, { timeZone: 'Europe/Rome', now });
       expect(result).toBe(false);
     });
 
+    it('should respect a custom leadMs for modification checks', () => {
+      const slot = { date: '2026-08-14', start_time: '13:00' };
+      const now = new Date('2026-08-14T08:00:00.000Z'); // 3h before 11:00 UTC
+      expect(isTooLateToModify(slot, { timeZone: 'Europe/Rome', now, leadMs: MODIFICATION_LEAD_MS })).toBe(true);
+      expect(isTooLateToModify(slot, { timeZone: 'Europe/Rome', now, leadMs: 60 * 60 * 1000 })).toBe(false);
+    });
   });
 
   describe('todayInZone', () => {
     it('should correctly return today date as YYYY-MM-DD in the specified time zone', () => {
-      // Fixed UTC instant corresponding to August 14, 2026, at 23:30 UTC
-      // In Europe/Rome (UTC+2 in summer), this is already August 15, 2026, at 01:30 local time
       const now = new Date('2026-08-14T23:30:00.000Z');
       const result = todayInZone('Europe/Rome', now);
       expect(result).toBe('2026-08-15');
+    });
+
+    it('should zero-pad single-digit months and days', () => {
+      const now = new Date('2026-03-05T10:00:00.000Z');
+      expect(todayInZone('Europe/Rome', now)).toBe('2026-03-05');
+    });
+
+    it('should return a valid YYYY-MM-DD string when now is omitted', () => {
+      const result = todayInZone('Europe/Rome');
+      expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
   });
 
@@ -104,11 +139,17 @@ describe('hutTime - Black-Box Tests', () => {
       const date = '2026-08-14';
       const time = '10:00';
       const timeZone = 'Europe/Rome';
-      
-      // Current time set to 10:01 local time (08:01:00 UTC) -> target time is in the past
       const now = new Date('2026-08-14T08:01:00.000Z');
 
       const result = isInPast(date, time, { timeZone, now });
+      expect(result).toBe(true);
+    });
+
+    it('should return true when the target wall-clock time equals now', () => {
+      const result = isInPast('2026-08-14', '10:00', {
+        timeZone: 'Europe/Rome',
+        now: new Date('2026-08-14T08:00:00.000Z'),
+      });
       expect(result).toBe(true);
     });
 
@@ -116,13 +157,14 @@ describe('hutTime - Black-Box Tests', () => {
       const date = '2026-08-14';
       const time = '10:00';
       const timeZone = 'Europe/Rome';
-      
-      // Current time set to 09:59 local time (07:59:00 UTC) -> target time is in the future
       const now = new Date('2026-08-14T07:59:00.000Z');
 
       const result = isInPast(date, time, { timeZone, now });
       expect(result).toBe(false);
     });
-  });
 
+    it('should work when now is omitted', () => {
+      expect(isInPast('2000-01-01', '12:00', { timeZone: 'Europe/Rome' })).toBe(true);
+    });
+  });
 });

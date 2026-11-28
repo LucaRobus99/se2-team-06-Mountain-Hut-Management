@@ -73,6 +73,7 @@ describe('slotDao - White-Box Tests', () => {
 
       const [sql, params] = db.query.mock.calls[0];
       expect(sql).toContain('IN ($1)');
+      expect(sql).not.toContain('AND b.id <>');
       expect(params).toEqual([1]);
     });
 
@@ -86,6 +87,17 @@ describe('slotDao - White-Box Tests', () => {
       expect(params).toEqual([1, 2, 3]);
     });
 
+    it('should append booking exclusion clause when exceptBookingId is provided', async () => {
+      db.query.mockResolvedValue({ rows: [] });
+
+      await dao.getTablesWithFreeForSlots([1, 2], 77);
+
+      const [sql, params] = db.query.mock.calls[0];
+      expect(sql).toContain('IN ($1, $2)');
+      expect(sql).toContain('AND b.id <> $3');
+      expect(params).toEqual([1, 2, 77]);
+    });
+
     it('should skip the query when there are no slots', async () => {
       await expect(dao.getTablesWithFreeForSlots([])).resolves.toEqual([]);
 
@@ -93,13 +105,30 @@ describe('slotDao - White-Box Tests', () => {
     });
   });
 
-  describe('getTableSetForSlot', () => {
+  describe('getTableSetForSlot & getTableSetForSlots', () => {
     it('should return the table set of the slot', async () => {
       const rows = [{ tableId: 1, seats: 4 }];
       db.query.mockResolvedValue({ rows });
 
       await expect(dao.getTableSetForSlot(1)).resolves.toEqual(rows);
       expect(db.query.mock.calls[0][1]).toEqual([1]);
+    });
+
+    it('should group table rows into a Map by slot_id and default missing slots to []', async () => {
+      db.query.mockResolvedValue({
+        rows: [
+          { slot_id: 10, table_id: 1, seats: 4 },
+          { slot_id: 10, table_id: 2, seats: 2 },
+        ],
+      });
+
+      const map = await dao.getTableSetForSlots([10, 20]);
+      expect(map.get(10)).toEqual([
+        { tableId: 1, seats: 4 },
+        { tableId: 2, seats: 2 },
+      ]);
+      expect(map.get(20)).toEqual([]);
+      expect(db.query.mock.calls[0][1]).toEqual([[10, 20]]);
     });
   });
 
@@ -133,7 +162,7 @@ describe('slotDao - White-Box Tests', () => {
     });
   });
 
-  describe('findTableByLabel', () => {
+  describe('findTableByLabel, createTable, deleteTable & listTables', () => {
     it('should return the table when the label exists', async () => {
       db.query.mockResolvedValue({ rows: [{ id: 3 }] });
 
@@ -146,14 +175,66 @@ describe('slotDao - White-Box Tests', () => {
 
       await expect(dao.findTableByLabel('T99')).resolves.toBeNull();
     });
-  });
 
-  describe('createTable', () => {
     it('should insert the label and return the new id', async () => {
       db.query.mockResolvedValue({ rows: [{ id: 4 }] });
 
       await expect(dao.createTable({ label: 'T4', seats: 6 })).resolves.toBe(4);
       expect(db.query.mock.calls[0][1]).toEqual(['T4', 6]);
+    });
+
+    it('should return true when deleteTable deletes a row and false when none matched', async () => {
+      db.query.mockResolvedValueOnce({ rows: [{ id: 4 }] });
+      await expect(dao.deleteTable(4)).resolves.toBe(true);
+
+      db.query.mockResolvedValueOnce({ rows: [] });
+      await expect(dao.deleteTable(4)).resolves.toBe(false);
+    });
+
+    it('should list all tables ordered by label and id', async () => {
+      const rows = [{ id: 1, label: 'T1', seats: 4 }];
+      db.query.mockResolvedValue({ rows });
+
+      await expect(dao.listTables()).resolves.toEqual(rows);
+      expect(db.query.mock.calls[0][0]).toContain('ORDER BY label, id');
+    });
+  });
+
+  describe('range queries, time patterns, booking checks & range clear', () => {
+    it('should list active slots in a date range', async () => {
+      const rows = [{ id: 1, date: '2026-08-17' }];
+      db.query.mockResolvedValue({ rows });
+
+      await expect(dao.listByDateRange('2026-08-17', '2026-08-23')).resolves.toEqual(rows);
+      expect(db.query.mock.calls[0][1]).toEqual(['2026-08-17', '2026-08-23']);
+    });
+
+    it('should list distinct time patterns', async () => {
+      const rows = [{ startTime: '12:00', endTime: '13:00', meal: 'lunch' }];
+      db.query.mockResolvedValue({ rows });
+
+      await expect(dao.listTimePatterns()).resolves.toEqual(rows);
+      expect(db.query.mock.calls[0][0]).toContain('SELECT DISTINCT');
+    });
+
+    it('should return true or false based on rowCount in hasAnyConfirmedBookingInRange', async () => {
+      db.query.mockResolvedValueOnce({ rowCount: 1 });
+      await expect(dao.hasAnyConfirmedBookingInRange('2026-08-17', '2026-08-23')).resolves.toBe(true);
+
+      db.query.mockResolvedValueOnce({ rowCount: 0 });
+      await expect(dao.hasAnyConfirmedBookingInRange('2026-08-17', '2026-08-23')).resolves.toBe(false);
+    });
+
+    it('should archive slots with bookings and delete remaining slots in clearSlotsByDateRange', async () => {
+      db.query.mockResolvedValue({ rows: [] });
+
+      await dao.clearSlotsByDateRange(tx, '2026-08-17', '2026-08-23');
+
+      expect(tx.query).toHaveBeenCalledTimes(2);
+      expect(tx.query.mock.calls[0][0]).toContain('UPDATE slots s');
+      expect(tx.query.mock.calls[0][1]).toEqual(['2026-08-17', '2026-08-23']);
+      expect(tx.query.mock.calls[1][0]).toContain('DELETE FROM slots');
+      expect(tx.query.mock.calls[1][1]).toEqual(['2026-08-17', '2026-08-23']);
     });
   });
 });

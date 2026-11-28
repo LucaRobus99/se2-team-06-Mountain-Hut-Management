@@ -31,6 +31,16 @@ describe('StaffRoutes - Integration Tests', () => {
       expect(response.body.error.code).toBe('UNAUTHENTICATED');
     });
 
+    it('should return 401 Unauthorized when accessing weekly copy endpoints without logging in', async () => {
+      const previewRes = await request(app).post('/api/staff/slots/copy-week/preview').send({});
+      expect(previewRes.status).toBe(401);
+      expect(previewRes.body.error.code).toBe('UNAUTHENTICATED');
+
+      const copyRes = await request(app).post('/api/staff/slots/copy-week').send({});
+      expect(copyRes.status).toBe(401);
+      expect(copyRes.body.error.code).toBe('UNAUTHENTICATED');
+    });
+
     it('should return 403 Forbidden when a non-staff user (e.g., hiker) accesses staff endpoints', async () => {
       await agent
         .post('/api/auth/login')
@@ -48,6 +58,26 @@ describe('StaffRoutes - Integration Tests', () => {
       });
       expect(postRes.status).toBe(403);
       expect(postRes.body.error.code).toBe('FORBIDDEN');
+    });
+
+    it('should return 403 Forbidden when a hiker accesses weekly copy endpoints', async () => {
+      await agent
+        .post('/api/auth/login')
+        .send({ email: 'hiker@hut.test', password: 'password' });
+
+      const previewRes = await agent.post('/api/staff/slots/copy-week/preview').send({
+        sourceWeekStart: '2026-11-16',
+        targetWeekStart: '2026-11-23',
+      });
+      expect(previewRes.status).toBe(403);
+      expect(previewRes.body.error.code).toBe('FORBIDDEN');
+
+      const copyRes = await agent.post('/api/staff/slots/copy-week').send({
+        sourceWeekStart: '2026-11-16',
+        targetWeekStart: '2026-11-23',
+      });
+      expect(copyRes.status).toBe(403);
+      expect(copyRes.body.error.code).toBe('FORBIDDEN');
     });
   });
 
@@ -70,6 +100,12 @@ describe('StaffRoutes - Integration Tests', () => {
       const invalidRes = await agent.get('/api/staff/hikers').query({ query: 'a' });
       expect([400, 422]).toContain(invalidRes.status);
       expect(invalidRes.body).toHaveProperty('error');
+    });
+
+    it('should handle missing search term on GET /api/staff/hikers', async () => {
+      const missingRes = await agent.get('/api/staff/hikers');
+      expect([400, 422]).toContain(missingRes.status);
+      expect(missingRes.body).toHaveProperty('error');
     });
 
     it('should return staff availability slots including slots within 2 hours and handle invalid params', async () => {
@@ -123,7 +159,6 @@ describe('StaffRoutes - Integration Tests', () => {
     it('should create an existingHiker staff booking with 201 and Location header', async () => {
       const response = await agent.post('/api/staff/bookings').send({
         mode: 'existingHiker',
-        // Seed slot 3 (2026-11-15 12:00) is still open at the fixed "now".
         slotId: 3,
         partySize: 2,
         hikerId: 3,
@@ -162,6 +197,64 @@ describe('StaffRoutes - Integration Tests', () => {
 
       expect([400, 404, 422]).toContain(response.status);
       expect(response.body).toHaveProperty('error');
+    });
+  });
+
+  describe('Weekly copy endpoints (POST /slots/copy-week/preview & POST /slots/copy-week)', () => {
+    beforeEach(async () => {
+      await agent
+        .post('/api/auth/login')
+        .send({ email: 'employee@hut.test', password: 'password' });
+    });
+
+    it('should reject invalid week payloads on POST /api/staff/slots/copy-week/preview', async () => {
+      const res = await agent.post('/api/staff/slots/copy-week/preview').send({
+        sourceWeekStart: '2026-11-17',
+        targetWeekStart: '2026-11-23',
+      });
+
+      expect([400, 422]).toContain(res.status);
+      expect(res.body).toHaveProperty('error');
+    });
+
+    it('should handle preview response on POST /api/staff/slots/copy-week/preview', async () => {
+      const res = await agent.post('/api/staff/slots/copy-week/preview').send({
+        sourceWeekStart: '2026-11-16',
+        targetWeekStart: '2026-11-23',
+      });
+
+      expect([200, 400, 409, 422]).toContain(res.status);
+      if (res.status === 200) {
+        expect(res.body).toHaveProperty('revision');
+      }
+    });
+
+    it('should reject invalid or conflicting week payloads on POST /api/staff/slots/copy-week', async () => {
+      const res = await agent.post('/api/staff/slots/copy-week').send({
+        sourceWeekStart: '2026-11-16',
+        targetWeekStart: '2026-11-10',
+      });
+
+      expect([400, 409, 422]).toContain(res.status);
+      expect(res.body).toHaveProperty('error');
+    });
+
+    it('should copy a weekly schedule when preview succeeds and revision matches', async () => {
+      const previewRes = await agent.post('/api/staff/slots/copy-week/preview').send({
+        sourceWeekStart: '2026-11-16',
+        targetWeekStart: '2026-11-23',
+      });
+
+      if (previewRes.status === 200) {
+        const copyRes = await agent.post('/api/staff/slots/copy-week').send({
+          sourceWeekStart: '2026-11-16',
+          targetWeekStart: '2026-11-23',
+          expectedRevision: previewRes.body.revision,
+        });
+
+        expect(copyRes.status).toBe(201);
+        expect(copyRes.body).toMatchObject({ targetWeekStart: '2026-11-23' });
+      }
     });
   });
 });

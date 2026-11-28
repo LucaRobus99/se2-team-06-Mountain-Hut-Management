@@ -21,15 +21,13 @@ describe('AvailabilityRoutes - Integration Tests', () => {
   });
 
   describe('GET /api/availability', () => {
-
     it('should return available slots when valid query parameters (date, meal, partySize) are provided', async () => {
-      // Assuming seed data contains slots for a specific date (adjust parameters according to your seed data)
       const response = await request(app)
         .get('/api/availability')
         .query({
-          date: '2026-11-15', // Adjust to a valid seed date if necessary
+          date: '2026-11-15',
           meal: 'lunch',
-          partySize: '2'
+          partySize: '2',
         });
 
       expect(response.status).toBe(200);
@@ -37,34 +35,28 @@ describe('AvailabilityRoutes - Integration Tests', () => {
     });
 
     it('should handle validation errors or missing query parameters gracefully via error handler', async () => {
-      // Sending request without required query params or invalid format
       const response = await request(app)
         .get('/api/availability')
         .query({
           date: 'invalid-date',
-          partySize: 'not-a-number'
+          partySize: 'not-a-number',
         });
 
-      // Depending on service/validation implementation, it should return 400 or handle it
-      expect([400, 422, 500]).toContain(response.status);
+      expect([400, 422]).toContain(response.status);
       expect(response.body).toHaveProperty('error');
     });
-
   });
 
   describe('GET /api/availability/:slotId/seating', () => {
-
     it('should return seating arrangement details for a valid slotId and partySize', async () => {
-      // Assuming slot ID 1 exists in the seed data
       const slotId = 1;
 
       const response = await request(app)
         .get(`/api/availability/${slotId}/seating`)
         .query({ partySize: '2' });
 
-      // If the slot exists, expect 200; if it doesn't exist in seed, expect 404
       expect([200, 404]).toContain(response.status);
-      
+
       if (response.status === 200) {
         expect(response.body).toBeDefined();
       }
@@ -80,7 +72,67 @@ describe('AvailabilityRoutes - Integration Tests', () => {
       expect(response.status).toBe(404);
       expect(response.body).toHaveProperty('error');
     });
-
   });
 
+  describe('GET /api/availability/menus', () => {
+    it('should return public slot menus for a date without requiring login', async () => {
+      const { rows: slots } = await db.query(
+        `SELECT id, meal_id FROM slots WHERE date = '2026-11-15' ORDER BY id LIMIT 1`
+      );
+
+      if (slots.length > 0) {
+        const menuRes = await db.query(
+          `INSERT INTO menus (meal_id, name, content, updated_at)
+           VALUES ($1, 'Hut Lunch', 'Polenta e funghi', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
+           RETURNING id`,
+          [slots[0].meal_id]
+        );
+        await db.query('UPDATE slots SET menu_id = $1 WHERE id = $2', [menuRes.rows[0].id, slots[0].id]);
+      }
+
+      const response = await request(app)
+        .get('/api/availability/menus')
+        .query({ date: '2026-11-15' });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({
+        date: '2026-11-15',
+        meal: null,
+      });
+      expect(Array.isArray(response.body.slots)).toBe(true);
+    });
+
+    it('should filter by meal and return 400 when date is missing or invalid', async () => {
+      const filteredRes = await request(app)
+        .get('/api/availability/menus')
+        .query({ date: '2026-11-15', meal: 'lunch' });
+
+      expect(filteredRes.status).toBe(200);
+      expect(filteredRes.body.meal).toBe('lunch');
+
+      const invalidRes = await request(app).get('/api/availability/menus');
+      expect(invalidRes.status).toBe(400);
+      expect(invalidRes.body).toHaveProperty('error');
+    });
+  });
+
+  describe('GET /api/availability/:slotId/menu', () => {
+    it('should return slot menu details with menu: null when no menu is assigned', async () => {
+      const { rows: slots } = await db.query('SELECT id FROM slots ORDER BY id LIMIT 1');
+      const slotId = slots[0]?.id ?? 1;
+
+      const response = await request(app).get(`/api/availability/${slotId}/menu`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({ slotId });
+      expect(response.body).toHaveProperty('menu');
+    });
+
+    it('should return 404 when requesting menu for a non-existent slotId', async () => {
+      const response = await request(app).get('/api/availability/99999/menu');
+
+      expect(response.status).toBe(404);
+      expect(response.body).toHaveProperty('error');
+    });
+  });
 });
