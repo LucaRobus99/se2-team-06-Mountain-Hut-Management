@@ -8,5 +8,9 @@ describe('menu formatting', () => {
   it('escapes user-supplied markup', () => {
     expect(menuToHtml('<img src=x> & bread')).toBe('<p>&lt;img src=x&gt; &amp; bread</p>');
   });
+  it('omits editing comments without breaking nested lists', () => {
+    expect(menuToHtml('// Heading note\n- Polenta\n  // Ingredient note\n  - *Mushrooms*\n- Bread')).toBe('<ul><li>Polenta<ul><li><em>Mushrooms</em></li></ul></li><li>Bread</li></ul>');
+    expect(menuToHtml('  // Only an editing note')).toBe('');
+  });
   it('handles empty content', () => expect(menuToHtml(' \n')).toBe(''));
 });

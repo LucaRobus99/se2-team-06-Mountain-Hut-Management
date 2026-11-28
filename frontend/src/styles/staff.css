@@ -28,11 +28,11 @@
 .staff-topbar-avatar { width:35px; height:35px; background:#e7eee7; }
 .staff-mobile-toggle,.staff-backdrop { display:none; }
 .staff-content { max-width:1530px; margin:0 auto; padding:clamp(22px,3vw,43px); }
-.staff-page { display:grid; gap:25px; }
+.staff-page { display:grid; gap:25px; width:100%; max-width:1260px; margin-inline:auto; }
 .staff-page-heading { display:flex; align-items:center; justify-content:space-between; gap:18px; margin-bottom:3px; }
-.staff-eyebrow { color:#72937c; font-weight:800; font-size:.7rem; letter-spacing:.15em; margin:0 0 8px; }
-.staff-page-heading h1 { margin:0; font-family:Georgia,serif; font-weight:700; font-size:clamp(2rem,3vw,2.9rem); letter-spacing:-.04em; color:#22382b; }
-.staff-page-heading p:not(.staff-eyebrow) { margin:8px 0 0; color:#718073; font-size:.94rem; }
+.staff-eyebrow { color:#7f9d8b; font-weight:800; font-size:.74rem; letter-spacing:.16em; text-transform:uppercase; margin:0 0 8px; }
+.staff-page-heading h1 { margin:0; font-family:Georgia,serif; font-weight:700; font-size:clamp(2.15rem,3vw,3rem); letter-spacing:-.04em; color:#22382b; }
+.staff-page-heading p:not(.staff-eyebrow) { margin:8px 0 0; color:#718073; font-size:.98rem; }
 .staff-heading-pill { border:1px solid #ccdbcd; color:#446b4e; background:#ecf5e9; font-size:.78rem; border-radius:30px; padding:9px 14px; white-space:nowrap; }
 .staff-panel { background:#fff; border:1px solid var(--staff-line); border-radius:17px; padding:clamp(18px,2.5vw,32px); box-shadow:0 8px 30px rgba(35,62,46,.035); }
 .staff-panel-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:21px; }
@@ -352,9 +352,9 @@
    Match the previous 110% desktop appearance using local dimensions, not zoom. */
 .staff-content:has(> .staff-slots-page) { max-width:1430px; }
 .staff-slots-page { gap:27px; }
-.staff-slots-page .staff-page-heading h1 { font-size:clamp(2rem,3.3vw,3.19rem); }
-.staff-slots-page .staff-page-heading p:not(.staff-eyebrow) { font-size:1.034rem; }
-.staff-slots-page .staff-eyebrow { font-size:.77rem; }
+.staff-slots-page .staff-page-heading h1 { font-size:clamp(2.15rem,3vw,3rem); }
+.staff-slots-page .staff-page-heading p:not(.staff-eyebrow) { font-size:.98rem; }
+.staff-slots-page .staff-eyebrow { font-size:.74rem; }
 .staff-slots-page .staff-panel { padding:clamp(18px,2.75vw,35px); }
 .staff-slots-page .staff-panel-heading h2 { font-size:1.683rem; }
 .staff-slots-page .staff-panel-heading p { font-size:.968rem; }

@@ -10,6 +10,8 @@ export function menuToHtml(text) {
   const root = [];
   const stack = [];
   for (const line of lines) {
+    // Editing-only notes must never reach the preview or persisted HTML.
+    if (line.trimStart().startsWith('//')) continue;
     const match = /^( *)([-*]|\d+\.)\s+(.+)$/.exec(line);
     if (!match) {
       stack.length = 0;

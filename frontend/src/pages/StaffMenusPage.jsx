@@ -8,13 +8,41 @@ import { menuToHtml } from '../utils/menuContent.js';
 import '../styles/staff-menus.css';
 
 const meals = ['breakfast', 'lunch', 'aperitivo', 'dinner'].map(value => ({ value, label: mealLabel(value) }));
-const tools = [ ['Bold', 'B', '**'], ['Italic', 'I', '*'], ['Bullet list', '• ≡', '- '], ['Numbered list', '1. ≡', '1. '], ['Nested item', '↳', '  - '] ];
+const tools = [ ['Bold', 'B', '**'], ['Italic', 'I', '*'], ['Bullet list', '• ≡', '- '], ['Sub-item (nested list)', 'Sub-item', '  - '] ];
+
+const menuExample = `// Add a course heading, list the dishes and leave a blank line between courses.
+**STARTERS**
+- Cured meat selection
+  - *Speck, salami and mountain cheese*
+- Rustic bruschetta
+  - *Toasted bread, cherry tomatoes and basil*
+
+**FIRST COURSES**
+- Polenta concia with venison stew
+  - *Slow-cooked venison, melted alpine cheese and butter*
+- Porcini risotto
+  - *Carnaroli rice, porcini mushrooms and parsley*
+
+**MAIN COURSES**
+- Braised beef cheek
+  - *Red wine jus and rosemary potatoes*
+- Grilled sausage trio
+  - *Homemade sausages with mustard sauce*
+
+**SIDE DISHES**
+- Seasonal vegetables
+- French fries
+
+**DESSERTS**
+- Apple strudel
+  - *Served warm with vanilla cream*`;
 
 export default function StaffMenusPage() {
   const [name, setName] = useState('');
   const [meal, setMeal] = useState('');
   const [text, setText] = useState('');
   const [mode, setMode] = useState('both');
+  const [guide, setGuide] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState('');
   const [confirm, setConfirm] = useState(false);
@@ -67,11 +95,31 @@ export default function StaffMenusPage() {
         </div>
         <div className="staff-menu-editor-heading"><h3>Menu content</h3><div className="staff-menu-tabs" aria-label="Editor view">{['editor', 'both', 'preview'].map(view => <button key={view} type="button" aria-pressed={mode === view} onClick={() => setMode(view)}>{view[0].toUpperCase()+view.slice(1)}</button>)}</div></div>
         <div className={`staff-menu-workspace ${mode === 'both' ? 'is-split' : ''}`}>
-          {mode !== 'preview' && <div className="staff-menu-editor"><div className="staff-menu-toolbar" role="group" aria-label="Text formatting">{tools.map(([label, symbol, marker]) => <button key={label} type="button" title={label} aria-label={label} onMouseDown={e => e.preventDefault()} onClick={() => format(marker)}>{symbol}</button>)}</div><textarea ref={editor} aria-label="Menu content" value={text} onChange={e => setText(e.target.value)} placeholder={'Write your menu here…\n\n**Starters**\n- Homemade bread\n- Alpine cheese'} /><small>Select text to format it, or use the list tools.</small></div>}
+          {mode !== 'preview' && <div className="staff-menu-editor">
+            <div className="staff-menu-toolbar" role="group" aria-label="Text formatting">
+              {tools.map(([label, symbol, marker]) => <button key={label} type="button" title={label} aria-label={label} onMouseDown={e => e.preventDefault()} onClick={() => format(marker)}>{symbol}</button>)}
+              <button type="button" className="staff-menu-help" title="Formatting guide" aria-label="Formatting guide" aria-expanded={guide} aria-controls="menu-formatting-guide" onClick={() => setGuide(value => !value)}><span aria-hidden="true">?</span></button>
+            </div>
+            {guide && <section id="menu-formatting-guide" className="staff-menu-guide" aria-label="Formatting guide">
+              <h4>How to write your menu</h4>
+              <p>Give each course a heading, add the dishes and write ingredients or variations underneath. Leave a blank line between courses.</p>
+              <dl>
+                <div><dt>Course heading</dt><dd><code>**STARTERS**</code><span>Use bold uppercase headings.</span></dd></div>
+                <div><dt>Dish name</dt><dd><code>- Cured meat selection</code><span>Use one bullet per dish; bullets are hidden in the menu.</span></dd></div>
+                <div><dt>Ingredients or notes</dt><dd><code>{'  - *Speck, salami and mountain cheese*'}</code><span>Use Sub-item and Italic to keep details close to the dish.</span></dd></div>
+                <div><dt>Editing comment</dt><dd><code>// Your note</code><span>Comments stay in the editor and are not saved to the menu.</span></dd></div>
+              </dl>
+            </section>}
+            <textarea ref={editor} aria-label="Menu content" value={text} onChange={e => setText(e.target.value)} placeholder={menuExample} />
+            <div className="staff-menu-editor-footer">
+              <small>{text.length} characters</small>
+              <button type="button" className="staff-menu-example" onClick={() => setText(current => current.trim() ? current.trimEnd() + '\n\n' + menuExample : menuExample)}>+ Insert example</button>
+            </div>
+          </div>}
           {mode !== 'editor' && <div className="staff-menu-preview"><div className="staff-menu-paper"><svg viewBox="0 0 32 28" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M2 25 12 5l5 10 5-7 8 17H2Z"/></svg><p className="staff-menu-kicker">EDELWEISS HUT{meal ? ` · ${mealLabel(meal).toUpperCase()}` : ''}</p><h3>{name.trim() || 'Untitled menu'}</h3><hr/>{html ? <MenuContent content={html}/> : <p className="staff-menu-empty">Your formatted menu will appear here.</p>}</div></div>}
         </div>
         {error && !confirm && <Alert variant="danger" className="mt-3">{error}</Alert>}
-        <div className="staff-menu-footer"><small>{text.length} characters · Saved menus can be assigned to service slots.</small><button type="submit" className="staff-primary-button">Save menu <span aria-hidden="true">→</span></button></div>
+        <div className="staff-menu-footer"><small>Saved menus can be assigned to service slots.</small><button type="submit" className="staff-primary-button">Save menu <span aria-hidden="true">→</span></button></div>
       </form>
     </section>
     <Modal show={confirm} onHide={() => !busy && setConfirm(false)} centered scrollable backdrop="static" keyboard={!busy} dialogClassName="staff-confirm-modal eh-dialog" backdropClassName="eh-cancel-backdrop" aria-labelledby="menu-confirm-title">
