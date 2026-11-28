@@ -9,6 +9,7 @@ const icons = {
   dashboard: <><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></>,
   calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/></>,
   reservations: <><path d="M8 4h9a2 2 0 0 1 2 2v15H5V6a2 2 0 0 1 2-2h1"/><path d="M9 3h6v4H9zM9 12h6M9 16h6"/></>,
+  book: <><path d="M12 5v16M3 4c4-1 7 0 9 2 2-2 5-3 9-2v15c-4-1-7 0-9 2-2-2-5-3-9-2Z"/></>,
   exit: <><path d="M10 17l5-5-5-5M15 12H3"/><path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7"/></>,
   menu: <path d="M4 7h16M4 12h16M4 17h16"/>,
 };
@@ -52,6 +53,9 @@ export default function StaffLayout() {
           </NavLink>
           <NavLink to="/staff/reservations" onClick={() => setMenuOpen(false)} className={({ isActive }) => `staff-navigation-link ${isActive ? 'active' : ''}`}>
             <StaffIcon name="reservations" /> Reservations
+          </NavLink>
+          <NavLink to="/staff/menus" onClick={() => setMenuOpen(false)} className={({ isActive }) => `staff-navigation-link ${isActive ? 'active' : ''}`}>
+            <StaffIcon name="book" /> Manage menus
           </NavLink>
         </nav>
         <div className="staff-sidebar-bottom">

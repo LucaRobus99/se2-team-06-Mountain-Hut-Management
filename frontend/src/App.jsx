@@ -2,6 +2,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router';
 import MainLayout from './layouts/MainLayout.jsx';
 import StaffLayout from './layouts/StaffLayout.jsx';
 import StaffDashboardPage from './pages/StaffDashboardPage.jsx';
+import StaffMenusPage from './pages/StaffMenusPage.jsx';
 import StaffReservationsPage from './pages/StaffReservationsPage.jsx';
 import HomePage from './pages/HomePage.jsx';
 import AvailabilityPage from './pages/AvailabilityPage.jsx';
@@ -70,6 +71,7 @@ export default function App() {
         <Route path="staff" element={<StaffLayout />}>
           <Route index element={<StaffDashboardPage />} />
           <Route path="slots" element={<SlotManagementPage />} />
+          <Route path="menus" element={<StaffMenusPage />} />
           <Route path="reservations" element={<StaffReservationsPage />} />
           <Route path="*" element={<Navigate to="/staff" replace />} />
         </Route>
